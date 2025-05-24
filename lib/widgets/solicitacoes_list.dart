@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/detalhes_alvara.dart';
 
 class SolicitacoesList extends StatelessWidget {
-  const SolicitacoesList({super.key});
+  const SolicitacoesList({super.key, required String evento, required String data, required String empresa});
 
   void _mostrarDetalhes(BuildContext context, String evento, String data, String empresa) {
     showDialog(

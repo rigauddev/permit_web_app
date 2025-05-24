@@ -39,14 +39,14 @@ class CustomDrawer extends StatelessWidget {
           if (isUser || isOperatorOrManager || isAdmin)
             _buildTile(context, icon: Icons.event, title: 'Serviços', route: '/services'),
 
-            ExpansionTile(
-              leading: Icon(Icons.event, color: primaryColor), 
-              title: const Text('Agendamentos'), 
-              children: [
-                _buildSubTile(context, 'Solicitar Alvará', '/event-permit'),
-                _buildSubTile(context, 'Meus Alvarás', '/my-permits'),
-                _buildSubTile(context, 'Certidão', '/my-permits'),
-              ]), 
+            // ExpansionTile(
+            //   leading: Icon(Icons.event, color: primaryColor), 
+            //   title: const Text('Agendamentos'), 
+            //   children: [
+            //     _buildSubTile(context, 'Solicitar Alvará', '/event-permit'),
+            //     _buildSubTile(context, 'Meus Alvarás', '/my-permits'),
+            //     _buildSubTile(context, 'Certidão', '/my-permits'),
+            //   ]), 
 
 
           /// Submenu: Serviços (Operador, Gestor e Admin)
@@ -57,20 +57,22 @@ class CustomDrawer extends StatelessWidget {
               children: [
                 _buildSubTile(context, 'Solicitações', '/solicitacoes'),
                 _buildSubTile(context, 'Vistorias', '/vistorias'),
-                _buildSubTile(context, 'Geração de DAM', '/dam'),
+                // _buildSubTile(context, 'Geração de DAM', '/dam'),
               ],
             ),
 
           /// Usuários (Apenas gestor admin e admin)
           if (isGestorAdmin || isAdmin)
-          ExpansionTile(
-            leading: Icon(Icons.people, color: primaryColor),
-            title: const Text('Usuários'),
-            children: [
-              _buildSubTile(context, 'Cadastrar Usuários', '/user-create'),
-              _buildSubTile(context, 'Permissões de Usuários', '/users'),
-            ],
-          ),
+            _buildTile(context, icon: Icons.people, title: 'Usuarios', route: '/users'),
+
+          // ExpansionTile(
+          //   leading: Icon(Icons.people, color: primaryColor),
+          //   title: const Text('Usuários'),
+          //   children: [
+          //     _buildSubTile(context, 'Cadastrar Usuários', '/user-create'),
+          //     _buildSubTile(context, 'Permissões de Usuários', '/users'),
+          //   ],
+          // ),
           
           ExpansionTile(
             leading: Icon(Icons.people, color: primaryColor),

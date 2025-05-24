@@ -1,57 +1,37 @@
 import 'package:flutter/material.dart';
-
 import '../../widgets/custom_appbar.dart';
 import '../../widgets/custom_drawer.dart';
 
 class ServicesPage extends StatelessWidget {
-  const ServicesPage({super.key, required this.userType, this.userProfile, this.permitType, this.questions});
+  const ServicesPage({
+    super.key,
+    required this.userType,
+    this.userProfile,
+  });
+  
   final String userType;
   final String? userProfile;
-  final String? permitType;
-  final List<Map<String, dynamic>>? questions;
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-
     final crossAxisCount = screenWidth < 600
-        ? 1
-        : screenWidth < 900
-            ? 2
-            : 3;
+      ? 1
+      : screenWidth < 900
+        ? 2
+        : 3;
 
     final services = [
       {
         'title': 'Solicitação de Alvará',
         'description': 'Solicite permissões para eventos e atividades públicas.',
         'icon': Icons.assignment,
-        'route': '/permit-dashboard',
       },
-      {
-        'title': 'IPTU',
-        'description': 'Acesse informações e gere boletos do seu IPTU.',
-        'icon': Icons.home_work,
-        'route': '/iptu',
-      },
-      {
-        'title': 'Certidões',
-        'description': 'Solicite certidões negativas ou outros documentos oficiais.',
-        'icon': Icons.description,
-        'route': '/certidoes',
-      },
-      {
-        'title': 'Nota Fiscal',
-        'description': 'Emita ou consulte notas fiscais de serviços prestados.',
-        'icon': Icons.receipt_long,
-        'route': '/nota-fiscal',
-      },
+      // ... outros serviços ...
     ];
 
     return Scaffold(
-      appBar: const CustomAppBar(
-        title: 'Serviços',
-        actions: [],
-      ),
+      appBar: const CustomAppBar(title: 'Serviços', actions: []),
       drawer: CustomDrawer(userType: userType),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -66,7 +46,6 @@ class ServicesPage extends StatelessWidget {
               title: service['title'] as String,
               description: service['description'] as String,
               icon: service['icon'] as IconData,
-              route: service['route'] as String,
             );
           }).toList(),
         ),
@@ -79,7 +58,6 @@ class ServicesPage extends StatelessWidget {
     required String title,
     required String description,
     required IconData icon,
-    required String route,
   }) {
     return Card(
       elevation: 2,
@@ -92,60 +70,44 @@ class ServicesPage extends StatelessWidget {
             Stack(
               alignment: Alignment.topRight,
               children: [
-                Center(
-                  child: Icon(
-                    icon,
-                    size: 40,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
+                Center(child: Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary)),
                 IconButton(
                   icon: const Icon(Icons.info_outline, size: 20),
                   tooltip: 'Descrição do serviço',
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: Text(title),
-                        content: Text(description),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('Fechar'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(title),
+                      content: Text(description),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Fechar')),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () {
-                if (title == 'Solicitação de Alvará') {
-                  _showPermitTypeModal(context);
-                } else {
-                  Navigator.pushNamed(context, route);
-                }
-              },
+              onPressed: () => _onTapAlvara(context),
               child: const Text('Acessar'),
-            )
+            ),
           ],
         ),
       ),
     );
   }
+
+  void _onTapAlvara(BuildContext context) {
+    _showPermitTypeModal(context);
+  }
+
   void _showPermitTypeModal(BuildContext parentContext) {
     showDialog(
       context: parentContext,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Selecione o tipo de alvará'),
           content: Column(
@@ -157,12 +119,7 @@ class ServicesPage extends StatelessWidget {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(); // Fecha só o modal
-              },
-              child: const Text('Cancelar'),
-            ),
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancelar')),
           ],
         );
       },
@@ -174,36 +131,26 @@ class ServicesPage extends StatelessWidget {
       title: Text(type),
       leading: const Icon(Icons.assignment_outlined),
       onTap: () async {
-        Navigator.of(dialogContext).pop(); // Fecha o modal
-        
-        final perguntas = await _fetchPerguntasPorTipo(type);
+        Navigator.of(dialogContext).pop();
+
+        // 1. Requisições paralelas:
+        final questionsFuture = _fetchPerguntasPorTipo(type);
+        final formsFuture = _fetchUserForms(userType);
+
+        final results = await Future.wait([questionsFuture, formsFuture]);
+        final questions = results[0];
+        final forms = results[1];
 
         if (parentContext.mounted) {
-          String route;
-          switch (type) {
-            case 'Alvará de Evento':
-              route = '/permit-dashboard'
-              ;
-              break;
-            case 'Alvará de Construção':
-              route = '/permit-dashboard';
-              break;
-            case 'Alvará de Funcionamento':
-              route = '/permit-dashboard';
-              break;
-            default:
-              route = '/permit-dashboard';
-          }
-
           Navigator.pushNamed(
             parentContext,
-            route,
-            // arguments: perguntas,
+            '/permit-dashboard',
             arguments: {
               'userType': userType,
-              'userProfile': userProfile,
-              'permitType': permitType, // ou o tipo que você selecionou
-              'questions': perguntas, // as perguntas que você buscou
+              'userProfile': userProfile ?? '',
+              'permitType': type,
+              'questions': questions,
+              'forms': forms,
             },
           );
         }
@@ -211,24 +158,134 @@ class ServicesPage extends StatelessWidget {
     );
   }
 
-
+  /// Mock do endpoint GET /question?permitType=...
   Future<List<Map<String, dynamic>>> _fetchPerguntasPorTipo(String tipoFormulario) async {
-    try {
-      // Aqui você deveria chamar sua API de verdade
-      // Vou simular com um Future.delayed para demonstrar:
-      await Future.delayed(const Duration(seconds: 1)); // simula chamada HTTP
-
-      // Simulando resposta
-      return [
-        {'pergunta': 'Qual o nome do evento?', 'tipoResposta': 'Texto'},
-        {'pergunta': 'Data do evento', 'tipoResposta': 'Data'},
-        {'pergunta': 'Anexe a autorização', 'tipoResposta': 'Arquivo'},
-      ];
-    } catch (e) {
-      // Tratar erro aqui
-      debugPrint('Erro ao buscar perguntas: $e');
-      return [];
-    }
+    await Future.delayed(const Duration(seconds: 1));
+    return [
+      {
+        "id": "001",
+        "pergunta": "O evento vai ter carro de som?",
+        "descricao": "Informe se o evento terá carro de som",
+        "secretaria": "Infraestrutura",
+        "tipo_formulario": tipoFormulario,
+        "tipos_resposta": ["Sim/Não", "Calendário", "Anexar Documento"],
+        "status": "ativo",
+      },
+      {
+        "id": "002",
+        "pergunta": "Será vendida comida no evento?",
+        "descricao": "Isso requer vistoria da Vigilância Sanitária",
+        "secretaria": "Saúde",
+        "tipo_formulario": tipoFormulario,
+        "tipos_resposta": ["Sim/Não"],
+        "status": "ativo",
+      },
+    ];
   }
 
+  /// Mock do endpoint GET /user-forms?userType=...
+  Future<List<Map<String, dynamic>>> _fetchUserForms(String userType) async {
+    await Future.delayed(const Duration(milliseconds: 800));
+    return [
+      {
+        "formId": "F001",
+        "user_id": "U001",
+        "nome_do_evento": "Evento 1",
+        "permitType": "Alvará de Evento",
+        "local_evento": "Centro de conferência",
+        "data_do_evento": "10/05/2025",
+        "status": "aguardando aprovaçoes",
+        "perguntas": [
+          {
+            "id": "002",
+            "pergunta": "Será vendida comida no evento?",
+            "descricao": "Isso requer vistoria da Vigilância Sanitária",
+            "secretaria": "Saúde",
+            "anexos": ["Anexo 1", "Anexo 2"],
+            "data_do_evento": "10/05/2025",
+            "local": "Centro de conferência",
+            "status": "aguardando aprovaçao",
+            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+          },
+          {
+            "id": "002",
+            "pergunta": "Será vendida comida no evento?",
+            "descricao": "Isso requer vistoria da Vigilância Sanitária",
+            "secretaria": "Saúde",
+            "anexos": ["Anexo 1", "Anexo 2"],
+            "data_do_evento": "10/05/2025",
+            "local_evento": "Centro de conferência",
+            "status": "aguardando aprovaçao",
+            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},] // Aqui vamos criar logica para aparecer com se fosse um chat 
+          },
+        ] // aguardando, aprovado, recusado
+      },
+      {
+        "formId": "F002",
+        "user_id": "U001",
+        "nome_do_evento": "Evento 1",
+        "permitType": "Alvará de Evento",
+        "local_evento": "Centro de conferência",
+        "data_do_evento": "2025-05-20",
+        "status": "aguardando",
+        "perguntas": [
+          {
+            "id": "002",
+            "pergunta": "Será vendida comida no evento?",
+            "descricao": "Isso requer vistoria da Vigilância Sanitária",
+            "secretaria": "Saúde",
+            "anexos": ["Anexo 1", "Anexo 2"],
+            "data_do_evento": "10/05/2025",
+            "local": "Centro de conferência",
+            "status": "aguardando aprovaçao",
+            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+          },
+          {
+            "id": "002",
+            "pergunta": "Será vendida comida no evento?",
+            "descricao": "Isso requer vistoria da Vigilância Sanitária",
+            "secretaria": "Saúde",
+            "anexos": ["Anexo 1", "Anexo 2"],
+            "data_do_evento": "10/05/2025",
+            "local": "Centro de conferência",
+            "status": "aguardando aprovaçao",
+            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+          },
+        ] // aguardando, aprovado, recusado
+      },
+      {
+        "formId": "F003",
+        "user_id": "U001",
+        "nome_do_evento": "Evento 1",
+        "permitType": "Alvará de Evento",
+        "local_evento": "Centro de conferência",
+        "data_do_evento": "2025-05-20",
+        "status": "aguardando",
+        "perguntas": [
+          {
+            "id": "002",
+            "pergunta": "Será vendida comida no evento?",
+            "descricao": "Isso requer vistoria da Vigilância Sanitária",
+            "secretaria": "Saúde",
+            "anexos": ["Anexo 1", "Anexo 2"],
+            "data_do_evento": "10/05/2025",
+            "local": "Centro de conferência",
+            "status": "aguardando aprovaçao",
+            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+          },
+          {
+            "id": "002",
+            "pergunta": "Será vendida comida no evento?",
+            "descricao": "Isso requer vistoria da Vigilância Sanitária",
+            "secretaria": "Saúde",
+            "anexos": ["Anexo 1", "Anexo 2"],
+            "data_do_evento": "10/05/2025",
+            "local": "Centro de conferência",
+            "status": "aguardando aprovaçao",
+            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+          },
+        ] // aguardando, aprovado, recusado
+      },
+    ];
+  }
 }

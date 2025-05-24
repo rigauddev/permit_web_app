@@ -27,7 +27,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
 
   final List<String> _secretarias = ['Meio Ambiente', 'Segurança', 'Eventos'];
   final List<String> _tiposFormulario = ['Alvará de Eventos', 'Táxi', 'Estabelecimento'];
-  final List<String> _tiposResposta = ['Anexar Documento', 'Selecionar Data', 'Botão de Baixar', 'calendario'];
+  final List<String> _tiposResposta = ['Anexar Documento', 'calendario', 'Botão de Baixar'];
 
   @override
   Widget build(BuildContext context) {

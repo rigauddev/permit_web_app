@@ -1,4 +1,3 @@
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,17 +32,32 @@ class MyApp extends ConsumerWidget {
       initialRoute: '/',
       routes: {
       '/': (context) => LoginPage(),
-      '/home': (context) => UserHomePage(userType: user?.tipoUsuario ?? ''),
-      '/profile': (context) => ProfilePage(userType: user?.tipoUsuario ?? ''),
-      '/users': (context) => UsersListPage(userType: user?.tipoUsuario ?? ''),
+      '/home': (context) => UserHomePage(userType: user?.userType ?? ''),
+      '/profile': (context) => ProfilePage(userType: user?.userType ?? ''),
+      '/users': (context) => UsersListPage(userType: user?.userType ?? ''),
       '/registrar_usuario': (context) => UserRegistrationPage(),
-      '/cadastro_usuario': (context) => UserCreatePage(userType: user?.tipoUsuario ?? ''),
-      '/services': (context) => ServicesPage(userType: user?.tipoUsuario ?? '', userProfile: user?.profile ?? ''),
-      '/user-create': (context) => UserCreatePage(userType: user?.tipoUsuario ?? ''),
-      '/permit-dashboard': (context) => PermitDashboardPage(userType: user?.tipoUsuario ?? '', userProfile: user?.profile ?? '', permitType: '', questions: []),
-      '/questtions': (context) => PerguntasPage(userType: user?.tipoUsuario ?? ''),
-      '/event-permit': (context) => PermitRequestPage(userType: user?.tipoUsuario ?? '', userProfile: user?.profile ?? '', permitType: '', questions: []),
+      '/cadastro_usuario': (context) => UserCreatePage(userType: user?.userType ?? ''),
+      '/services': (context) => ServicesPage(userType: user?.userType ?? '', userProfile: user?.profile ?? ''),
+      '/user-create': (context) => UserCreatePage(userType: user?.userType ?? ''),
+      // '/permit-dashboard': (context) => PermitDashboardPage(userType: user?.userType ?? '', userProfile: user?.profile ?? '', permitType: '', questions: [], forms: []),
+      '/questtions': (context) => PerguntasPage(userType: user?.userType ?? ''),
+      '/event-permit': (context) => PermitRequestPage(userType: user?.userType ?? '', userProfile: user?.profile ?? '', permitType: '', questions: []),
     },
+    onGenerateRoute: (settings) {
+        if (settings.name == '/permit-dashboard') {
+          final args = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (ctx) => PermitDashboardPage(
+              userType: args['userType'],
+              userProfile: args['userProfile'],
+              permitType: args['permitType'],
+              questions: args['questions'],
+              forms: args['forms'],
+            ),
+          );
+        }
+        return null;
+      },
   );
   }
 }

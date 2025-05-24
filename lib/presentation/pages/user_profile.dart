@@ -64,7 +64,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                   SizedBox(height: 8.0),
                   Text(
-                    'Tipo de Usuário: ${user?.tipoUsuario ?? ''}',
+                    'Tipo de Usuário: ${user?.userType ?? ''}',
                     style: TextStyle(
                       fontSize: 18.0,
                     ),
