@@ -1,22 +1,22 @@
 class UserModel {
   final String name;
   final String email;
-  final String password;
-  final String tipoUsuario;
+  final String userType;
+  final String profile;
 
   UserModel({
     required this.name,
     required this.email,
-    required this.password,
-    required this.tipoUsuario,
+    required this.userType,
+    required this.profile,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'name': name,
       'email': email,
-      'password': password,
-      'tipoUsuario': tipoUsuario,
+      'userType': userType,
+      'profile': profile,
     };
   }
 
@@ -24,12 +24,9 @@ class UserModel {
     return UserModel(
       name: json['name'],
       email: json['email'],
-      password: json['password'],
-      tipoUsuario: json['tipoUsuario'],
+      userType: json['userType'],
+      profile: json['profile'],
     );
   }
 
-  get type => null;
-
-  get profile => null;
 }

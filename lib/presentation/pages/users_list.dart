@@ -100,10 +100,6 @@ class _UsersListPageState extends State<UsersListPage> {
     );
   }
 
-  // String _gerarSenha() {
-  //   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  //   return List.generate(10, (index) => chars[Random().nextInt(chars.length)]).join();
-  // }
 
   @override
   Widget build(BuildContext context) {
