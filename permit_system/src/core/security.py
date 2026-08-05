@@ -45,6 +45,18 @@ def create_mfa_challenge_token(subject: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def create_email_verification_token(email: str) -> str:
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=30)
+    payload = {
+        "sub": email,
+        "purpose": "email_verification",
+        "iat": int(now.timestamp()),
+        "exp": expires_at,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
 def decode_token(token: str) -> dict[str, Any]:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

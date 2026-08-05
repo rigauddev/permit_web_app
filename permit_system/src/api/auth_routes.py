@@ -4,7 +4,18 @@ from sqlalchemy.orm import Session
 from src.api.dependencies import get_current_user, require_roles
 from src.infra.database.models import UserModel
 from src.infra.database.mysql_db import get_db
-from src.schemas.auth_schema import LoginRequest, LoginStartResponse, MfaGenerateRequest, MfaGenerateResponse, MfaVerifyRequest, TokenResponse
+from src.schemas.auth_schema import (
+    EmailVerificationConfirmRequest,
+    EmailVerificationConfirmResponse,
+    EmailVerificationStartRequest,
+    EmailVerificationStartResponse,
+    LoginRequest,
+    LoginStartResponse,
+    MfaGenerateRequest,
+    MfaGenerateResponse,
+    MfaVerifyRequest,
+    TokenResponse,
+)
 from src.schemas.user_schema import UserCreateRequest, UserResponse
 from src.services.auth_service import AuthService
 
@@ -27,9 +38,24 @@ def verify_mfa(payload: MfaVerifyRequest, db: Session = Depends(get_db)):
     return AuthService(db).verify_mfa_code(payload.challenge_token, payload.method, payload.code)
 
 
+@router.post("/email-verifications", response_model=EmailVerificationStartResponse)
+def start_email_verification(payload: EmailVerificationStartRequest, db: Session = Depends(get_db)):
+    return AuthService(db).start_email_verification(payload.email, payload.purpose)
+
+
+@router.post("/email-verifications/confirm", response_model=EmailVerificationConfirmResponse)
+def confirm_email_verification(payload: EmailVerificationConfirmRequest, db: Session = Depends(get_db)):
+    return AuthService(db).confirm_email_verification(payload.email, payload.code, payload.purpose)
+
+
 @router.post("/register", response_model=UserResponse)
 def register(payload: UserCreateRequest, db: Session = Depends(get_db)):
-    return AuthService(db).create_user(payload, force_role="cidadao", force_secretaria=None)
+    return AuthService(db).create_user(
+        payload,
+        force_role="cidadao",
+        force_secretaria=None,
+        require_email_verification=True,
+    )
 
 
 @router.post("/company-users", response_model=UserResponse)

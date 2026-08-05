@@ -4,9 +4,23 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.security import create_access_token, create_mfa_challenge_token, decode_token, hash_password, verify_password
-from src.infra.database.models import RoleModel, SecretariaModel, UserModel
-from src.schemas.auth_schema import LoginStartResponse, MfaGenerateResponse, TokenResponse, UserSessionResponse
+from src.core.security import (
+    create_access_token,
+    create_email_verification_token,
+    create_mfa_challenge_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
+from src.infra.database.models import EmailVerificationModel, RoleModel, SecretariaModel, UserModel
+from src.schemas.auth_schema import (
+    EmailVerificationConfirmResponse,
+    EmailVerificationStartResponse,
+    LoginStartResponse,
+    MfaGenerateResponse,
+    TokenResponse,
+    UserSessionResponse,
+)
 from src.schemas.user_schema import UserCreateRequest, UserResponse
 
 
@@ -77,7 +91,67 @@ class AuthService:
         )
         return TokenResponse(access_token=token, user=session)
 
-    def create_user(self, payload: UserCreateRequest, force_role: str | None = None, force_secretaria: str | None = None) -> UserResponse:
+    def start_email_verification(self, email: str, purpose: str = "register") -> EmailVerificationStartResponse:
+        existing_user = self.db.query(UserModel).filter(UserModel.email == email).first()
+        if purpose == "register" and existing_user:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já cadastrado")
+
+        code = f"{random.randint(0, 999999):06d}"
+        verification = EmailVerificationModel(
+            email=email,
+            purpose=purpose,
+            code_hash=hash_password(code),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+        )
+        self.db.add(verification)
+        self.db.commit()
+
+        return EmailVerificationStartResponse(
+            email=email,
+            delivery=self._mask_email(email),
+            dev_code=code,
+        )
+
+    def confirm_email_verification(self, email: str, code: str, purpose: str = "register") -> EmailVerificationConfirmResponse:
+        verification = (
+            self.db.query(EmailVerificationModel)
+            .filter(
+                EmailVerificationModel.email == email,
+                EmailVerificationModel.purpose == purpose,
+                EmailVerificationModel.verified_at.is_(None),
+            )
+            .order_by(EmailVerificationModel.created_at.desc())
+            .first()
+        )
+        if not verification:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código não gerado")
+
+        expires_at = verification.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código expirado")
+        if not verify_password(code, verification.code_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Código inválido")
+
+        verification.verified_at = datetime.now(timezone.utc)
+        self.db.commit()
+
+        return EmailVerificationConfirmResponse(
+            email=email,
+            verification_token=create_email_verification_token(email),
+        )
+
+    def create_user(
+        self,
+        payload: UserCreateRequest,
+        force_role: str | None = None,
+        force_secretaria: str | None = None,
+        require_email_verification: bool = False,
+    ) -> UserResponse:
+        if require_email_verification:
+            self._validate_email_verification_token(payload.email, payload.email_verification_token)
+
         existing = (
             self.db.query(UserModel)
             .filter((UserModel.email == payload.email) | (UserModel.cpf_cnpj == payload.cpf_cnpj))
@@ -153,9 +227,24 @@ class AuthService:
     def _mask_delivery(user: UserModel, method: str) -> str:
         if method != "email":
             return method
-        name, _, domain = user.email.partition("@")
+        return AuthService._mask_email(user.email)
+
+    @staticmethod
+    def _mask_email(email: str) -> str:
+        name, _, domain = email.partition("@")
         visible = name[:2] if len(name) > 2 else name[:1]
         return f"{visible}***@{domain}"
+
+    @staticmethod
+    def _validate_email_verification_token(email: str, verification_token: str | None) -> None:
+        if not verification_token:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valide o e-mail antes do cadastro")
+        try:
+            payload = decode_token(verification_token)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Validação de e-mail inválida") from exc
+        if payload.get("purpose") != "email_verification" or payload.get("sub") != email:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Validação de e-mail inválida")
 
     @staticmethod
     def to_response(user: UserModel) -> UserResponse:

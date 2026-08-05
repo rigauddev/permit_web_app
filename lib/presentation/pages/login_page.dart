@@ -21,6 +21,7 @@ class LoginPage extends HookConsumerWidget {
     final challenge = useState<LoginChallenge?>(null);
     final mfaGeneration = useState<MfaGeneration?>(null);
     final selectedMfaMethod = useState<String>('email');
+    final accessProfile = useState<String?>(null);
     final isLoading = useState(false);
     final obscurePassword = useState(true);
     final errorMessage = useState<String?>(null);
@@ -79,6 +80,15 @@ class LoginPage extends HookConsumerWidget {
           selectedMfaMethod.value,
           mfaController.text,
         );
+        final isCitizen = session.user.role == 'cidadao';
+        final selectedCitizen = accessProfile.value == 'cidadao';
+        if (selectedCitizen != isCitizen) {
+          errorMessage.value =
+              selectedCitizen
+                  ? 'Este login pertence a um usuário interno. Use o acesso Prefeitura.'
+                  : 'Este login pertence a um cidadão. Use o acesso Cidadão.';
+          return;
+        }
         await secureStorage.write(
           key: 'access_token',
           value: session.accessToken,
@@ -127,6 +137,7 @@ class LoginPage extends HookConsumerWidget {
     final size = MediaQuery.of(context).size;
     final theme = Theme.of(context);
     final hasChallenge = challenge.value != null;
+    final hasAccessProfile = accessProfile.value != null;
 
     return Scaffold(
       body: Center(
@@ -156,7 +167,9 @@ class LoginPage extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          hasChallenge
+                          !hasAccessProfile
+                              ? 'Escolha o tipo de acesso'
+                              : hasChallenge
                               ? 'Validação de segurança'
                               : 'Acesso ao sistema',
                           style: theme.textTheme.titleLarge?.copyWith(
@@ -165,7 +178,30 @@ class LoginPage extends HookConsumerWidget {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 20),
-                        if (!hasChallenge) ...[
+                        if (!hasAccessProfile) ...[
+                          _AccessProfileButton(
+                            icon: Icons.person_outline,
+                            title: 'Cidadão',
+                            subtitle:
+                                'Solicitar e acompanhar alvarás de evento.',
+                            onTap: () => accessProfile.value = 'cidadao',
+                          ),
+                          const SizedBox(height: 12),
+                          _AccessProfileButton(
+                            icon: Icons.badge_outlined,
+                            title: 'Prefeitura',
+                            subtitle: 'Operadores, gestores e administradores.',
+                            onTap: () => accessProfile.value = 'interno',
+                          ),
+                        ] else if (!hasChallenge) ...[
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => accessProfile.value = null,
+                              icon: const Icon(Icons.arrow_back),
+                              label: const Text('Trocar tipo de acesso'),
+                            ),
+                          ),
                           TextField(
                             controller: emailController,
                             keyboardType: TextInputType.emailAddress,
@@ -223,10 +259,12 @@ class LoginPage extends HookConsumerWidget {
                           const SizedBox(height: 12),
                           TextButton(
                             onPressed:
-                                () => Navigator.pushNamed(
-                                  context,
-                                  '/registrar_usuario',
-                                ),
+                                accessProfile.value == 'cidadao'
+                                    ? () => Navigator.pushNamed(
+                                      context,
+                                      '/registrar_usuario',
+                                    )
+                                    : null,
                             child: const Text('Criar conta de cidadão'),
                           ),
                         ] else ...[
@@ -337,6 +375,53 @@ class LoginPage extends HookConsumerWidget {
                   ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccessProfileButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _AccessProfileButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(subtitle),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
             ],
           ),
         ),

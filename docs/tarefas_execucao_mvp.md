@@ -11,7 +11,7 @@
 ## Marco 2 - Fluxo do cidadão
 
 - [ ] Limitar tela de serviços ao MVP de `Solicitação de Alvará de Evento`.
-- [ ] Criar cadastro PF/PJ.
+- [x] Criar cadastro PF/PJ com validação de e-mail antes do formulário.
 - [ ] Corrigir estado do formulário para separar dados do responsável, evento, respostas e anexos.
 - [ ] Validar antecedência mínima de 15 dias.
 - [ ] Validar campos obrigatórios do evento: nome, data, local, público esperado, início e término.
@@ -62,6 +62,8 @@
 - [ ] Criar logs de auditoria.
 - [x] Criar camada inicial de API de autenticação no Flutter.
 - [x] Substituir mock de login por chamadas HTTP com MFA.
+- [x] Identificar tipo de usuário pelo `role` retornado no login/JWT.
+- [x] Exibir escolha de acesso Cidadão ou Prefeitura antes do login.
 - [ ] Substituir mocks de solicitações por chamadas HTTP.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 

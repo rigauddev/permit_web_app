@@ -59,3 +59,15 @@ class UserModel(Base):
     role = relationship("RoleModel", back_populates="users")
     secretaria = relationship("SecretariaModel", back_populates="users")
     permit_requests = relationship("PermitRequestModel", back_populates="solicitante")
+
+
+class EmailVerificationModel(Base):
+    __tablename__ = "verificacoes_email"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    purpose = Column(String(50), default="register", nullable=False)
+    code_hash = Column(String(255), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
