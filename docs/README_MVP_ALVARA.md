@@ -8,6 +8,16 @@ Esta pasta reúne o planejamento executável do MVP de solicitação de alvará/
 - [Tarefas de execução](./tarefas_execucao_mvp.md)
 - [Descrição sugerida da PR](./pr_mvp_documentacao.md)
 
+## Estrutura do projeto
+
+O repositório do app agora concentra frontend e backend:
+
+- `lib/`: frontend Flutter web/mobile.
+- `permit_system/`: backend FastAPI.
+- `docs/`: documentação e planejamento do MVP.
+
+O backend foi movido para dentro do app sem incluir `.env`, `.venv`, caches ou arquivos locais.
+
 ## Escopo da primeira entrega
 
 O primeiro serviço em produção será a solicitação de alvará de festa/evento. O usuário externo se cadastra como pessoa física ou jurídica, informa dados do responsável e do evento, anexa documentos obrigatórios e responde perguntas condicionais. A partir das respostas, o sistema cria pendências por secretaria/órgão responsável.

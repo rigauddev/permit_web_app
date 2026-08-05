@@ -1,0 +1,1 @@
+from src.entities.exceptions.pydantic_entity import BaseModelDefault, BaseModelExtended

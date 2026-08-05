@@ -10,6 +10,7 @@ Esta PR organiza o roadmap e as tarefas executáveis do MVP de solicitação de 
 - Adiciona roadmap de entrega em `docs/roadmap_entrega_mvp.md`.
 - Adiciona checklist de execução em `docs/tarefas_execucao_mvp.md`.
 - Adiciona descrição sugerida desta PR em `docs/pr_mvp_documentacao.md`.
+- Organiza o backend `permit_system/` dentro do repositório Flutter, sem incluir `.env`, `.venv` ou caches locais.
 
 ## Decisões registradas
 
