@@ -62,29 +62,38 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                   child: const Text('Voltar'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    if (state.currentStep == state.totalSteps - 1) {
-                      controller.submitRequest(context);
-                      controller.resetForm();
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder:
-                              (_) => PermitDashboardPage(
-                                userType: widget.userType,
-                                userProfile: widget.userProfile,
-                                permitType: widget.permitType,
-                                questions: const [],
-                                forms: const [],
-                              ),
-                        ),
-                      );
-                    } else {
-                      controller.nextStep();
-                    }
-                  },
+                  onPressed:
+                      state.isSubmitting
+                          ? null
+                          : () async {
+                            if (!controller.canGoNext(context)) return;
+                            if (state.currentStep == state.totalSteps - 1) {
+                              final protocolo = await controller.submitRequest(
+                                context,
+                              );
+                              if (protocolo == null || !context.mounted) return;
+                              controller.resetForm();
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder:
+                                      (_) => PermitDashboardPage(
+                                        userType: widget.userType,
+                                        userProfile: widget.userProfile,
+                                        permitType: widget.permitType,
+                                        questions: widget.questions,
+                                        forms: const [],
+                                      ),
+                                ),
+                              );
+                            } else {
+                              controller.nextStep();
+                            }
+                          },
                   child: Text(
-                    state.currentStep == state.totalSteps - 1
+                    state.isSubmitting
+                        ? 'Enviando...'
+                        : state.currentStep == state.totalSteps - 1
                         ? 'Enviar'
                         : 'Avançar',
                   ),

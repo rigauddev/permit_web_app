@@ -1,6 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/permit_api_service.dart';
 import '../../permit_request/models/permit_request_state.dart';
 
 final permitRequestControllerProvider =
@@ -14,12 +16,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
   void initializeQuestions(List<Map<String, dynamic>> newQuestions) {
     state = state.copyWith(
       questions: newQuestions,
-      totalSteps: state.totalSteps + newQuestions.length,
+      totalSteps: 4 + newQuestions.length,
+      currentStep: 0,
+      submittedProtocol: null,
     );
   }
 
-  void updateAnswer(int questionId, dynamic answer) {
-    state = state.copyWith(answers: {...state.answers, questionId: answer});
+  void updateAnswer(String questionKey, dynamic answer) {
+    final response = answer is Map ? answer['resposta'] : answer;
+    state = state.copyWith(
+      answers: {...state.answers, questionKey: response == 'Sim'},
+      answerDetails: {...state.answerDetails, questionKey: answer},
+    );
   }
 
   void updateBasicInfo({
@@ -29,30 +37,58 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? phone,
     String? email,
   }) {
-    final updatedAnswers = Map<int, dynamic>.from(state.answers);
-    if (name != null) updatedAnswers[-1] = name;
-    if (cpfCnpj != null) updatedAnswers[-2] = cpfCnpj;
-    if (address != null) updatedAnswers[-3] = address;
-    if (phone != null) updatedAnswers[-4] = phone;
-    if (email != null) updatedAnswers[-5] = email;
+    final updated = Map<String, String>.from(state.responsibleData);
+    if (name != null) updated['nome'] = name;
+    if (cpfCnpj != null) updated['cpf_cnpj'] = cpfCnpj;
+    if (address != null) updated['endereco'] = address;
+    if (phone != null) updated['telefone'] = phone;
+    if (email != null) updated['email'] = email;
 
-    state = state.copyWith(answers: updatedAnswers);
+    state = state.copyWith(responsibleData: updated);
   }
 
   void updateEventInfo({
     String? eventName,
     String? eventDate,
     String? eventAddress,
+    String? expectedPublic,
+    String? startTime,
+    String? endTime,
+    bool? isBeneficente,
+    String? instituicaoBeneficiada,
   }) {
-    final updatedAnswers = Map<int, dynamic>.from(state.answers);
-    if (eventName != null) updatedAnswers[-3] = eventName;
-    if (eventDate != null) updatedAnswers[-4] = eventDate;
-    if (eventAddress != null) updatedAnswers[-5] = eventAddress;
-    state = state.copyWith(answers: updatedAnswers);
+    final updated = Map<String, String>.from(state.eventData);
+    if (eventName != null) updated['nome_evento'] = eventName;
+    if (eventDate != null) updated['data_evento'] = eventDate;
+    if (eventAddress != null) updated['endereco_evento'] = eventAddress;
+    if (expectedPublic != null) updated['publico_estimado'] = expectedPublic;
+    if (startTime != null) updated['horario_inicio'] = startTime;
+    if (endTime != null) updated['horario_termino'] = endTime;
+    if (isBeneficente != null) {
+      updated['is_beneficente'] = isBeneficente.toString();
+    }
+    if (instituicaoBeneficiada != null) {
+      updated['instituicao_beneficiada'] = instituicaoBeneficiada;
+    }
+    state = state.copyWith(eventData: updated);
   }
 
   void addAttachments(List<PlatformFile> newFiles) {
     state = state.copyWith(attachments: [...state.attachments, ...newFiles]);
+  }
+
+  void removeAttachment(PlatformFile file) {
+    state = state.copyWith(
+      attachments:
+          state.attachments
+              .where(
+                (item) =>
+                    item.name != file.name ||
+                    item.size != file.size ||
+                    item.path != file.path,
+              )
+              .toList(),
+    );
   }
 
   void nextStep() {
@@ -71,9 +107,107 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     state = PermitRequestState.initial();
   }
 
-  void submitRequest(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Solicitação enviada com sucesso!')),
-    );
+  bool canGoNext(BuildContext context) {
+    final error = validateCurrentStep();
+    if (error == null) return true;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    return false;
+  }
+
+  String? validateCurrentStep() {
+    if (state.currentStep == 0) {
+      for (final field in [
+        'nome',
+        'cpf_cnpj',
+        'telefone',
+        'email',
+        'endereco',
+      ]) {
+        if ((state.responsibleData[field] ?? '').trim().isEmpty) {
+          return 'Preencha todos os dados do responsável.';
+        }
+      }
+    }
+
+    if (state.currentStep == 1 && state.attachments.length < 3) {
+      return 'Anexe RG/CPF, comprovante de residência e alvará do local.';
+    }
+
+    if (state.currentStep == 2) {
+      for (final field in [
+        'nome_evento',
+        'data_evento',
+        'endereco_evento',
+        'publico_estimado',
+        'horario_inicio',
+        'horario_termino',
+      ]) {
+        if ((state.eventData[field] ?? '').trim().isEmpty) {
+          return 'Preencha todos os dados obrigatórios do evento.';
+        }
+      }
+      final eventDate = DateTime.tryParse(state.eventData['data_evento'] ?? '');
+      if (eventDate == null) {
+        return 'Informe a data do evento no formato correto.';
+      }
+      final today = DateTime.now();
+      final currentDate = DateTime(today.year, today.month, today.day);
+      if (eventDate.difference(currentDate).inDays < 15) {
+        return 'A solicitação precisa ser feita com pelo menos 15 dias de antecedência.';
+      }
+      if (state.eventData['is_beneficente'] == 'true' &&
+          (state.eventData['instituicao_beneficiada'] ?? '').trim().isEmpty) {
+        return 'Informe a instituição beneficiada pelo evento.';
+      }
+    }
+
+    if (state.currentStep >= 3 && state.currentStep < state.totalSteps - 1) {
+      final question = state.questions[state.currentStep - 3];
+      final key = question['key'] as String;
+      if (!state.answers.containsKey(key)) {
+        return 'Responda a pergunta antes de avançar.';
+      }
+    }
+
+    return null;
+  }
+
+  List<Map<String, String>> previewRequirements() {
+    return PermitApiService.previewRequirements(state.answers, state.eventData);
+  }
+
+  Future<String?> submitRequest(BuildContext context) async {
+    if (state.isSubmitting) return null;
+    state = state.copyWith(isSubmitting: true);
+    try {
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        throw PermitApiException('Sessão expirada. Faça login novamente.');
+      }
+      final response = await PermitApiService().createRequest(
+        accessToken: token,
+        responsibleData: state.responsibleData,
+        eventData: state.eventData,
+        answers: state.answers,
+        attachmentNames: state.attachments.map((file) => file.name).toList(),
+      );
+      final protocolo = response['protocolo'] as String? ?? '';
+      state = state.copyWith(isSubmitting: false, submittedProtocol: protocolo);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Solicitação enviada. Protocolo: $protocolo')),
+        );
+      }
+      return protocolo;
+    } catch (error) {
+      state = state.copyWith(isSubmitting: false);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+      return null;
+    }
   }
 }

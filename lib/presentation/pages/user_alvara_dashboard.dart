@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/permit_api_service.dart';
 import '../../features/permit_request/pages/permit_request_page.dart';
 import '../../shared/widgets/back_to_services_button.dart';
 import '../../shared/widgets/chat_comentarios.dart';
 import '../../shared/widgets/custom_drawer.dart';
 
-class PermitDashboardPage extends StatelessWidget {
+class PermitDashboardPage extends StatefulWidget {
   final String userType;
   final String userProfile;
   final String permitType;
@@ -21,11 +23,42 @@ class PermitDashboardPage extends StatelessWidget {
   });
 
   @override
+  State<PermitDashboardPage> createState() => _PermitDashboardPageState();
+}
+
+class _PermitDashboardPageState extends State<PermitDashboardPage> {
+  late List<Map<String, dynamic>> _forms;
+  bool _loadingForms = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _forms = List<Map<String, dynamic>>.from(widget.forms);
+    _loadForms();
+  }
+
+  Future<void> _loadForms() async {
+    setState(() => _loadingForms = true);
+    try {
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) return;
+      final forms = await PermitApiService().listRequests(token);
+      if (!mounted) return;
+      setState(() => _forms = forms);
+    } catch (_) {
+      // Mantém a lista atual para não bloquear o usuário por falha temporária.
+    } finally {
+      if (mounted) setState(() => _loadingForms = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       // appBar: CustomAppBar(title: 'Alvará', actions: []),
       appBar: AppBar(title: Text('Alvará')),
-      drawer: CustomDrawer(userType: userType),
+      drawer: CustomDrawer(userType: widget.userType),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -134,20 +167,20 @@ class PermitDashboardPage extends StatelessWidget {
                         ),
                       ),
                       ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
+                        onPressed: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder:
                                   (context) => PermitRequestPage(
-                                    userType: userType,
-                                    userProfile: userProfile,
-                                    permitType: permitType,
-                                    questions:
-                                        questions, // Sua lista vinda do backend
+                                    userType: widget.userType,
+                                    userProfile: widget.userProfile,
+                                    permitType: widget.permitType,
+                                    questions: widget.questions,
                                   ),
                             ),
                           );
+                          if (mounted) _loadForms();
                         },
                         icon: Icon(Icons.add),
                         label: Text('Nova Solicitação'),
@@ -172,9 +205,17 @@ class PermitDashboardPage extends StatelessWidget {
                       ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        itemCount: forms.length,
+                        itemCount: _forms.length + (_loadingForms ? 1 : 0),
                         itemBuilder: (context, index) {
-                          final form = forms[index];
+                          if (_loadingForms && index == 0) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+
+                          final form =
+                              _forms[_loadingForms ? index - 1 : index];
 
                           return Card(
                             child: Padding(
@@ -396,7 +437,7 @@ class PermitDashboardPage extends StatelessWidget {
               observacoes: observacoes,
               anexosExistentes: anexosExistentes,
               scrollController: scrollCtrl,
-              userType: '',
+              userType: widget.userType,
             );
           },
         );
