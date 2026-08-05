@@ -1,16 +1,33 @@
-# permit_web_app
+# Projeto Flutter - Serviços
 
-A new Flutter project.
+## ✅ Requisitos
 
-## Getting Started
+- Flutter 3.x
+- Docker
+- Android Studio ou VS Code com Dart/Flutter plugin
 
-This project is a starting point for a Flutter application.
+## 🚀 Rodando o Projeto com Docker
 
-A few resources to get you started if this is your first Flutter project:
+1. Certifique-se de que o Docker está instalado e rodando.
+2. No terminal, execute:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```bash
+docker build -t alvara_app .
+docker run -p 8080:80 alvara_app
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+ ## 🔧 Desenvolvimento Local
+
+
+ flutter pub get
+ lutter run -d chrome
+
+ ## 🧱 Estrutura do Projeto
+
+core/: temas, rotas e utilitários globais
+
+data/: modelos compartilhados
+
+features/: organização por funcionalidades
+
+presentation/: widgets reutilizáveis

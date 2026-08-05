@@ -3,6 +3,15 @@
 *.log
 *.pyc
 *.swp
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+*.db
 .DS_Store
 .atom/
 .build/
@@ -32,6 +41,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+ios/build/
 
 # Symbolication related
 app.*.symbols

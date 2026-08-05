@@ -5,13 +5,13 @@
 - [x] Criar roadmap do MVP.
 - [x] Criar lista de tarefas executáveis.
 - [x] Registrar decisão de manter um único app com perfis.
-- [ ] Configurar branch remota para PR.
+- [x] Configurar branch remota para PR.
 - [ ] Definir ambiente de homologação.
 
 ## Marco 2 - Fluxo do cidadão
 
 - [ ] Limitar tela de serviços ao MVP de `Solicitação de Alvará de Evento`.
-- [ ] Criar cadastro PF/PJ.
+- [x] Criar cadastro PF/PJ com validação de e-mail antes do formulário.
 - [ ] Corrigir estado do formulário para separar dados do responsável, evento, respostas e anexos.
 - [ ] Validar antecedência mínima de 15 dias.
 - [ ] Validar campos obrigatórios do evento: nome, data, local, público esperado, início e término.
@@ -53,14 +53,19 @@
 
 ## Marco 6 - Backend e persistência
 
-- [ ] Implementar API mínima.
-- [ ] Criar autenticação no backend.
+- [x] Implementar API mínima de login, usuário atual e solicitações.
+- [x] Criar autenticação no backend.
 - [ ] Remover usuários mockados do caminho de produção.
-- [ ] Criar modelos de usuários, secretarias, solicitações, exigências, anexos e comentários.
+- [x] Criar modelos de usuários, secretarias, solicitações, exigências e anexos.
+- [ ] Criar modelo de comentários.
 - [ ] Criar upload com validação de tipo/tamanho.
 - [ ] Criar logs de auditoria.
-- [ ] Criar camada de API no Flutter.
-- [ ] Substituir mocks por chamadas HTTP.
+- [x] Criar camada inicial de API de autenticação no Flutter.
+- [x] Substituir mock de login por chamadas HTTP com MFA.
+- [x] Identificar tipo de usuário pelo `role` retornado no login/JWT.
+- [x] Exibir escolha de acesso Cidadão ou Prefeitura antes do login.
+- [ ] Substituir mocks de solicitações por chamadas HTTP.
+- [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 
 ## Marco 7 - Documento final e DAM
 
@@ -75,6 +80,7 @@
 - [ ] Testar cadastro PF.
 - [ ] Testar cadastro PJ.
 - [ ] Testar login.
+- [x] Testar login backend com MFA por e-mail em ambiente local.
 - [ ] Testar solicitação completa.
 - [ ] Testar evento com som.
 - [ ] Testar evento com palco/gerador.

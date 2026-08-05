@@ -1,53 +1,79 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../data/providers/user_provider.dart';
 
-class CustomDrawer extends StatelessWidget {
+class CustomDrawer extends ConsumerWidget implements PreferredSizeWidget {
   final String userType; // user, operador, gestor, admin
   final String? userProfile; // null, ou 'admin' para gestor admin
 
-  const CustomDrawer({
-    super.key,
-    required this.userType,
-    this.userProfile,
-  });
+  const CustomDrawer({super.key, required this.userType, this.userProfile});
 
   bool get isAdmin => userType == 'admin';
   bool get isUser => userType == 'user';
-  bool get isOperatorOrManager => userType == 'operador' || userType == 'gestor';
+  bool get isOperatorOrManager =>
+      userType == 'operador' || userType == 'gestor';
   bool get isGestorAdmin => userType == 'gestor' && userProfile == 'admin';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(userProvider);
     final primaryColor = Theme.of(context).colorScheme.primary;
-
     return Drawer(
       child: ListView(
+        padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
             decoration: BoxDecoration(color: primaryColor),
-            child: const Center(
-              child: Text(
-                'Prefeitura de Valença',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
+            child: Column(
+              children: [
+                CircleAvatar(
+                  radius: 50,
+                  backgroundImage: AssetImage('assets/images/avatar.jpg'),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  user!.name,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ],
             ),
           ),
 
           /// Início - todos acessam
-          _buildTile(context, icon: Icons.home, title: 'Início', route: '/home'),
+          _buildTile(
+            context,
+            icon: Icons.home,
+            title: 'Início',
+            route: '/home',
+          ),
 
           /// Alvará (usuário comum)
           if (isUser || isOperatorOrManager || isAdmin)
-            _buildTile(context, icon: Icons.event, title: 'Serviços', route: '/services'),
-
-            // ExpansionTile(
-            //   leading: Icon(Icons.event, color: primaryColor), 
-            //   title: const Text('Agendamentos'), 
-            //   children: [
-            //     _buildSubTile(context, 'Solicitar Alvará', '/event-permit'),
-            //     _buildSubTile(context, 'Meus Alvarás', '/my-permits'),
-            //     _buildSubTile(context, 'Certidão', '/my-permits'),
-            //   ]), 
-
+            ExpansionTile(
+              leading: Icon(Icons.event, color: primaryColor),
+              title: const Text('Serviços'),
+              children: [
+                _buildSubTile(context, 'Serviços', '/services'),
+                _buildSubTile(
+                  context,
+                  'Secretaria de Cultura',
+                  '/solicitacoes',
+                ),
+                _buildSubTile(
+                  context,
+                  'secreatria de Desenvolvimento Social',
+                  '/vistorias',
+                ),
+                _buildSubTile(
+                  context,
+                  'Secretaria de Desenvolvimento Urbano',
+                  '/dam',
+                ),
+                _buildSubTile(context, 'Secretaria de Educação', '/dam'),
+                _buildSubTile(context, 'Secretaria de Segurança', '/dam'),
+                _buildSubTile(context, 'Secretaria de Transporte', '/dam'),
+              ],
+            ),
 
           /// Submenu: Serviços (Operador, Gestor e Admin)
           if (isOperatorOrManager || isAdmin)
@@ -62,18 +88,14 @@ class CustomDrawer extends StatelessWidget {
             ),
 
           /// Usuários (Apenas gestor admin e admin)
-          if (isGestorAdmin || isAdmin)
-            _buildTile(context, icon: Icons.people, title: 'Usuarios', route: '/users'),
+          if (isAdmin)
+            _buildTile(
+              context,
+              icon: Icons.people,
+              title: 'Usuarios',
+              route: '/users',
+            ),
 
-          // ExpansionTile(
-          //   leading: Icon(Icons.people, color: primaryColor),
-          //   title: const Text('Usuários'),
-          //   children: [
-          //     _buildSubTile(context, 'Cadastrar Usuários', '/user-create'),
-          //     _buildSubTile(context, 'Permissões de Usuários', '/users'),
-          //   ],
-          // ),
-          
           ExpansionTile(
             leading: Icon(Icons.people, color: primaryColor),
             title: const Text('Secretaria'),
@@ -81,19 +103,18 @@ class CustomDrawer extends StatelessWidget {
               _buildSubTile(context, 'Cadastrar Secretaria', '/users'),
               _buildSubTile(context, 'Gestão de Operadores', '/users'),
               _buildSubTile(context, 'Gestão de Gestor', '/users'),
-            ]
-            ),
-            ExpansionTile(
+            ],
+          ),
+
+          ExpansionTile(
             leading: Icon(Icons.people, color: primaryColor),
             title: const Text('Configurações'),
             children: [
-              
               _buildSubTile(context, 'Permissões', '/users'),
               _buildSubTile(context, 'Tipo de Usuários', '/users'),
               _buildSubTile(context, 'Criar perguntas', '/questtions'),
-
-            ]
-            ),
+            ],
+          ),
 
           const Divider(),
 
@@ -109,8 +130,14 @@ class CustomDrawer extends StatelessWidget {
       ),
     );
   }
+
   /// Utilitário para criar ListTiles padrão
-  Widget _buildTile(BuildContext context, {required IconData icon, required String title, required String route}) {
+  Widget _buildTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String route,
+  }) {
     return ListTile(
       leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
       title: Text(title),
@@ -130,4 +157,7 @@ class CustomDrawer extends StatelessWidget {
       },
     );
   }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
