@@ -72,3 +72,24 @@ Para executar a aplicação, execute o seguinte comando:
 ```bash
 uvicorn main:app --reload
 ```
+
+## Desenvolvimento local com seeds
+
+O backend usa `DATABASE_URL` e, por padrão, cria um SQLite local em `permit_system.db`.
+
+```bash
+cp .env.example .env
+pip install -r requirements.txt
+python scripts/seed.py
+uvicorn main:app --reload
+```
+
+Usuários de teste criados pelo seed:
+
+- `admin@prefeitura.local`
+- `cidadao@teste.local`
+- `meioambiente@prefeitura.local`
+- `dmtran@prefeitura.local`
+- `gestor@prefeitura.local`
+
+Senha padrão: `123456`.
