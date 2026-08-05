@@ -57,15 +57,21 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                     child: const Text('Voltar'),
                   ),
                 ElevatedButton(
-                  onPressed: () {
-                    if (state.currentStep == state.totalSteps - 1) {
-                      controller.submitRequest(context);
-                    } else {
-                      controller.nextStep();
-                    }
-                  },
+                  onPressed:
+                      state.isSubmitting
+                          ? null
+                          : () async {
+                            if (!controller.canGoNext(context)) return;
+                            if (state.currentStep == state.totalSteps - 1) {
+                              await controller.submitRequest(context);
+                            } else {
+                              controller.nextStep();
+                            }
+                          },
                   child: Text(
-                    state.currentStep == state.totalSteps - 1
+                    state.isSubmitting
+                        ? 'Enviando...'
+                        : state.currentStep == state.totalSteps - 1
                         ? 'Enviar'
                         : 'Avançar',
                   ),

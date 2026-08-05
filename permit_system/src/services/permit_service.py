@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.infra.database.models import PermitRequestModel, PermitRequirementModel, SecretariaModel, UserModel
@@ -23,6 +24,7 @@ class PermitService:
         self.db = db
 
     def create_request(self, payload: PermitCreateRequest, solicitante: UserModel) -> PermitResponse:
+        self._validate_payload(payload)
         protocolo = self._generate_protocol()
         dam_status = "isento" if payload.is_beneficente else "pendente_prefeitura"
         request = PermitRequestModel(
@@ -87,6 +89,57 @@ class PermitService:
                 requirements.append((secretaria_slug, tipo_exigencia))
                 seen.add((secretaria_slug, tipo_exigencia))
         return requirements
+
+    @staticmethod
+    def _validate_payload(payload: PermitCreateRequest) -> None:
+        responsible_required = ["nome", "cpf_cnpj", "telefone", "email", "endereco"]
+        event_required = [
+            "nome_evento",
+            "data_evento",
+            "endereco_evento",
+            "publico_estimado",
+            "horario_inicio",
+            "horario_termino",
+        ]
+
+        if any(not str(payload.dados_responsavel.get(field, "")).strip() for field in responsible_required):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Dados obrigatórios do responsável não foram preenchidos.",
+            )
+
+        if any(not str(payload.dados_evento.get(field, "")).strip() for field in event_required):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Dados obrigatórios do evento não foram preenchidos.",
+            )
+
+        try:
+            event_date = date.fromisoformat(str(payload.dados_evento["data_evento"]))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Data do evento deve estar no formato AAAA-MM-DD.",
+            ) from exc
+
+        if event_date < date.today() + timedelta(days=15):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A solicitação precisa ter pelo menos 15 dias de antecedência.",
+            )
+
+        attachment_names = payload.dados_evento.get("anexos_informados") or []
+        if not isinstance(attachment_names, list) or len(attachment_names) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe RG/CPF, comprovante de residência e alvará do local.",
+            )
+
+        if payload.is_beneficente and not (payload.instituicao_beneficiada or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe a instituição beneficiada pelo evento beneficente.",
+            )
 
     @staticmethod
     def _generate_protocol() -> str:
