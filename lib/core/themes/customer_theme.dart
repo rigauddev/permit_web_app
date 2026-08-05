@@ -1,61 +1,69 @@
-
 import 'package:flutter/material.dart';
 
+const Color valencaGreen = Color(0xFF005C20);
+const Color valencaLightGreen = Color(0xFF00A63C);
+const Color valencaBlue = Color(0xFF00AEEF);
+const Color valencaYellow = Color(0xFFFFD733);
+const Color valencaRed = Color(0xFFE30613);
+const Color valencaInk = Color(0xFF172019);
+
 final ThemeData customTheme = ThemeData(
-  colorScheme: ColorScheme(
+  colorScheme: const ColorScheme(
     brightness: Brightness.light,
-    primary: Color(0xFF1E5631),       // Verde - cor primária
+    primary: valencaGreen,
     onPrimary: Colors.white,
-    secondary: Color(0xFF00AEEF),     // Azul - cor secundária
+    secondary: valencaBlue,
     onSecondary: Colors.white,
-    error: Color(0xFFE30613),         // Vermelho
+    tertiary: valencaYellow,
+    onTertiary: valencaInk,
+    error: valencaRed,
     onError: Colors.white,
     surface: Colors.white,
-    onSurface: Color(0xFF1A1A1A),
+    onSurface: valencaInk,
   ),
-  scaffoldBackgroundColor: Colors.white,
+  scaffoldBackgroundColor: const Color(0xFFF6F8F5),
   useMaterial3: true,
   fontFamily: 'Roboto',
-  inputDecorationTheme: InputDecorationTheme(
+  inputDecorationTheme: const InputDecorationTheme(
     filled: true,
-    fillColor: Colors.grey[100],
+    fillColor: Colors.white,
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
+      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderSide: BorderSide(color: Color(0xFFD8E0D8)),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF1E5631), width: 2),
+      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderSide: BorderSide(color: valencaGreen, width: 2),
     ),
-    labelStyle: const TextStyle(color: Color(0xFF1A1A1A)),
+    labelStyle: TextStyle(color: valencaInk),
+  ),
+  cardTheme: CardThemeData(
+    color: Colors.white,
+    elevation: 2,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: const Color(0xFF1E5631),
+      backgroundColor: valencaGreen,
       foregroundColor: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
   ),
   textButtonTheme: TextButtonThemeData(
-    style: TextButton.styleFrom(
-      foregroundColor: const Color(0xFF00AEEF),
-    ),
+    style: TextButton.styleFrom(foregroundColor: valencaGreen),
   ),
 
   appBarTheme: const AppBarTheme(
-  backgroundColor: Color(0xFF1E5631), // Verde principal
-  foregroundColor: Colors.white,
-  elevation: 4,
-  centerTitle: true,
-  titleTextStyle: TextStyle(
-    fontSize: 20,
-    fontWeight: FontWeight.bold,
-    color: Colors.white,
+    backgroundColor: valencaGreen,
+    foregroundColor: Colors.white,
+    elevation: 2,
+    centerTitle: true,
+    titleTextStyle: TextStyle(
+      fontSize: 20,
+      fontWeight: FontWeight.bold,
+      color: Colors.white,
+    ),
+    iconTheme: IconThemeData(color: Colors.white),
   ),
-  iconTheme: IconThemeData(color: Colors.white),
-),
-
 );

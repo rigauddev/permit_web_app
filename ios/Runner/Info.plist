@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Precisamos acessar a galeria para anexar arquivos.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Precisamos acessar a câmera para tirar fotos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Precisamos do microfone para anexar áudios (se necessário).</string>
 </dict>
 </plist>

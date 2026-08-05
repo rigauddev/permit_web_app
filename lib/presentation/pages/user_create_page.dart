@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../../core/auth_service.dart';
 
 class UserCreatePage extends StatefulWidget {
   final String userType;
@@ -10,108 +13,202 @@ class UserCreatePage extends StatefulWidget {
 
 class _UserCreatePageState extends State<UserCreatePage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _surnameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _surnameController = TextEditingController();
+  final _cpfController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _authService = AuthService();
+  final _secureStorage = const FlutterSecureStorage();
 
-  final List<String> _companyList = [
-    'Empresa 1',
-    'Empresa 2', 
-    'Empresa 3',
-  ];
+  final _roles = const {
+    'admin': 'Administrador',
+    'gestor_secretaria': 'Gestor de secretaria',
+    'operador_secretaria': 'Operador de secretaria',
+  };
 
-  final List<String> _userTypeList = [
-    'admin',
-    'gestor', 
-    'operador',
-  ];
-  String? _selectedUserType;
-  String? _selectedCompany;
+  final _secretarias = const {
+    'desenvolvimento_economico': 'Desenvolvimento Econômico',
+    'meio_ambiente': 'Meio Ambiente',
+    'infraestrutura': 'Infraestrutura',
+    'dmtran': 'DMTRAN',
+    'vigilancia_sanitaria': 'Vigilância Sanitária',
+    'guarda_civil': 'Guarda Civil Municipal',
+    'receita_municipal': 'Receita Municipal',
+  };
 
-  void _registerUser() {
-    if (_formKey.currentState!.validate()) {
-      // Simulação do cadastro
+  String? _selectedRole = 'operador_secretaria';
+  String? _selectedSecretaria = 'desenvolvimento_economico';
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _surnameController.dispose();
+    _cpfController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _registerUser() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final token = await _secureStorage.read(key: 'access_token');
+    if (token == null) {
+      _showError('Sessão expirada. Entre novamente.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _authService.createCompanyUser(
+        accessToken: token,
+        nome: _nameController.text,
+        sobrenome: _surnameController.text,
+        cpfCnpj: _cpfController.text,
+        email: _emailController.text,
+        senha: _passwordController.text,
+        role: _selectedRole!,
+        secretaria: _selectedRole == 'admin' ? null : _selectedSecretaria,
+        telefone: _phoneController.text,
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Usuário cadastrado para $_selectedCompany com sucesso!'),
+        const SnackBar(
+          content: Text('Usuário interno cadastrado com sucesso.'),
         ),
       );
       Navigator.pop(context);
+    } on AuthException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Não foi possível cadastrar o usuário interno');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Cadastro de Usuário')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Nome'),
-                validator: (value) => value!.isEmpty ? 'Informe seu nome' : null,
+      appBar: AppBar(title: const Text('Cadastro de usuário interno')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Nome'),
+                    validator:
+                        (value) => value!.isEmpty ? 'Informe o nome' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _surnameController,
+                    decoration: const InputDecoration(labelText: 'Sobrenome'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _cpfController,
+                    decoration: const InputDecoration(labelText: 'CPF'),
+                    validator:
+                        (value) => value!.isEmpty ? 'Informe o CPF' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(labelText: 'Telefone'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(labelText: 'E-mail'),
+                    keyboardType: TextInputType.emailAddress,
+                    validator:
+                        (value) => value!.isEmpty ? 'Informe o e-mail' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Senha inicial',
+                    ),
+                    obscureText: true,
+                    validator:
+                        (value) =>
+                            value!.length < 6
+                                ? 'A senha deve ter pelo menos 6 caracteres'
+                                : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedRole,
+                    decoration: const InputDecoration(labelText: 'Perfil'),
+                    items:
+                        _roles.entries
+                            .map(
+                              (entry) => DropdownMenuItem(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                            )
+                            .toList(),
+                    onChanged: (value) => setState(() => _selectedRole = value),
+                  ),
+                  if (_selectedRole != 'admin') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedSecretaria,
+                      decoration: const InputDecoration(
+                        labelText: 'Secretaria',
+                      ),
+                      items:
+                          _secretarias.entries
+                              .map(
+                                (entry) => DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                ),
+                              )
+                              .toList(),
+                      onChanged:
+                          (value) =>
+                              setState(() => _selectedSecretaria = value),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _registerUser,
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Cadastrar usuário interno'),
+                  ),
+                ],
               ),
-              TextFormField(
-                controller: _surnameController,
-                decoration: const InputDecoration(labelText: 'Sobrenome'),
-                validator: (value) => value!.isEmpty ? 'Informe seu sobrenome' : null,
-              ),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) => value!.isEmpty ? 'Informe seu email' : null,
-              ),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Senha'),
-                obscureText: true,
-                validator: (value) => value!.length < 6 ? 'A senha deve ter pelo menos 6 caracteres' : null,
-              ),
-              const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                value: _selectedCompany,
-                decoration: const InputDecoration(labelText: 'Empresa'),
-                items: _companyList.map((empresa) {
-                  return DropdownMenuItem(
-                    value: empresa,
-                    child: Text(empresa),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCompany = value;
-                  });
-                },
-                validator: (value) => value == null ? 'Selecione uma empresa' : null,
-              ),
-              DropdownButtonFormField<String>(
-                value: _selectedUserType,
-                decoration: const InputDecoration(labelText: 'Tipo de Usuário'),
-                items: _userTypeList.map((userType) {
-                  return DropdownMenuItem(
-                    value: userType,
-                    child: Text(userType),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedUserType = value;
-                  });
-                },
-                validator: (value) => value == null ? 'Selecione um tipo de usuário' : null,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _registerUser,
-                child: const Text('Cadastrar'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

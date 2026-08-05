@@ -6,10 +6,29 @@ class LoginRequest(BaseModel):
     senha: str = Field(..., min_length=6)
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: "UserSessionResponse"
+class LoginStartResponse(BaseModel):
+    mfa_required: bool = True
+    challenge_token: str
+    available_methods: list[str]
+    default_method: str = "email"
+
+
+class MfaGenerateRequest(BaseModel):
+    challenge_token: str
+    method: str = "email"
+
+
+class MfaGenerateResponse(BaseModel):
+    method: str
+    delivery: str
+    expires_in_seconds: int = 300
+    dev_code: str | None = None
+
+
+class MfaVerifyRequest(BaseModel):
+    challenge_token: str
+    method: str = "email"
+    code: str = Field(..., min_length=6, max_length=6)
 
 
 class UserSessionResponse(BaseModel):
@@ -20,4 +39,7 @@ class UserSessionResponse(BaseModel):
     secretaria: str | None = None
 
 
-TokenResponse.model_rebuild()
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserSessionResponse

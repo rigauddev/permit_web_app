@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from jose import jwt
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 
@@ -31,3 +31,22 @@ def create_access_token(subject: str, claims: dict[str, Any] | None = None) -> s
         **(claims or {}),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_mfa_challenge_token(subject: str) -> str:
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=10)
+    payload = {
+        "sub": subject,
+        "purpose": "mfa",
+        "iat": int(now.timestamp()),
+        "exp": expires_at,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_token(token: str) -> dict[str, Any]:
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError as exc:
+        raise ValueError("Token inválido") from exc

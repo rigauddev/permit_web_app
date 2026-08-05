@@ -5,7 +5,12 @@ class DetalhesSolicitacao extends StatelessWidget {
   final String data;
   final String empresa;
 
-  const DetalhesSolicitacao({super.key, required this.evento, required this.data, required this.empresa});
+  const DetalhesSolicitacao({
+    super.key,
+    required this.evento,
+    required this.data,
+    required this.empresa,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +31,10 @@ class DetalhesSolicitacao extends StatelessWidget {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fechar")),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Fechar"),
+        ),
       ],
     );
   }

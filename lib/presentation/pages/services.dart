@@ -1,31 +1,41 @@
 import 'package:flutter/material.dart';
-import '../../widgets/custom_appbar.dart';
-import '../../widgets/custom_drawer.dart';
+import '../../shared/widgets/custom_appbar.dart';
+import '../../shared/widgets/custom_drawer.dart';
 
 class ServicesPage extends StatelessWidget {
   const ServicesPage({
     super.key,
     required this.userType,
     this.userProfile,
+    this.userName,
   });
-  
+
   final String userType;
   final String? userProfile;
+  final String? userName;
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth < 600
-      ? 1
-      : screenWidth < 900
-        ? 2
-        : 3;
+    final crossAxisCount =
+        screenWidth < 600
+            ? 1
+            : screenWidth < 900
+            ? 2
+            : 3;
 
     final services = [
       {
         'title': 'Solicitação de Alvará',
-        'description': 'Solicite permissões para eventos e atividades públicas.',
+        'description':
+            'Solicite permissões para eventos e atividades públicas.',
         'icon': Icons.assignment,
+      },
+      {
+        'title': 'Coleta',
+        'description':
+            'Solicite permissões para eventos e atividades públicas.',
+        'icon': Icons.group_work_sharp,
       },
       // ... outros serviços ...
     ];
@@ -40,14 +50,15 @@ class ServicesPage extends StatelessWidget {
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           childAspectRatio: 1.2,
-          children: services.map((service) {
-            return _buildServiceCard(
-              context,
-              title: service['title'] as String,
-              description: service['description'] as String,
-              icon: service['icon'] as IconData,
-            );
-          }).toList(),
+          children:
+              services.map((service) {
+                return _buildServiceCard(
+                  context,
+                  title: service['title'] as String,
+                  description: service['description'] as String,
+                  icon: service['icon'] as IconData,
+                );
+              }).toList(),
         ),
       ),
     );
@@ -70,25 +81,40 @@ class ServicesPage extends StatelessWidget {
             Stack(
               alignment: Alignment.topRight,
               children: [
-                Center(child: Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary)),
+                Center(
+                  child: Icon(
+                    icon,
+                    size: 40,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.info_outline, size: 20),
                   tooltip: 'Descrição do serviço',
-                  onPressed: () => showDialog(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: Text(title),
-                      content: Text(description),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Fechar')),
-                      ],
-                    ),
-                  ),
+                  onPressed:
+                      () => showDialog(
+                        context: context,
+                        builder:
+                            (ctx) => AlertDialog(
+                              title: Text(title),
+                              content: Text(description),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: const Text('Fechar'),
+                                ),
+                              ],
+                            ),
+                      ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             ElevatedButton(
               onPressed: () => _onTapAlvara(context),
@@ -113,20 +139,39 @@ class ServicesPage extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildPermitTypeOption(dialogContext, parentContext, 'Alvará de Evento'),
-              _buildPermitTypeOption(dialogContext, parentContext, 'Alvará de Construção'),
-              _buildPermitTypeOption(dialogContext, parentContext, 'Alvará de Funcionamento'),
+              _buildPermitTypeOption(
+                dialogContext,
+                parentContext,
+                'Alvará de Evento',
+              ),
+              _buildPermitTypeOption(
+                dialogContext,
+                parentContext,
+                'Alvará de Construção',
+              ),
+              _buildPermitTypeOption(
+                dialogContext,
+                parentContext,
+                'Alvará de Funcionamento',
+              ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _buildPermitTypeOption(BuildContext dialogContext, BuildContext parentContext, String type) {
+  Widget _buildPermitTypeOption(
+    BuildContext dialogContext,
+    BuildContext parentContext,
+    String type,
+  ) {
     return ListTile(
       title: Text(type),
       leading: const Icon(Icons.assignment_outlined),
@@ -149,6 +194,7 @@ class ServicesPage extends StatelessWidget {
               'userType': userType,
               'userProfile': userProfile ?? '',
               'permitType': type,
+              'userName': userName ?? '',
               'questions': questions,
               'forms': forms,
             },
@@ -159,11 +205,13 @@ class ServicesPage extends StatelessWidget {
   }
 
   /// Mock do endpoint GET /question?permitType=...
-  Future<List<Map<String, dynamic>>> _fetchPerguntasPorTipo(String tipoFormulario) async {
+  Future<List<Map<String, dynamic>>> _fetchPerguntasPorTipo(
+    String tipoFormulario,
+  ) async {
     await Future.delayed(const Duration(seconds: 1));
     return [
       {
-        "id": "001",
+        "id": 001,
         "pergunta": "O evento vai ter carro de som?",
         "descricao": "Informe se o evento terá carro de som",
         "secretaria": "Infraestrutura",
@@ -172,12 +220,12 @@ class ServicesPage extends StatelessWidget {
         "status": "ativo",
       },
       {
-        "id": "002",
+        "id": 002,
         "pergunta": "Será vendida comida no evento?",
         "descricao": "Isso requer vistoria da Vigilância Sanitária",
         "secretaria": "Saúde",
         "tipo_formulario": tipoFormulario,
-        "tipos_resposta": ["Sim/Não"],
+        "tipos_resposta": ["Sim/Não", "Calendário", "Anexar Documento"],
         "status": "ativo",
       },
     ];
@@ -187,105 +235,116 @@ class ServicesPage extends StatelessWidget {
   Future<List<Map<String, dynamic>>> _fetchUserForms(String userType) async {
     await Future.delayed(const Duration(milliseconds: 800));
     return [
-      {
-        "formId": "F001",
-        "user_id": "U001",
-        "nome_do_evento": "Evento 1",
-        "permitType": "Alvará de Evento",
-        "local_evento": "Centro de conferência",
-        "data_do_evento": "10/05/2025",
-        "status": "aguardando aprovaçoes",
-        "perguntas": [
-          {
-            "id": "002",
-            "pergunta": "Será vendida comida no evento?",
-            "descricao": "Isso requer vistoria da Vigilância Sanitária",
-            "secretaria": "Saúde",
-            "anexos": ["Anexo 1", "Anexo 2"],
-            "data_do_evento": "10/05/2025",
-            "local": "Centro de conferência",
-            "status": "aguardando aprovaçao",
-            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
-          },
-          {
-            "id": "002",
-            "pergunta": "Será vendida comida no evento?",
-            "descricao": "Isso requer vistoria da Vigilância Sanitária",
-            "secretaria": "Saúde",
-            "anexos": ["Anexo 1", "Anexo 2"],
-            "data_do_evento": "10/05/2025",
-            "local_evento": "Centro de conferência",
-            "status": "aguardando aprovaçao",
-            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},] // Aqui vamos criar logica para aparecer com se fosse um chat 
-          },
-        ] // aguardando, aprovado, recusado
-      },
-      {
-        "formId": "F002",
-        "user_id": "U001",
-        "nome_do_evento": "Evento 1",
-        "permitType": "Alvará de Evento",
-        "local_evento": "Centro de conferência",
-        "data_do_evento": "2025-05-20",
-        "status": "aguardando",
-        "perguntas": [
-          {
-            "id": "002",
-            "pergunta": "Será vendida comida no evento?",
-            "descricao": "Isso requer vistoria da Vigilância Sanitária",
-            "secretaria": "Saúde",
-            "anexos": ["Anexo 1", "Anexo 2"],
-            "data_do_evento": "10/05/2025",
-            "local": "Centro de conferência",
-            "status": "aguardando aprovaçao",
-            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
-          },
-          {
-            "id": "002",
-            "pergunta": "Será vendida comida no evento?",
-            "descricao": "Isso requer vistoria da Vigilância Sanitária",
-            "secretaria": "Saúde",
-            "anexos": ["Anexo 1", "Anexo 2"],
-            "data_do_evento": "10/05/2025",
-            "local": "Centro de conferência",
-            "status": "aguardando aprovaçao",
-            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
-          },
-        ] // aguardando, aprovado, recusado
-      },
-      {
-        "formId": "F003",
-        "user_id": "U001",
-        "nome_do_evento": "Evento 1",
-        "permitType": "Alvará de Evento",
-        "local_evento": "Centro de conferência",
-        "data_do_evento": "2025-05-20",
-        "status": "aguardando",
-        "perguntas": [
-          {
-            "id": "002",
-            "pergunta": "Será vendida comida no evento?",
-            "descricao": "Isso requer vistoria da Vigilância Sanitária",
-            "secretaria": "Saúde",
-            "anexos": ["Anexo 1", "Anexo 2"],
-            "data_do_evento": "10/05/2025",
-            "local": "Centro de conferência",
-            "status": "aguardando aprovaçao",
-            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
-          },
-          {
-            "id": "002",
-            "pergunta": "Será vendida comida no evento?",
-            "descricao": "Isso requer vistoria da Vigilância Sanitária",
-            "secretaria": "Saúde",
-            "anexos": ["Anexo 1", "Anexo 2"],
-            "data_do_evento": "10/05/2025",
-            "local": "Centro de conferência",
-            "status": "aguardando aprovaçao",
-            "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
-          },
-        ] // aguardando, aprovado, recusado
-      },
+      // {
+      //   "formId": 001,
+      //   "user_id": 0012,
+      //   "nome_do_evento": "Evento 1",
+      //   "permitType": "Alvará de Evento",
+      //   "local_evento": "Centro de conferência",
+      //   "data_do_evento": "10/05/2025",
+      //   "status": "aguardando aprovaçoes",
+      //   "perguntas": [
+      //     {
+      //       "id": 001,
+      //       "pergunta": "Será vendida comida no evento?",
+      //       "descricao": "Isso requer vistoria da Vigilância Sanitária",
+      //       "secretaria": "Saúde",
+      //       "anexos": ["Anexo 1", "Anexo 2"],
+      //       "data_do_evento": "10/05/2025",
+      //       "local": "Centro de conferência",
+      //       "status": "aguardando aprovaçao",
+      //       "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"}]
+      //     },
+      //     {
+      //       "id": 002,
+      //       "pergunta": "Será vendida comida no evento?",
+      //       "descricao": "Isso requer vistoria da Vigilância Sanitária",
+      //       "secretaria": "Saúde",
+      //       "anexos": ["Anexo 1", "Anexo 2"],
+      //       "data_do_evento": "10/05/2025",
+      //       "local_evento": "Centro de conferência",
+      //       "status": "aguardando aprovaçao",
+      //       "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"}] // Aqui vamos criar logica para aparecer com se fosse um chat
+      //     },
+      //   ] // aguardando, aprovado, recusado
+      // },
+      // {
+      //   "formId": 002,
+      //   "user_id": 0011,
+      //   "nome_do_evento": "Evento 2",
+      //   "permitType": "Alvará de Evento",
+      //   "local_evento": "Centro de conferência",
+      //   "data_do_evento": "2025-05-20",
+      //   "status": "aguardando",
+      //   "perguntas": [
+      //     {
+      //       "id": 001,
+      //       "pergunta": "Será vendida comida no evento?",
+      //       "descricao": "Isso requer vistoria da Vigilância Sanitária",
+      //       "secretaria": "Saúde",
+      //       "anexos": ["Anexo 1", "Anexo 2"],
+      //       "data_do_evento": "10/05/2025",
+      //       "local": "Centro de conferência",
+      //       "status": "aguardando aprovaçao",
+      //       "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+      //     },
+      //     {
+      //       "id": 002,
+      //       "pergunta": "Será vendida comida no evento?",
+      //       "descricao": "Isso requer vistoria da Vigilância Sanitária",
+      //       "secretaria": "Saúde",
+      //       "anexos": ["Anexo 1", "Anexo 2"],
+      //       "data_do_evento": "10/05/2025",
+      //       "local": "Centro de conferência",
+      //       "status": "aguardando aprovaçao",
+      //       "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+      //     },
+      //   ] // aguardando, aprovado, recusado
+      // },
+      // {
+      //   "formId": 003,
+      //   "user_id": 001,
+      //   "nome_do_evento": "Evento 3",
+      //   "permitType": "Alvará de Evento",
+      //   "local_evento": "Centro de conferência",
+      //   "data_do_evento": "2025-05-20",
+      //   "status": "aguardando aprovaçoes",
+      //   "perguntas": [
+      //     {
+      //       "id": 001,
+      //       "pergunta": "Será vendida comida no evento?",
+      //       "descricao": "Isso requer vistoria da Vigilância Sanitária",
+      //       "secretaria": "Saúde",
+      //       "anexos": ["Anexo 1", "Anexo 2"],
+      //       "data_do_evento": "10/05/2025",
+      //       "local": "Centro de conferência",
+      //       "status": "aguardando aprovaçao",
+      //       "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+      //     },
+      //     {
+      //       "id": 002,
+      //       "pergunta": "Será vendida comida no evento?",
+      //       "descricao": "Isso requer vistoria da Vigilância Sanitária",
+      //       "secretaria": "Saúde",
+      //       "anexos": ["Anexo 1", "Anexo 2"],
+      //       "data_do_evento": "10/05/2025",
+      //       "local": "Centro de conferência",
+      //       "status": "Aprovado",
+      //       "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+      //     },
+      //     {
+      //       "id": 003,
+      //       "pergunta": "Será vendida comida no evento?",
+      //       "descricao": "Isso requer vistoria da Vigilância Sanitária",
+      //       "secretaria": "Saúde",
+      //       "anexos": ["Anexo 1", "Anexo 2"],
+      //       "data_do_evento": "10/05/2025",
+      //       "local": "Centro de conferência",
+      //       "status": "Precisa de Alterações",
+      //       "observacoes": [{"user_type": "Usuario", "user_name": "Joaquim", "descricao": "texto da Observação 1"}, {"user_type": "operador", "user_name": "Monica", "descricao": "texto da Observação 2"},]
+      //     },
+      //   ] // aguardando, aprovado, recusado
+      // },
     ];
   }
 }

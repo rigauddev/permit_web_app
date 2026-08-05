@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:permit_web_app/widgets/custom_appbar.dart';
 
-import '../../widgets/custom_drawer.dart';
+import '../../shared/widgets/custom_drawer.dart';
 
 class UserHomePage extends StatelessWidget {
   const UserHomePage({super.key, required this.userType, this.userProfile});
@@ -9,121 +8,169 @@ class UserHomePage extends StatelessWidget {
   final String userType;
   final String? userProfile;
 
+  bool get _isCitizen => userType == 'user' || userType == 'cidadao';
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth < 600
-        ? 1
-        : screenWidth < 900
-            ? 2
-            : 3;
     return Scaffold(
-      appBar: CustomAppBar(
-        title:  'Bem-vindo ao Sistema de Serviços da Prefeitura',
-        actions: []),
-      drawer: CustomDrawer(userType: userType),
+      appBar: AppBar(
+        title: Text(_isCitizen ? 'Meus serviços' : 'Painel interno'),
+      ),
+      drawer: CustomDrawer(userType: userType, userProfile: userProfile),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Image.asset(
-                'assets/images/logo_prefeitura_1.png',
-                height: 100,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Todos os serviços da Prefeitura em um só lugar.',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Nosso objetivo é facilitar o atendimento ao público reunindo, em um único aplicativo, todos os serviços das secretarias municipais.',
-              style: TextStyle(fontSize: 16),
-              textAlign: TextAlign.justify,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Aqui você pode solicitar alvarás, acompanhar eventos, acessar informações das secretarias, agendar serviços, entrar em contato com a prefeitura e muito mais.',
-              style: TextStyle(fontSize: 16),
-              textAlign: TextAlign.justify,
-            ),
-            const SizedBox(height: 28),
-            const Text(
-              'Acesse os serviços:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            GridView.count(
-              crossAxisCount: crossAxisCount,
-              shrinkWrap: true,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              physics: const NeverScrollableScrollPhysics(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1100),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildServiceCard(
-                  context,
-                  icon: Icons.assignment,
-                  title: 'Receita Municipal',
-                  route: '/services',
+                Center(
+                  child: Image.asset(
+                    'assets/images/logo_prefeitura_1.png',
+                    height: 92,
+                  ),
                 ),
-                _buildServiceCard(
-                  context,
-                  icon: Icons.apartment,
-                  title: 'Secretarias',
-                  route: '/secretarias',
+                const SizedBox(height: 24),
+                Text(
+                  _isCitizen
+                      ? 'Olá, acompanhe seus serviços municipais.'
+                      : 'Olá, acompanhe as demandas da sua área.',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                _buildServiceCard(
-                  context,
-                  icon: Icons.calendar_month,
-                  title: 'Agendamentos',
-                  route: '/eventos',
+                const SizedBox(height: 8),
+                Text(
+                  _isCitizen
+                      ? 'Solicite alvará de evento, acompanhe protocolos e responda pendências da prefeitura.'
+                      : 'Analise solicitações, acompanhe pendências por secretaria e gerencie usuários conforme suas permissões.',
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                _buildServiceCard(
-                  context,
-                  icon: Icons.support_agent,
-                  title: 'Atendimento',
-                  route: '/atendimento',
+                const SizedBox(height: 24),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final crossAxisCount =
+                        constraints.maxWidth < 680
+                            ? 1
+                            : constraints.maxWidth < 980
+                            ? 2
+                            : 3;
+                    final cards =
+                        _isCitizen
+                            ? _citizenCards(context)
+                            : _internalCards(context);
+                    return GridView.count(
+                      crossAxisCount: crossAxisCount,
+                      shrinkWrap: true,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: constraints.maxWidth < 680 ? 2.7 : 1.55,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: cards,
+                    );
+                  },
                 ),
               ],
-            )
-          ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildServiceCard(BuildContext context,
-      {required IconData icon, required String title, required String route}) {
-    return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, route),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
+  List<Widget> _citizenCards(BuildContext context) {
+    return [
+      _buildServiceCard(
+        context,
+        icon: Icons.event_available_outlined,
+        title: 'Solicitar alvará de evento',
+        description:
+            'Preencha o formulário, envie documentos e acompanhe o protocolo.',
+        route: '/services',
+      ),
+      _buildServiceCard(
+        context,
+        icon: Icons.folder_copy_outlined,
+        title: 'Minhas solicitações',
+        description: 'Consulte status, pendências e autorizações emitidas.',
+        route: '/services',
+      ),
+    ];
+  }
+
+  List<Widget> _internalCards(BuildContext context) {
+    return [
+      _buildServiceCard(
+        context,
+        icon: Icons.assignment_turned_in_outlined,
+        title: 'Solicitações da secretaria',
+        description: 'Analise aprovações, recusas e pedidos de correção.',
+        route: '/services',
+      ),
+      _buildServiceCard(
+        context,
+        icon: Icons.people_outline,
+        title: 'Usuários internos',
+        description: 'Cadastre operadores, gestores e administradores.',
+        route: '/user-create',
+      ),
+      if (userType == 'admin')
+        _buildServiceCard(
+          context,
+          icon: Icons.tune_outlined,
+          title: 'Perguntas e permissões',
+          description:
+              'Configure perguntas condicionais e regras por secretaria.',
+          route: '/questtions',
         ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 48, color: Colors.green[800]),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ],
+    ];
+  }
+
+  Widget _buildServiceCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String description,
+    required String route,
+  }) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => Navigator.pushNamed(context, route),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 42,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

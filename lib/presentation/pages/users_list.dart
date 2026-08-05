@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 // import 'dart:math';
 
-import '../../widgets/custom_appbar.dart';
-import '../../widgets/custom_drawer.dart';
+import '../../shared/widgets/custom_appbar.dart';
+import '../../shared/widgets/custom_drawer.dart';
 
 class UsersListPage extends StatefulWidget {
   final String userType;
@@ -46,69 +46,92 @@ class _UsersListPageState extends State<UsersListPage> {
     final telefoneController = TextEditingController(text: user['telefone']);
     final enderecoController = TextEditingController(text: user['endereco']);
     final emailController = TextEditingController(text: user['email']);
-    final empresaController = TextEditingController(text: user['empresa'] ?? '');
+    final empresaController = TextEditingController(
+      text: user['empresa'] ?? '',
+    );
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Editar Usuário'),
-        content: SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(controller: nomeController, decoration: const InputDecoration(labelText: 'Nome')),
-              TextField(controller: sobrenomeController, decoration: const InputDecoration(labelText: 'Sobrenome')),
-              TextField(controller: telefoneController, decoration: const InputDecoration(labelText: 'Telefone')),
-              TextField(controller: enderecoController, decoration: const InputDecoration(labelText: 'Endereço')),
-              TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email')),
-              TextField(controller: empresaController, decoration: const InputDecoration(labelText: 'Empresa')),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Editar Usuário'),
+            content: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                    controller: nomeController,
+                    decoration: const InputDecoration(labelText: 'Nome'),
+                  ),
+                  TextField(
+                    controller: sobrenomeController,
+                    decoration: const InputDecoration(labelText: 'Sobrenome'),
+                  ),
+                  TextField(
+                    controller: telefoneController,
+                    decoration: const InputDecoration(labelText: 'Telefone'),
+                  ),
+                  TextField(
+                    controller: enderecoController,
+                    decoration: const InputDecoration(labelText: 'Endereço'),
+                  ),
+                  TextField(
+                    controller: emailController,
+                    decoration: const InputDecoration(labelText: 'Email'),
+                  ),
+                  TextField(
+                    controller: empresaController,
+                    decoration: const InputDecoration(labelText: 'Empresa'),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // final novaSenha = _gerarSenha();
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Nova senha enviada para ${emailController.text}',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.lock_reset),
+                    label: const Text('Gerar nova senha e enviar'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
                 onPressed: () {
-                  // final novaSenha = _gerarSenha();
+                  setState(() {
+                    user['nome'] = nomeController.text;
+                    user['sobrenome'] = sobrenomeController.text;
+                    user['telefone'] = telefoneController.text;
+                    user['endereco'] = enderecoController.text;
+                    user['email'] = emailController.text;
+                    user['empresa'] = empresaController.text;
+                  });
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Nova senha enviada para ${emailController.text}')),
-                  );
                 },
-                icon: const Icon(Icons.lock_reset),
-                label: const Text('Gerar nova senha e enviar'),
+                child: const Text('Salvar'),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                user['nome'] = nomeController.text;
-                user['sobrenome'] = sobrenomeController.text;
-                user['telefone'] = telefoneController.text;
-                user['endereco'] = enderecoController.text;
-                user['email'] = emailController.text;
-                user['empresa'] = empresaController.text;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    final isAdminOrGestor = widget.userType == 'admin' || widget.userType == 'gestor';
+    final isAdminOrGestor =
+        widget.userType == 'admin' || widget.userType == 'gestor';
 
     return Scaffold(
-      appBar: CustomAppBar(
-        title:  'Lista de Usuários',
-        actions: []),
+      appBar: CustomAppBar(title: 'Lista de Usuários', actions: []),
       drawer: CustomDrawer(userType: widget.userType),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

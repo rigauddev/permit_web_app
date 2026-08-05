@@ -60,8 +60,9 @@
 - [ ] Criar modelo de comentários.
 - [ ] Criar upload com validação de tipo/tamanho.
 - [ ] Criar logs de auditoria.
-- [ ] Criar camada de API no Flutter.
-- [ ] Substituir mocks por chamadas HTTP.
+- [x] Criar camada inicial de API de autenticação no Flutter.
+- [x] Substituir mock de login por chamadas HTTP com MFA.
+- [ ] Substituir mocks de solicitações por chamadas HTTP.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 
 ## Marco 7 - Documento final e DAM
@@ -77,6 +78,7 @@
 - [ ] Testar cadastro PF.
 - [ ] Testar cadastro PJ.
 - [ ] Testar login.
+- [x] Testar login backend com MFA por e-mail em ambiente local.
 - [ ] Testar solicitação completa.
 - [ ] Testar evento com som.
 - [ ] Testar evento com palco/gerador.
