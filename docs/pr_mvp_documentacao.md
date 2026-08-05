@@ -14,6 +14,9 @@ Esta PR organiza o roadmap e as tarefas executáveis do MVP de solicitação de 
 - Adiciona modelagem inicial de permissões, secretarias, usuários, solicitações, exigências e anexos.
 - Adiciona endpoints iniciais de autenticação e solicitações.
 - Adiciona seed local com usuários, secretarias e uma solicitação de exemplo.
+- Finaliza fluxo inicial de autenticação com MFA: login, geração de código e validação antes do token.
+- Atualiza login Flutter para consumir API, persistir token e diferenciar página inicial de cidadão e usuário interno.
+- Separa auto-cadastro de cidadão do cadastro de usuários internos.
 
 ## Decisões registradas
 
@@ -28,6 +31,7 @@ Esta PR organiza o roadmap e as tarefas executáveis do MVP de solicitação de 
 - `python3 -m compileall -q permit_system`
 - `python scripts/seed.py`
 - Teste manual HTTP: `/auth/login`, `/auth/me`, `/permit-requests`
+- Teste manual HTTP MFA: `/auth/login`, `/auth/mfa/generate`, `/auth/mfa/verify`, `/permit-requests`
 
 Resultado atual: o comando executa, mas retorna 33 issues já existentes no projeto, principalmente imports não usados, prints, APIs depreciadas e uso de `BuildContext` após async gap.
 
