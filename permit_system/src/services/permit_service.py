@@ -4,8 +4,20 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.infra.database.models import PermitRequestModel, PermitRequirementModel, SecretariaModel, UserModel
-from src.schemas.permit_schema import PermitCreateRequest, PermitResponse, RequirementResponse
+from src.infra.database.models import (
+    AttachmentModel,
+    PermitRequestModel,
+    PermitRequirementModel,
+    SecretariaModel,
+    UserModel,
+)
+from src.schemas.permit_schema import (
+    AttachmentResponse,
+    DamAttachmentRequest,
+    PermitCreateRequest,
+    PermitResponse,
+    RequirementResponse,
+)
 
 
 QUESTION_RULES = {
@@ -80,6 +92,36 @@ class PermitService:
             )
         return [self.to_response(item) for item in query.order_by(PermitRequestModel.created_at.desc()).all()]
 
+    def attach_dam(
+        self,
+        request_id: int,
+        payload: DamAttachmentRequest,
+        current_user: UserModel,
+    ) -> AttachmentResponse:
+        self._ensure_can_attach_dam(current_user)
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if request.is_beneficente:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Evento beneficente é isento de DAM.",
+            )
+
+        attachment = AttachmentModel(
+            permit_request_id=request.id,
+            tipo_documento="dam",
+            nome_arquivo=payload.nome_arquivo,
+            arquivo_url=payload.arquivo_url,
+            mime_type=payload.mime_type,
+            tamanho_bytes=payload.tamanho_bytes,
+        )
+        request.dam_status = "anexado"
+        self.db.add(attachment)
+        self.db.commit()
+        self.db.refresh(attachment)
+        return self._attachment_to_response(attachment)
+
     @staticmethod
     def _build_requirements(respostas: dict[str, Any]) -> list[tuple[str, str]]:
         requirements: list[tuple[str, str]] = []
@@ -142,6 +184,16 @@ class PermitService:
             )
 
     @staticmethod
+    def _ensure_can_attach_dam(current_user: UserModel) -> None:
+        role = current_user.role.slug
+        secretaria = current_user.secretaria.slug if current_user.secretaria else None
+        if role == "admin":
+            return
+        if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "receita_municipal":
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para anexar DAM")
+
+    @staticmethod
     def _generate_protocol() -> str:
         return f"ALV-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
 
@@ -168,4 +220,16 @@ class PermitService:
                 )
                 for item in request.requirements
             ],
+            attachments=[PermitService._attachment_to_response(item) for item in request.attachments],
+        )
+
+    @staticmethod
+    def _attachment_to_response(attachment: AttachmentModel) -> AttachmentResponse:
+        return AttachmentResponse(
+            id=attachment.id,
+            tipo_documento=attachment.tipo_documento,
+            nome_arquivo=attachment.nome_arquivo,
+            arquivo_url=attachment.arquivo_url,
+            mime_type=attachment.mime_type,
+            tamanho_bytes=attachment.tamanho_bytes,
         )
