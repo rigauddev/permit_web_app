@@ -1,162 +1,82 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../core/auth_service.dart';
 import '../../data/providers/user_provider.dart';
 
-class LoginPage extends ConsumerStatefulWidget {
+class LoginPage extends HookConsumerWidget {
   const LoginPage({super.key});
 
   @override
-  LoginPageState createState() => LoginPageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final emailController = useTextEditingController();
+    final passwordController = useTextEditingController();
+    final mfaController = useTextEditingController();
+    final mfaFocusNode = useFocusNode();
 
-class LoginPageState extends ConsumerState<LoginPage> {
-  final TextEditingController _mfaController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final FocusNode _mfaFocusNode = FocusNode();
+    final showMfaField = useState(false);
+    final isLoading = useState(false);
+    final obscurePassword = useState(true);
+    final errorMessage = useState<String?>(null);
 
-  String? _errorMessage;
-  bool _showMfaField = false;
-  bool _isLoading = false;
-  bool _obscurePassword = true;
+    final authService = AuthService();
+    final secureStorage = const FlutterSecureStorage();
 
+    Future<void> validateLogin() async {
+      final email = emailController.text;
+      final password = passwordController.text;
 
-  final AuthService _authService = AuthService();
-
-  void _validateLogin() {
-    if (_authService.validateLogin(_emailController.text, _passwordController.text)) {
-      setState(() {
-        _showMfaField = true;
-        _errorMessage = null;
-      });
-      Future.delayed(const Duration(milliseconds: 300), () {
-        FocusScope.of(context).requestFocus(_mfaFocusNode);
-      });
-    } else {
-      setState(() {
-        _errorMessage = 'Email ou senha inválidos';
-      });
-    }
-  }
-
-  void _validateMfa() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (_authService.validateMfa(_emailController.text, _mfaController.text)) {
-      final user = _authService.getUser(_emailController.text);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user', jsonEncode(user.toJson()));
-      ref.read(userProvider.notifier).setUser(user);
-
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+      if (await authService.validateLogin(email, password)) {
+        showMfaField.value = true;
+        errorMessage.value = null;
+        Future.delayed(const Duration(milliseconds: 300), () {
+          mfaFocusNode.requestFocus();
+        });
+      } else {
+        errorMessage.value = 'Email ou senha inválidos';
       }
-    } else {
-      setState(() {
-        _errorMessage = 'Código MFA inválido';
-      });
     }
 
-    setState(() {
-      _isLoading = false;
-    });
-  }
+    Future<void> validateMfa() async {
+      isLoading.value = true;
 
-  @override
-  Widget build(BuildContext context) {
+      final email = emailController.text;
+      final password = passwordController.text;
+      final mfaCode = mfaController.text;
+
+      final mfaValid = await authService.validateMfaWithCredentials(email, password, mfaCode);
+
+      if (mfaValid) {
+        final user = authService.getUser(email);
+        await secureStorage.write(key: 'user', value: jsonEncode(user?.toJson()));
+        ref.read(userProvider.notifier).setUser(user!);
+        if (context.mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      } else {
+        errorMessage.value = 'Código MFA inválido';
+      }
+
+      isLoading.value = false;
+    }
+
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
       body: Stack(
         children: [
-          // Formas geométricas nos cantos
-          Positioned(
-            top: -30,
-            left: -30,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: const BoxDecoration(
-                color: Color(0xFF006B3F),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            top: 40,
-            right: -20,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: const BoxDecoration(
-                color: Color(0xFF002776),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(100),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -20,
-            left: -20,
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFD700),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 40,
-            right: -30,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: const BoxDecoration(
-                color: Color(0xFFDA291C),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(100),
-                ),
-              ),
-            ),
-          ),
-
-          // Conteúdo principal
           Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      double logoSize;
-
-                      if (constraints.maxWidth < 600) {
-                        logoSize = constraints.maxWidth * 0.6;
-                      } else if (constraints.maxWidth < 900) {
-                        logoSize = 250;
-                      } else {
-                        logoSize = 200;
-                      }
-
-                      return Image.asset(
-                        'assets/images/logo_prefeitura_1.png',
-                        width: logoSize,
-                        height: logoSize,
-                        alignment: Alignment.center,
-                      );
-                    },
+                  Image.asset(
+                    'assets/images/logo_prefeitura_1.png',
+                    width: size.width < 600 ? size.width * 0.6 : 250,
                   ),
                   const SizedBox(height: 20),
                   ConstrainedBox(
@@ -164,99 +84,91 @@ class LoginPageState extends ConsumerState<LoginPage> {
                       maxWidth: size.width < 600 ? size.width * 0.9 : 400,
                     ),
                     child: Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
                       elevation: 10,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       child: Padding(
-                        padding: const EdgeInsets.all(24.0),
+                        padding: const EdgeInsets.all(24),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            TextField(
-                              controller: _emailController,
-                              decoration: const InputDecoration(
-                                labelText: 'Email',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.email),
+                            if (!showMfaField.value) ...[
+                              TextField(
+                                controller: emailController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.email),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 15),
-                            TextField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              decoration: InputDecoration(
-                                labelText: 'Senha',
-                                border: const OutlineInputBorder(),
-                                prefixIcon: const Icon(Icons.lock),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              const SizedBox(height: 15),
+                              TextField(
+                                controller: passwordController,
+                                obscureText: obscurePassword.value,
+                                decoration: InputDecoration(
+                                  labelText: 'Senha',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.lock),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(obscurePassword.value ? Icons.visibility : Icons.visibility_off),
+                                    onPressed: () => obscurePassword.value = !obscurePassword.value,
                                   ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
                                 ),
                               ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pushNamed(context, '/esqueci_senha');
-                              },
-                              child: const Text('Esqueci minha senha'),
-                            ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF006B3F),
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                              TextButton(
+                                onPressed: () => Navigator.pushNamed(context, '/esqueci_senha'),
+                                child: const Text('Esqueci minha senha'),
+                              ),
+                              const SizedBox(height: 10),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF006B3F),
+                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
+                                onPressed: validateLogin,
+                                child: const Text('Entrar', style: TextStyle(color: Colors.white)),
                               ),
-                              onPressed: _validateLogin,
-                              child: const Text(
-                                'Entrar',
-                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                            ],
+                            if (showMfaField.value) ...[
+                              const SizedBox(height: 20),
+                              Text(
+                                'Insira o código MFA',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                               ),
-                            ),
-                            if (_showMfaField) ...[
                               const SizedBox(height: 20),
                               TextField(
-                                controller: _mfaController,
-                                focusNode: _mfaFocusNode,
+                                controller: mfaController,
+                                focusNode: mfaFocusNode,
+                                keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
                                   labelText: 'Código MFA',
                                   border: OutlineInputBorder(),
                                   prefixIcon: Icon(Icons.shield),
                                 ),
-                                keyboardType: TextInputType.number,
                               ),
                               const SizedBox(height: 10),
-                              _isLoading
+                              isLoading.value
                                   ? const CircularProgressIndicator()
                                   : ElevatedButton(
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFF002776),
                                         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
-                                      onPressed: _validateMfa,
-                                      child: const Text(
-                                        'Enviar',
-                                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
+                                      onPressed: validateMfa,
+                                      child: const Text('Enviar', style: TextStyle(color: Colors.white)),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextButton(
+                                      onPressed: () => Navigator.pushNamed(context, '/'),
+                                      child: const Text('Cancelar', style: TextStyle(color: Colors.redAccent)),
                                     ),
                             ],
-                            if (_errorMessage != null)
+                            if (errorMessage.value != null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 10),
                                 child: Text(
-                                  _errorMessage!,
+                                  errorMessage.value!,
                                   style: const TextStyle(color: Colors.red),
                                 ),
                               ),
@@ -265,14 +177,13 @@ class LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/registrar_usuario');
-                    },
-                    child: const Text('Não tem uma conta? Cadastre-se'),
-                  ),
-                  const SizedBox(height: 20),
+                  if (!showMfaField.value) ...[
+                    const SizedBox(height: 20),
+                    TextButton(
+                      onPressed: () => Navigator.pushNamed(context, '/registrar_usuario'),
+                      child: const Text('Não tem uma conta? Cadastre-se'),
+                    ),
+                  ]
                 ],
               ),
             ),

@@ -13,6 +13,7 @@ class _UserRegistrationPageState extends State<UserRegistrationPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _cpfController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -52,19 +53,25 @@ class _UserRegistrationPageState extends State<UserRegistrationPage> {
                 validator: (value) => value!.isEmpty ? 'Informe seu sobrenome' : null,
               ),
               TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: '00-0000-0000'),
+                validator: (value) => value!.isEmpty ? 'Informe seu telefone' : null,
+              ),
+              TextFormField(
                 controller: _addressController,
-                decoration: const InputDecoration(labelText: 'Endereço'),
+                decoration: const InputDecoration(labelText: 'Rua, n° - Bairro'),
                 validator: (value) => value!.isEmpty ? 'Informe seu endereço' : null,
               ),
               TextFormField(
                 controller: _cpfController,
-                decoration: const InputDecoration(labelText: 'CPF'),
+                decoration: const InputDecoration(labelText: '00000000000'),
                 keyboardType: TextInputType.number,
                 validator: (value) => value!.isEmpty ? 'Informe seu CPF' : null,
               ),
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(labelText: 'seu-email@email.com'),
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) => value!.isEmpty ? 'Informe seu email' : null,
               ),

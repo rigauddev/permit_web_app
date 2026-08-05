@@ -167,11 +167,11 @@ class _PermitRequestPageState extends State<PermitRequestPage> {
               },
               child: const Text('Anexar Documento'),
             ),
-          if (tiposResposta.contains('Selecionar Data'))
+          if (tiposResposta.contains('Calendário'))
             TextFormField(
               readOnly: true,
               decoration: const InputDecoration(
-                labelText: 'Selecionar Data',
+                labelText: 'Selecione Data',
                 border: OutlineInputBorder(),
               ),
               onTap: () async {
