@@ -1,9 +1,12 @@
+import random
+from datetime import datetime, timedelta, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.security import create_access_token, hash_password, verify_password
+from src.core.security import create_access_token, create_mfa_challenge_token, decode_token, hash_password, verify_password
 from src.infra.database.models import RoleModel, SecretariaModel, UserModel
-from src.schemas.auth_schema import TokenResponse, UserSessionResponse
+from src.schemas.auth_schema import LoginStartResponse, MfaGenerateResponse, TokenResponse, UserSessionResponse
 from src.schemas.user_schema import UserCreateRequest, UserResponse
 
 
@@ -11,13 +14,58 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
 
-    def authenticate(self, email: str, senha: str) -> TokenResponse:
+    def start_login(self, email: str, senha: str) -> LoginStartResponse:
         user = self.db.query(UserModel).filter(UserModel.email == email, UserModel.is_active.is_(True)).first()
         if not user or not verify_password(senha, user.senha_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email ou senha inválidos",
             )
+
+        methods = self._available_mfa_methods(user)
+        if not methods:
+            methods = ["email"]
+        return LoginStartResponse(
+            challenge_token=create_mfa_challenge_token(str(user.id)),
+            available_methods=methods,
+            default_method=methods[0],
+        )
+
+    def generate_mfa_code(self, challenge_token: str, method: str) -> MfaGenerateResponse:
+        user = self._get_user_from_challenge(challenge_token)
+        methods = self._available_mfa_methods(user)
+        if method not in methods:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Método MFA não habilitado")
+
+        code = f"{random.randint(0, 999999):06d}"
+        user.mfa_code_hash = hash_password(code)
+        user.mfa_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        self.db.commit()
+
+        return MfaGenerateResponse(
+            method=method,
+            delivery=self._mask_delivery(user, method),
+            dev_code=code,
+        )
+
+    def verify_mfa_code(self, challenge_token: str, method: str, code: str) -> TokenResponse:
+        user = self._get_user_from_challenge(challenge_token)
+        methods = self._available_mfa_methods(user)
+        expires_at = user.mfa_code_expires_at
+        if method not in methods:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Método MFA não habilitado")
+        if not user.mfa_code_hash or not expires_at:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código MFA não gerado")
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código MFA expirado")
+        if not verify_password(code, user.mfa_code_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Código MFA inválido")
+
+        user.mfa_code_hash = None
+        user.mfa_code_expires_at = None
+        self.db.commit()
 
         session = self._to_session(user)
         token = create_access_token(
@@ -29,7 +77,7 @@ class AuthService:
         )
         return TokenResponse(access_token=token, user=session)
 
-    def create_user(self, payload: UserCreateRequest) -> UserResponse:
+    def create_user(self, payload: UserCreateRequest, force_role: str | None = None, force_secretaria: str | None = None) -> UserResponse:
         existing = (
             self.db.query(UserModel)
             .filter((UserModel.email == payload.email) | (UserModel.cpf_cnpj == payload.cpf_cnpj))
@@ -38,13 +86,16 @@ class AuthService:
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Usuário já cadastrado")
 
-        role = self.db.query(RoleModel).filter(RoleModel.slug == payload.role).first()
+        role_slug = force_role or payload.role
+        secretaria_slug = force_secretaria if force_secretaria is not None else payload.secretaria
+
+        role = self.db.query(RoleModel).filter(RoleModel.slug == role_slug).first()
         if not role:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Perfil inválido")
 
         secretaria = None
-        if payload.secretaria:
-            secretaria = self.db.query(SecretariaModel).filter(SecretariaModel.slug == payload.secretaria).first()
+        if secretaria_slug:
+            secretaria = self.db.query(SecretariaModel).filter(SecretariaModel.slug == secretaria_slug).first()
             if not secretaria:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Secretaria inválida")
 
@@ -60,6 +111,7 @@ class AuthService:
             endereco=payload.endereco,
             role_id=role.id,
             secretaria_id=secretaria.id if secretaria else None,
+            mfa_email_enabled=True,
         )
         self.db.add(user)
         self.db.commit()
@@ -75,6 +127,35 @@ class AuthService:
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
         )
+
+    def _get_user_from_challenge(self, challenge_token: str) -> UserModel:
+        try:
+            payload = decode_token(challenge_token)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Desafio MFA inválido") from exc
+        if payload.get("purpose") != "mfa":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Desafio MFA inválido")
+        user = self.db.query(UserModel).filter(UserModel.id == int(payload["sub"]), UserModel.is_active.is_(True)).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário inválido")
+        return user
+
+    @staticmethod
+    def _available_mfa_methods(user: UserModel) -> list[str]:
+        methods = []
+        if user.mfa_email_enabled:
+            methods.append("email")
+        if user.mfa_totp_enabled:
+            methods.append("totp")
+        return methods
+
+    @staticmethod
+    def _mask_delivery(user: UserModel, method: str) -> str:
+        if method != "email":
+            return method
+        name, _, domain = user.email.partition("@")
+        visible = name[:2] if len(name) > 2 else name[:1]
+        return f"{visible}***@{domain}"
 
     @staticmethod
     def to_response(user: UserModel) -> UserResponse:

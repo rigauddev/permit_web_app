@@ -105,6 +105,8 @@ def seed_users(db, roles, secretarias):
                 "endereco": "Valença - BA",
                 "role_id": data["role_id"],
                 "secretaria_id": data.get("secretaria_id"),
+                "mfa_email_enabled": True,
+                "mfa_totp_enabled": False,
             },
         )
     return created

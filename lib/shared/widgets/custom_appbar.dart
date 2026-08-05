@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/providers/user_provider.dart';
+import '../../../data/providers/user_provider.dart';
 
 class CustomAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  const CustomAppBar({
-    super.key,
-    required this.title,
-    required this.actions,
-  });
+  const CustomAppBar({super.key, required this.title, required this.actions});
 
   final String title;
   final List<Widget> actions;
@@ -31,13 +27,6 @@ class CustomAppBar extends ConsumerWidget implements PreferredSizeWidget {
             Navigator.pushNamed(context, '/profile');
           },
         ),
-        // IconButton(
-        //   icon: const Icon(Icons.exit_to_app),
-        //   onPressed: () {
-        //     ref.read(userProvider.notifier).logout();
-        //     Navigator.pushReplacementNamed(context, '/'); // Simula logout
-        //   },
-        // ),
       ],
     );
   }

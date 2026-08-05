@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../widgets/custom_appbar.dart';
-import '../../widgets/custom_drawer.dart';
+import '../../shared/widgets/custom_appbar.dart';
+import '../../shared/widgets/custom_drawer.dart';
 import '../../data/providers/user_provider.dart';
-
 
 class ProfilePage extends StatelessWidget {
   final String userType;
@@ -17,10 +16,7 @@ class ProfilePage extends StatelessWidget {
       builder: (context, ref, child) {
         final user = ref.watch(userProvider);
         return Scaffold(
-          appBar: CustomAppBar(
-            title: 'Perfil',
-            actions: []
-          ),
+          appBar: CustomAppBar(title: 'Perfil', actions: []),
           drawer: CustomDrawer(userType: userType),
           body: Center(
             child: Container(
@@ -37,8 +33,8 @@ class ProfilePage extends StatelessWidget {
                     offset: const Offset(0, 3),
                   ),
                 ],
-            ),
-            child: Column(
+              ),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
@@ -51,23 +47,17 @@ class ProfilePage extends StatelessWidget {
                   SizedBox(height: 16.0),
                   Text(
                     'Nome: ${user?.name ?? ''}',
-                    style: TextStyle(
-                      fontSize: 18.0,
-                    ),
+                    style: TextStyle(fontSize: 18.0),
                   ),
                   SizedBox(height: 8.0),
                   Text(
                     'Email: ${user?.email ?? ''}',
-                    style: TextStyle(
-                      fontSize: 18.0,
-                    ),
+                    style: TextStyle(fontSize: 18.0),
                   ),
                   SizedBox(height: 8.0),
                   Text(
                     'Tipo de Usuário: ${user?.userType ?? ''}',
-                    style: TextStyle(
-                      fontSize: 18.0,
-                    ),
+                    style: TextStyle(fontSize: 18.0),
                   ),
                 ],
               ),

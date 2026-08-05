@@ -13,7 +13,10 @@ class CompromissosList extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.all(8.0),
-            child: Text("Compromissos do Dia", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            child: Text(
+              "Compromissos do Dia",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ),
           Expanded(
             child: ListView(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../widgets/custom_appbar.dart';
-import '../../widgets/custom_drawer.dart';
+import '../../shared/widgets/custom_appbar.dart';
+import '../../shared/widgets/custom_drawer.dart';
 
 class PerguntasPage extends StatefulWidget {
   const PerguntasPage({super.key, required this.userType, this.userProfile});
@@ -26,8 +26,16 @@ class _PerguntasPageState extends State<PerguntasPage> {
   int? _indiceEdicao;
 
   final List<String> _secretarias = ['Meio Ambiente', 'Segurança', 'Eventos'];
-  final List<String> _tiposFormulario = ['Alvará de Eventos', 'Táxi', 'Estabelecimento'];
-  final List<String> _tiposResposta = ['Anexar Documento', 'calendario', 'Botão de Baixar'];
+  final List<String> _tiposFormulario = [
+    'Alvará de Eventos',
+    'Táxi',
+    'Estabelecimento',
+  ];
+  final List<String> _tiposResposta = [
+    'Anexar Documento',
+    'calendario',
+    'Botão de Baixar',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +43,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
 
     return Scaffold(
       appBar: CustomAppBar(title: 'Cadastrar Nova Pergunta', actions: []),
-      drawer: CustomDrawer(userType: widget.userType, userProfile: widget.userProfile),
+      drawer: CustomDrawer(
+        userType: widget.userType,
+        userProfile: widget.userProfile,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -44,7 +55,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Cadastrar Nova Pergunta', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Cadastrar Nova Pergunta',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 16),
                 Form(
                   key: _formKey,
@@ -52,57 +66,85 @@ class _PerguntasPageState extends State<PerguntasPage> {
                     runSpacing: 16,
                     spacing: 16,
                     children: [
-                      _buildTextField(label: 'Pergunta', onChanged: (v) => _pergunta = v, initialValue: _pergunta),
-                      _buildTextField(label: 'Descrição', onChanged: (v) => _descricao = v, maxLines: 2, initialValue: _descricao),
-                      _buildDropdown('Secretaria', _secretaria, _secretarias, (v) => _secretaria = v),
-                      _buildDropdown('Tipo de Formulário', _tipoFormulario, _tiposFormulario, (v) => _tipoFormulario = v),
+                      _buildTextField(
+                        label: 'Pergunta',
+                        onChanged: (v) => _pergunta = v,
+                        initialValue: _pergunta,
+                      ),
+                      _buildTextField(
+                        label: 'Descrição',
+                        onChanged: (v) => _descricao = v,
+                        maxLines: 2,
+                        initialValue: _descricao,
+                      ),
+                      _buildDropdown(
+                        'Secretaria',
+                        _secretaria,
+                        _secretarias,
+                        (v) => _secretaria = v,
+                      ),
+                      _buildDropdown(
+                        'Tipo de Formulário',
+                        _tipoFormulario,
+                        _tiposFormulario,
+                        (v) => _tipoFormulario = v,
+                      ),
                       _buildCheckboxList('Tipo de Resposta', _tiposResposta),
                       SizedBox(
                         width: isMobile ? double.infinity : 200,
                         child: ElevatedButton(
                           onPressed: _adicionarOuAtualizarPergunta,
-                          child: Text(_indiceEdicao != null ? 'Atualizar' : 'Salvar'),
+                          child: Text(
+                            _indiceEdicao != null ? 'Atualizar' : 'Salvar',
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 32),
-                const Text('Perguntas Cadastradas', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Perguntas Cadastradas',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 16),
                 _perguntas.isEmpty
                     ? const Text('Nenhuma pergunta cadastrada.')
                     : SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('Pergunta')),
-                            DataColumn(label: Text('Secretaria')),
-                            DataColumn(label: Text('Tipo')),
-                            DataColumn(label: Text('Ações')),
-                          ],
-                          rows: List.generate(_perguntas.length, (index) {
-                            final p = _perguntas[index];
-                            return DataRow(cells: [
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text('Pergunta')),
+                          DataColumn(label: Text('Secretaria')),
+                          DataColumn(label: Text('Tipo')),
+                          DataColumn(label: Text('Ações')),
+                        ],
+                        rows: List.generate(_perguntas.length, (index) {
+                          final p = _perguntas[index];
+                          return DataRow(
+                            cells: [
                               DataCell(Text(p['pergunta']!)),
                               DataCell(Text(p['secretaria']!)),
                               DataCell(Text(p['tipo']!)),
-                              DataCell(Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () => _editarPergunta(index),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () => _excluirPergunta(index),
-                                  ),
-                                ],
-                              )),
-                            ]);
-                          }),
-                        ),
+                              DataCell(
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () => _editarPergunta(index),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: () => _excluirPergunta(index),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
                       ),
+                    ),
               ],
             ),
           ),
@@ -111,26 +153,45 @@ class _PerguntasPageState extends State<PerguntasPage> {
     );
   }
 
-  Widget _buildTextField({required String label, int maxLines = 1, required ValueChanged<String> onChanged, String? initialValue}) {
+  Widget _buildTextField({
+    required String label,
+    int maxLines = 1,
+    required ValueChanged<String> onChanged,
+    String? initialValue,
+  }) {
     return SizedBox(
       width: MediaQuery.of(context).size.width < 600 ? double.infinity : 400,
       child: TextFormField(
         initialValue: initialValue,
         maxLines: maxLines,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
         onChanged: onChanged,
       ),
     );
   }
 
-  Widget _buildDropdown(String label, String? value, List<String> items, ValueChanged<String?> onChanged) {
+  Widget _buildDropdown(
+    String label,
+    String? value,
+    List<String> items,
+    ValueChanged<String?> onChanged,
+  ) {
     return SizedBox(
       width: MediaQuery.of(context).size.width < 600 ? double.infinity : 400,
       child: DropdownButtonFormField<String>(
-        value: value,
+        initialValue: value,
         isExpanded: true,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-        items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        items:
+            items
+                .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                .toList(),
         onChanged: onChanged,
       ),
     );
@@ -143,17 +204,20 @@ class _PerguntasPageState extends State<PerguntasPage> {
         Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         Wrap(
           spacing: 10,
-          children: items.map((item) {
-            return FilterChip(
-              label: Text(item),
-              selected: _tiposSelecionados.contains(item),
-              onSelected: (selected) {
-                setState(() {
-                  selected ? _tiposSelecionados.add(item) : _tiposSelecionados.remove(item);
-                });
-              },
-            );
-          }).toList(),
+          children:
+              items.map((item) {
+                return FilterChip(
+                  label: Text(item),
+                  selected: _tiposSelecionados.contains(item),
+                  onSelected: (selected) {
+                    setState(() {
+                      selected
+                          ? _tiposSelecionados.add(item)
+                          : _tiposSelecionados.remove(item);
+                    });
+                  },
+                );
+              }).toList(),
         ),
       ],
     );
@@ -190,7 +254,11 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _descricao = pergunta['descricao'];
       _secretaria = pergunta['secretaria'];
       _tipoFormulario = pergunta['tipo'];
-      _tiposSelecionados = (pergunta['resposta'] ?? '').split(', ').where((e) => e.isNotEmpty).toList();
+      _tiposSelecionados =
+          (pergunta['resposta'] ?? '')
+              .split(', ')
+              .where((e) => e.isNotEmpty)
+              .toList();
     });
   }
 
@@ -210,15 +278,9 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   // Simulações de API
-  void _enviarParaAPISalvar(Map<String, String> pergunta) {
-    print('Salvar na API: $pergunta');
-  }
+  void _enviarParaAPISalvar(Map<String, String> pergunta) {}
 
-  void _enviarParaAPIEditar(Map<String, String> pergunta) {
-    print('Editar na API: $pergunta');
-  }
+  void _enviarParaAPIEditar(Map<String, String> pergunta) {}
 
-  void _enviarParaAPIDeletar(Map<String, String> pergunta) {
-    print('Deletar na API: $pergunta');
-  }
+  void _enviarParaAPIDeletar(Map<String, String> pergunta) {}
 }
