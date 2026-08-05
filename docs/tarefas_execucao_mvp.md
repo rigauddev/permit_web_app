@@ -5,7 +5,7 @@
 - [x] Criar roadmap do MVP.
 - [x] Criar lista de tarefas executáveis.
 - [x] Registrar decisão de manter um único app com perfis.
-- [ ] Configurar branch remota para PR.
+- [x] Configurar branch remota para PR.
 - [ ] Definir ambiente de homologação.
 
 ## Marco 2 - Fluxo do cidadão
@@ -53,14 +53,16 @@
 
 ## Marco 6 - Backend e persistência
 
-- [ ] Implementar API mínima.
-- [ ] Criar autenticação no backend.
+- [x] Implementar API mínima de login, usuário atual e solicitações.
+- [x] Criar autenticação no backend.
 - [ ] Remover usuários mockados do caminho de produção.
-- [ ] Criar modelos de usuários, secretarias, solicitações, exigências, anexos e comentários.
+- [x] Criar modelos de usuários, secretarias, solicitações, exigências e anexos.
+- [ ] Criar modelo de comentários.
 - [ ] Criar upload com validação de tipo/tamanho.
 - [ ] Criar logs de auditoria.
 - [ ] Criar camada de API no Flutter.
 - [ ] Substituir mocks por chamadas HTTP.
+- [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 
 ## Marco 7 - Documento final e DAM
 
