@@ -31,6 +31,29 @@ class MfaVerifyRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
 
 
+class EmailVerificationStartRequest(BaseModel):
+    email: str
+    purpose: str = "register"
+
+
+class EmailVerificationStartResponse(BaseModel):
+    email: str
+    delivery: str
+    expires_in_seconds: int = 600
+    dev_code: str | None = None
+
+
+class EmailVerificationConfirmRequest(BaseModel):
+    email: str
+    code: str = Field(..., min_length=6, max_length=6)
+    purpose: str = "register"
+
+
+class EmailVerificationConfirmResponse(BaseModel):
+    email: str
+    verification_token: str
+
+
 class UserSessionResponse(BaseModel):
     id: int
     nome: str

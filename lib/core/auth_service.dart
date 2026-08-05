@@ -56,6 +56,32 @@ class AuthSession {
   }
 }
 
+class EmailVerificationStart {
+  final String delivery;
+  final String? devCode;
+
+  EmailVerificationStart({required this.delivery, this.devCode});
+
+  factory EmailVerificationStart.fromJson(Map<String, dynamic> json) {
+    return EmailVerificationStart(
+      delivery: json['delivery'] as String,
+      devCode: json['dev_code'] as String?,
+    );
+  }
+}
+
+class EmailVerificationConfirm {
+  final String verificationToken;
+
+  EmailVerificationConfirm({required this.verificationToken});
+
+  factory EmailVerificationConfirm.fromJson(Map<String, dynamic> json) {
+    return EmailVerificationConfirm(
+      verificationToken: json['verification_token'] as String,
+    );
+  }
+}
+
 class AuthService {
   AuthService({http.Client? client, String? baseUrl})
     : _client = client ?? http.Client(),
@@ -111,6 +137,7 @@ class AuthService {
     required String senha,
     String? telefone,
     String? endereco,
+    required String emailVerificationToken,
   }) async {
     final response = await _post('/auth/register', {
       'tipo_pessoa': tipoPessoa,
@@ -123,8 +150,31 @@ class AuthService {
       'telefone': telefone,
       'endereco': endereco,
       'role': 'cidadao',
+      'email_verification_token': emailVerificationToken,
     });
     return UserModel.fromApiUser(response);
+  }
+
+  Future<EmailVerificationStart> startRegistrationEmailVerification(
+    String email,
+  ) async {
+    final response = await _post('/auth/email-verifications', {
+      'email': email.trim(),
+      'purpose': 'register',
+    });
+    return EmailVerificationStart.fromJson(response);
+  }
+
+  Future<EmailVerificationConfirm> confirmRegistrationEmailVerification(
+    String email,
+    String code,
+  ) async {
+    final response = await _post('/auth/email-verifications/confirm', {
+      'email': email.trim(),
+      'code': code.trim(),
+      'purpose': 'register',
+    });
+    return EmailVerificationConfirm.fromJson(response);
   }
 
   Future<UserModel> createCompanyUser({

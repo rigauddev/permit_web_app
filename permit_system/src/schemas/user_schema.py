@@ -13,6 +13,7 @@ class UserCreateRequest(BaseModel):
     endereco: str | None = None
     role: str = "cidadao"
     secretaria: str | None = None
+    email_verification_token: str | None = None
 
 
 class UserResponse(BaseModel):

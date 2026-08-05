@@ -108,6 +108,10 @@ DAM:
 
 - `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/email-verifications`
+- `POST /auth/email-verifications/confirm`
+- `POST /auth/mfa/generate`
+- `POST /auth/mfa/verify`
 - `GET /me`
 - `GET /permit-types`
 - `GET /permit-types/{id}/questions`
@@ -124,6 +128,8 @@ DAM:
 - Senha com hash no backend usando bcrypt/argon2.
 - JWT ou sessão segura emitida pelo backend.
 - Remover usuários mockados de produção.
+- Auto-cadastro de cidadão deve validar e-mail antes de liberar o formulário.
+- O tipo de usuário deve ser definido pelo `role` vindo do backend/JWT, nunca pela escolha visual da tela de login.
 - RBAC validado no backend, não apenas no Flutter.
 - Validação de CPF/CNPJ, e-mail, telefone e data.
 - Limite de tamanho e tipo para anexos.
