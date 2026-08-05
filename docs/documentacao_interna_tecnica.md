@@ -5,9 +5,9 @@
 O projeto está dividido em:
 
 - `permit_app/permit_app/permit_web_app`: frontend Flutter para web/mobile.
-- `permit_system`: backend Python/FastAPI planejado, mas ainda sem implementação funcional. O arquivo `permit_system/main.py` contém apenas `1`.
+- `permit_system`: backend Python/FastAPI com autenticação, MFA por e-mail, RBAC básico, usuários/secretarias, solicitações de alvará, exigências por secretaria e seeds.
 
-O frontend já possui telas de login, cadastro, home, serviços da Receita Municipal, dashboard de alvarás e formulário de solicitação. Grande parte dos dados ainda está mockada no app.
+O frontend possui telas de login, cadastro com validação prévia de e-mail, home por perfil, serviço único do MVP, dashboard de alvarás e formulário de solicitação com revisão antes do envio. O caminho principal de autenticação e solicitações usa a API HTTP.
 
 ## Tecnologias identificadas
 
@@ -17,49 +17,46 @@ Frontend:
 - Riverpod/Hooks Riverpod.
 - Shared Preferences e Flutter Secure Storage.
 - File Picker para anexos.
-- HTTP, ainda sem camada de API consolidada.
+- HTTP com camadas `AuthService` e `PermitApiService`.
 
-Backend planejado:
+Backend:
 
 - FastAPI.
 - MySQL.
-- MongoDB.
 - SQLAlchemy/Pydantic.
-- JWT/MFA, ainda não implementados de ponta a ponta.
+- JWT/MFA por e-mail.
 
 ## Arquivos principais do Flutter
 
 - `lib/main.dart`: inicialização, tema, rotas estáticas e `onGenerateRoute`.
 - `lib/core/routes/app_routes.dart`: rotas dinâmicas do dashboard e solicitação.
-- `lib/core/auth_service.dart`: autenticação mockada, usuários de teste e MFA fixo.
-- `lib/features/services/receita_municipal/ui/receita_municipal_services_page.dart`: entrada do serviço de alvará e mocks de perguntas/formulários.
-- `lib/presentation/pages/user_alvara_dashboard.dart`: lista solicitações e detalhes por secretaria.
+- `lib/core/auth_service.dart`: login, geração/verificação de MFA, validação de e-mail e cadastro via API.
+- `lib/core/permit_api_service.dart`: perguntas oficiais do MVP, listagem e criação de solicitações via API.
+- `lib/features/services/receita_municipal/ui/receita_municipal_services_page.dart`: entrada única do MVP para Alvará de Evento.
+- `lib/presentation/pages/user_alvara_dashboard.dart`: lista solicitações reais da API e detalhes por secretaria.
 - `lib/features/permit_request/pages/permit_request_page.dart`: tela do fluxo de solicitação.
 - `lib/features/permit_request/pages/permit_request_form_builder.dart`: campos por etapa.
-- `lib/features/permit_request/controller/permit_request_controller.dart`: estado e submissão mockada.
+- `lib/features/permit_request/controller/permit_request_controller.dart`: estado separado, validação, preview de exigências e submissão via API.
 
 ## Riscos técnicos críticos para o MVP
 
-1. Backend não funcional.
-   O app ainda depende de mocks locais; sem backend não há persistência real, autenticação segura, upload real nem workflow interno.
+1. Upload de documentos ainda não persiste arquivos.
+   O File Picker seleciona arquivos e envia nomes no payload, mas ainda falta upload real com validação de tipo/tamanho e armazenamento.
 
-2. Autenticação insegura.
-   Existem usuários mockados, senha `123456`, hash SHA-256 simples no cliente e MFA fixo `123456`. Isso não pode ir para produção como autenticação real.
+2. Workflow interno ainda incompleto.
+   A API filtra filas por perfil/secretaria, mas ainda faltam ações de aprovar, recusar, solicitar correção, comentar e auditar.
 
-3. Estado do formulário sobrescreve dados.
-   `updateBasicInfo` e `updateEventInfo` usam chaves negativas repetidas em `answers`. Exemplo: endereço, e-mail, nome/data/endereço do evento podem colidir.
+3. Autorização/DAM ainda parcial.
+   O sistema registra `DAM pendente na Receita Municipal` ou `isento`, mas ainda falta documento final imprimível/PDF e integração futura com DAM.
 
-4. Perguntas condicionais ainda não são realmente condicionais.
-   O app exibe perguntas, mas não monta automaticamente as pendências por secretaria com base nas respostas.
+4. Observabilidade e auditoria ainda faltam.
+   Antes de produção, ações sensíveis devem registrar ator, data/hora, entidade afetada e metadados úteis.
 
-5. Rotas e permissões ainda são frágeis.
-   O Drawer mostra menus por `userType`, mas não há guarda central de rota nem validação no backend.
+5. Rotas do frontend ainda precisam de guarda central.
+   O backend valida JWT/RBAC, mas o app ainda deve centralizar proteção de rota para melhorar UX e reduzir telas indevidas.
 
-6. Upload de documentos é local.
-   O File Picker seleciona arquivos, mas não faz persistência, validação de tipo/tamanho ou envio.
-
-7. Geração de autorização/DAM não existe.
-   Para o MVP, o sistema deve gerar autorização com status "DAM pendente na Receita Municipal" ou "Isento por declaração beneficente".
+6. Configuração de produção precisa ser fechada.
+   Definir ambiente de homologação, CORS restrito, HTTPS, secrets, banco real, política de anexos e revisão final de segurança.
 
 ## Modelo de domínio recomendado
 
