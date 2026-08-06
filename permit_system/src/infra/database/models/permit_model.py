@@ -25,6 +25,7 @@ class PermitRequestModel(Base):
     solicitante = relationship("UserModel", back_populates="permit_requests")
     requirements = relationship("PermitRequirementModel", back_populates="permit_request")
     attachments = relationship("AttachmentModel", back_populates="permit_request")
+    comments = relationship("PermitCommentModel", back_populates="permit_request")
 
 
 class PermitRequirementModel(Base):
@@ -43,6 +44,7 @@ class PermitRequirementModel(Base):
     permit_request = relationship("PermitRequestModel", back_populates="requirements")
     secretaria = relationship("SecretariaModel", back_populates="requirements")
     attachments = relationship("AttachmentModel", back_populates="requirement")
+    comments = relationship("PermitCommentModel", back_populates="requirement")
 
 
 class AttachmentModel(Base):
@@ -60,3 +62,18 @@ class AttachmentModel(Base):
 
     permit_request = relationship("PermitRequestModel", back_populates="attachments")
     requirement = relationship("PermitRequirementModel", back_populates="attachments")
+
+
+class PermitCommentModel(Base):
+    __tablename__ = "comentarios_alvara"
+
+    id = Column(Integer, primary_key=True, index=True)
+    permit_request_id = Column(Integer, ForeignKey("solicitacoes_alvara.id"), nullable=False)
+    requirement_id = Column(Integer, ForeignKey("exigencias_alvara.id"), nullable=True)
+    author_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    mensagem = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    permit_request = relationship("PermitRequestModel", back_populates="comments")
+    requirement = relationship("PermitRequirementModel", back_populates="comments")
+    author = relationship("UserModel")

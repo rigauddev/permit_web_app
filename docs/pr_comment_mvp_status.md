@@ -33,6 +33,12 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
   - operador da Receita anexa DAM à solicitação: passou;
   - `dam_status` muda para `anexado`: passou;
   - operador de outra secretaria recebe `403`: passou.
+- Smoke test backend do fluxo interno:
+  - admin cria comentário geral na solicitação: passou;
+  - operador aprova exigência da própria secretaria: passou;
+  - operador de outra secretaria recebe `403`: passou;
+  - solicitação muda para `dam_pendente` após todas as anuências: passou;
+  - solicitação muda para `autorizada` após DAM anexado: passou.
 
 ## DAM
 
@@ -47,8 +53,7 @@ Já existe endpoint backend para registrar o anexo do DAM por metadados/URL:
 ## Próximos passos
 
 - Implementar upload binário real de anexos, incluindo UI para anexo específico do DAM.
-- Criar fila interna por secretaria com aprovar, recusar, solicitar correção e comentar.
-- Criar status geral da solicitação a partir das anuências das secretarias.
+- Criar telas internas para consumir os endpoints de fila, aprovação, correção e comentários.
 - Criar documento final de autorização imprimível/PDF.
 - Definir ambiente de homologação e configurações de produção.
 
