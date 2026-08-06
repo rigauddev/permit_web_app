@@ -89,6 +89,19 @@ class EventCredentialRevokeRequest(BaseModel):
     reason: str = Field(..., min_length=3, max_length=2000)
 
 
+class AuthorizationTemplateRequest(BaseModel):
+    header_text: str = Field(..., min_length=10, max_length=2000)
+    footer_text: str = Field(..., min_length=10, max_length=2000)
+
+
+class AuthorizationTemplateResponse(BaseModel):
+    id: int
+    slug: str
+    header_text: str
+    footer_text: str
+    updated_at: datetime | None = None
+
+
 class PermitResponse(BaseModel):
     id: int
     protocolo: str

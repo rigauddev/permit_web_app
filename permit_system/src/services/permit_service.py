@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from src.core.security import create_event_credential_token, decode_token, hash_token, verify_token_hash
 from src.infra.database.models import (
     AttachmentModel,
+    AuthorizationTemplateModel,
     EventCredentialModel,
     PermitCommentModel,
     PermitRequestModel,
@@ -18,6 +19,8 @@ from src.infra.database.models import (
 )
 from src.schemas.permit_schema import (
     AttachmentResponse,
+    AuthorizationTemplateRequest,
+    AuthorizationTemplateResponse,
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
@@ -60,6 +63,16 @@ QUESTION_RULES = {
 
 REQUIREMENT_STATUSES = {"aguardando_analise", "aprovada", "recusada", "pendente_documento"}
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8080")
+AUTHORIZATION_TEMPLATE_SLUG = "alvara_evento"
+DEFAULT_AUTHORIZATION_HEADER = (
+    "A Prefeitura Municipal de Valença, por meio da Central de Eventos, autoriza a realização do evento abaixo "
+    "após as anuências dos órgãos competentes e a regularização do DAM ou isenção aplicável."
+)
+DEFAULT_AUTHORIZATION_FOOTER = (
+    "Documento mantido no sistema municipal. A validade deve ser confirmada pela leitura do QR Code. "
+    "Quando houver exigência de assinatura, o responsável pode imprimir, assinar e anexar, ou assinar "
+    "eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado."
+)
 
 
 class PermitService:
@@ -368,6 +381,25 @@ class PermitService:
         self.db.refresh(credential)
         return self._credential_to_response(credential)
 
+    def get_authorization_template(self) -> AuthorizationTemplateResponse:
+        template = self._get_or_create_authorization_template()
+        return self._template_to_response(template)
+
+    def update_authorization_template(
+        self,
+        payload: AuthorizationTemplateRequest,
+        current_user: UserModel,
+    ) -> AuthorizationTemplateResponse:
+        if current_user.role.slug not in {"admin", "gestor_secretaria"}:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        template = self._get_or_create_authorization_template()
+        template.header_text = payload.header_text
+        template.footer_text = payload.footer_text
+        template.updated_by = current_user.id
+        self.db.commit()
+        self.db.refresh(template)
+        return self._template_to_response(template)
+
     @staticmethod
     def _build_requirements(respostas: dict[str, Any]) -> list[tuple[str, str]]:
         requirements: list[tuple[str, str]] = []
@@ -523,6 +555,24 @@ class PermitService:
     def _generate_protocol() -> str:
         return f"ALV-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
 
+    def _get_or_create_authorization_template(self) -> AuthorizationTemplateModel:
+        template = (
+            self.db.query(AuthorizationTemplateModel)
+            .filter(AuthorizationTemplateModel.slug == AUTHORIZATION_TEMPLATE_SLUG)
+            .first()
+        )
+        if template:
+            return template
+        template = AuthorizationTemplateModel(
+            slug=AUTHORIZATION_TEMPLATE_SLUG,
+            header_text=DEFAULT_AUTHORIZATION_HEADER,
+            footer_text=DEFAULT_AUTHORIZATION_FOOTER,
+        )
+        self.db.add(template)
+        self.db.commit()
+        self.db.refresh(template)
+        return template
+
     def _generate_public_code(self) -> str:
         for _ in range(10):
             code = f"EVT-{secrets.token_urlsafe(6).replace('_', '').replace('-', '').upper()[:8]}"
@@ -651,4 +701,14 @@ class PermitService:
             valid_until=credential.valid_until,
             issued_at=credential.issued_at,
             validation_url=validation_url,
+        )
+
+    @staticmethod
+    def _template_to_response(template: AuthorizationTemplateModel) -> AuthorizationTemplateResponse:
+        return AuthorizationTemplateResponse(
+            id=template.id,
+            slug=template.slug,
+            header_text=template.header_text,
+            footer_text=template.footer_text,
+            updated_at=template.updated_at,
         )

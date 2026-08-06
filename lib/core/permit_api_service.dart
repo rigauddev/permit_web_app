@@ -175,6 +175,32 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getAuthorizationTemplate({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/authorization-template'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateAuthorizationTemplate({
+    required String accessToken,
+    required String headerText,
+    required String footerText,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/permit-requests/authorization-template'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'header_text': headerText, 'footer_text': footerText}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> createRequest({
     required String accessToken,
     required Map<String, String> responsibleData,

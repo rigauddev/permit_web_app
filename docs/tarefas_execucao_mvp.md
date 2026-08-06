@@ -81,8 +81,13 @@
 
 ## Marco 7 - Documento final e DAM
 
-- [ ] Criar documento de autorização em HTML/PDF imprimível.
-- [ ] Incluir protocolo, responsável, evento, data, local, secretarias anuentes e observações.
+- [x] Criar documento de autorização em PDF imprimível como opção.
+- [x] Incluir protocolo, responsável, evento, data, local, secretarias anuentes e observações.
+- [x] Incluir logo oficial na autorização em tela e no PDF.
+- [x] Criar template configurável de cabeçalho e rodapé do PDF.
+- [x] Permitir que gestor/admin atualize textos do template do PDF.
+- [x] Incluir campos de assinatura no rodapé da autorização/PDF.
+- [x] Orientar assinatura impressa ou assinatura eletrônica pelo aplicativo gov.br quando exigida.
 - [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
 - [x] Permitir anexar o DAM à solicitação aprovada.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
@@ -90,6 +95,7 @@
 - [x] Gerar credencial/link de validação do evento autorizado no backend.
 - [x] Gerar QR Code visual para impressão/exibição.
 - [x] Criar tela de validação de credencial do evento.
+- [x] Validar automaticamente a credencial quando a autorização é aberta no app.
 - [x] Exibir referência do DAM armazenado na validação quando autorizado.
 - [x] Exibir autorização final em nome do responsável pelo evento.
 
@@ -127,7 +133,7 @@
 - [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.
-- [ ] Testar geração do documento final.
+- [x] Testar geração do documento final.
 - [x] Testar QR Code visual e tela de validação.
 - [ ] Testar layout mobile e desktop.
 
@@ -139,7 +145,7 @@
 4. Criar revisão/envio/protocolo.
 5. Implementar persistência/API mínima.
 6. Implementar fila interna por secretaria.
-7. Criar documento final em PDF/HTML imprimível.
-8. Ajustar 15 dias úteis e SLA interno de 2 dias úteis.
-9. Criar visão gestor/admin para todas as secretarias.
+7. Ajustar 15 dias úteis e SLA interno de 2 dias úteis.
+8. Criar visão gestor/admin para todas as secretarias.
+9. Testar layout mobile e desktop.
 10. Fazer limpeza de segurança e QA.
