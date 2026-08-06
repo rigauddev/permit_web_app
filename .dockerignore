@@ -1,4 +1,4 @@
-.build/
+build/
 .dart_tool/
 .packages
 .pub-cache/
@@ -6,5 +6,3 @@ flutter/
 test/
 .git
 .gitignore
-Dockerfile
-nginx.conf

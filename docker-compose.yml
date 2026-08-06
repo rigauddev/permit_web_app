@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: ./permit_system
+    container_name: permit_system_api
+    environment:
+      DATABASE_URL: sqlite:////data/permit_system.db
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-dev}
+      JWT_ALGORITHM: HS256
+    volumes:
+      - permit_system_data:/data
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python scripts/seed.py &&
+      uvicorn main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      args:
+        API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+    container_name: permit_web_app
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
+volumes:
+  permit_system_data:

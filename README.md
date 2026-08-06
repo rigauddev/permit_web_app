@@ -12,7 +12,24 @@
 2. No terminal, execute:
 
 ```bash
-docker build -t alvara_app .
+docker compose up --build
+```
+
+Aplicação web: `http://localhost:8080`
+
+API: `http://localhost:8000`
+
+Usuários de teste criados automaticamente no container da API:
+
+- `admin@prefeitura.local` / `123456`
+- `cidadao@teste.local` / `123456`
+- `receita@prefeitura.local` / `123456`
+- `meioambiente@prefeitura.local` / `123456`
+
+Para rodar somente o frontend web estático:
+
+```bash
+docker build --build-arg API_BASE_URL=http://localhost:8000 -t alvara_app .
 docker run -p 8080:80 alvara_app
 ```
 

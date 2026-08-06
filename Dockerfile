@@ -11,7 +11,8 @@ RUN flutter pub get
 COPY . .
 
 # Gerar build para web
-RUN flutter build web
+ARG API_BASE_URL=http://localhost:8000
+RUN flutter build web --dart-define=API_BASE_URL=${API_BASE_URL}
 
 # Etapa 2 - Servir com NGINX
 FROM nginx:alpine
