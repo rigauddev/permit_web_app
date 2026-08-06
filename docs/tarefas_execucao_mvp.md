@@ -20,6 +20,9 @@
 - [x] Gerar protocolo após envio.
 - [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.
 - [x] Corrigir seleção de respostas para não carregar resposta da pergunta anterior no wizard.
+- [x] Corrigir menu do cidadão para ocultar áreas internas de gestão, secretaria e configurações.
+- [x] Criar página inicial do cidadão com carrossel de informações da prefeitura/secretarias.
+- [x] Centralizar formulários de solicitação em largura adequada para desktop.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -60,6 +63,7 @@
 - [x] Criar status por secretaria.
 - [x] Atualizar status geral a partir das anuências.
 - [x] Criar visão de gestor/admin para gestão interna com escopo por secretaria.
+- [x] Criar dashboard inicial para usuários internos com serviços pertinentes ao perfil/secretaria.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [ ] Garantir que Receita/Fazenda só anexe DAM após todas as anuências aplicáveis.
@@ -83,6 +87,8 @@
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 - [x] Substituir lista mockada de usuários por endpoint real com secretaria e perfil.
 - [x] Restringir gestor a usuários da própria secretaria e impedir criação de admin por gestor.
+- [x] Criar gestão de conteúdo da página inicial com até 5 cards ativos por prefeitura/secretaria.
+- [x] Persistir cards de carrossel com título, texto, imagem e ordem de exibição.
 
 ## Marco 7 - Documento final e DAM
 
@@ -137,6 +143,8 @@
 - [ ] Testar evento beneficente.
 - [x] Testar operador de secretaria.
 - [x] Testar listagem de usuários: admin vê todos e gestor vê apenas sua secretaria.
+- [ ] Testar gestão de conteúdo por admin e gestor de secretaria.
+- [ ] Testar home do cidadão com carrossel em mobile e desktop.
 - [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.

@@ -47,32 +47,12 @@ class CustomDrawer extends ConsumerWidget implements PreferredSizeWidget {
             route: '/home',
           ),
 
-          /// Alvará (usuário comum)
-          if (isUser || isOperatorOrManager || isAdmin)
+          /// Serviços do cidadão
+          if (isUser)
             ExpansionTile(
               leading: Icon(Icons.event, color: primaryColor),
               title: const Text('Serviços'),
-              children: [
-                _buildSubTile(context, 'Serviços', '/services'),
-                _buildSubTile(
-                  context,
-                  'Secretaria de Cultura',
-                  '/solicitacoes',
-                ),
-                _buildSubTile(
-                  context,
-                  'secreatria de Desenvolvimento Social',
-                  '/vistorias',
-                ),
-                _buildSubTile(
-                  context,
-                  'Secretaria de Desenvolvimento Urbano',
-                  '/dam',
-                ),
-                _buildSubTile(context, 'Secretaria de Educação', '/dam'),
-                _buildSubTile(context, 'Secretaria de Segurança', '/dam'),
-                _buildSubTile(context, 'Secretaria de Transporte', '/dam'),
-              ],
+              children: [_buildSubTile(context, 'Serviços', '/services')],
             ),
 
           /// Submenu: Serviços (Operador, Gestor e Admin)
@@ -81,8 +61,14 @@ class CustomDrawer extends ConsumerWidget implements PreferredSizeWidget {
               leading: Icon(Icons.work, color: primaryColor),
               title: const Text('Gestão'),
               children: [
-                _buildSubTile(context, 'Solicitações', '/solicitacoes'),
-                _buildSubTile(context, 'Vistorias', '/vistorias'),
+                _buildSubTile(context, 'Solicitações', '/services'),
+                _buildSubTile(context, 'Vistorias', '/services'),
+                if (userType == 'gestor' || isAdmin)
+                  _buildSubTile(
+                    context,
+                    'Conteúdo da página inicial',
+                    '/home-content',
+                  ),
                 // _buildSubTile(context, 'Geração de DAM', '/dam'),
               ],
             ),
@@ -106,15 +92,16 @@ class CustomDrawer extends ConsumerWidget implements PreferredSizeWidget {
               ],
             ),
 
-          ExpansionTile(
-            leading: Icon(Icons.people, color: primaryColor),
-            title: const Text('Configurações'),
-            children: [
-              _buildSubTile(context, 'Permissões', '/users'),
-              _buildSubTile(context, 'Tipo de Usuários', '/users'),
-              _buildSubTile(context, 'Criar perguntas', '/questtions'),
-            ],
-          ),
+          if (isAdmin)
+            ExpansionTile(
+              leading: Icon(Icons.settings, color: primaryColor),
+              title: const Text('Configurações'),
+              children: [
+                _buildSubTile(context, 'Permissões', '/users'),
+                _buildSubTile(context, 'Tipo de usuários', '/users'),
+                _buildSubTile(context, 'Criar perguntas', '/questtions'),
+              ],
+            ),
 
           const Divider(),
 
