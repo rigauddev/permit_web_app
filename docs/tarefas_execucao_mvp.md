@@ -44,11 +44,11 @@
 
 ## Marco 5 - Fluxo interno
 
-- [ ] Criar fila por secretaria.
-- [ ] Garantir que operador veja apenas demandas da sua secretaria.
-- [ ] Criar ações: aprovar, recusar, solicitar correção e comentar.
-- [ ] Criar status por secretaria.
-- [ ] Atualizar status geral a partir das anuências.
+- [x] Criar fila por secretaria.
+- [x] Garantir que operador veja apenas demandas da sua secretaria.
+- [x] Criar ações: aprovar, recusar, solicitar correção e comentar.
+- [x] Criar status por secretaria.
+- [x] Atualizar status geral a partir das anuências.
 - [ ] Criar visão de gestor/admin para todas as secretarias.
 
 ## Marco 6 - Backend e persistência
@@ -57,7 +57,7 @@
 - [x] Criar autenticação no backend.
 - [x] Remover usuários mockados do caminho de produção.
 - [x] Criar modelos de usuários, secretarias, solicitações, exigências e anexos.
-- [ ] Criar modelo de comentários.
+- [x] Criar modelo de comentários.
 - [ ] Criar upload com validação de tipo/tamanho.
 - [ ] Criar logs de auditoria.
 - [x] Criar camada inicial de API de autenticação no Flutter.
@@ -90,7 +90,7 @@
 - [x] Testar evento com alimentação.
 - [ ] Testar evento beneficente.
 - [x] Testar operador de secretaria.
-- [ ] Testar aprovação, recusa e pedido de correção.
+- [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar geração do documento final.
 - [ ] Testar layout mobile e desktop.
 

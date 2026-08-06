@@ -120,6 +120,7 @@ DAM:
 - `POST /permit-requests/{id}/dam-attachment`
 - `POST /permit-requests/{id}/comments`
 - `PATCH /requirements/{id}/status`
+- `PATCH /permit-requests/requirements/{id}/status`
 - `POST /permit-requests/{id}/issue-authorization`
 
 ## Segurança mínima antes de produção

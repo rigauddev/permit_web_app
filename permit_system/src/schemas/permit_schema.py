@@ -36,6 +36,26 @@ class AttachmentResponse(BaseModel):
     tamanho_bytes: int | None = None
 
 
+class CommentCreateRequest(BaseModel):
+    mensagem: str = Field(..., min_length=2, max_length=2000)
+    requirement_id: int | None = None
+
+
+class CommentResponse(BaseModel):
+    id: int
+    permit_request_id: int
+    requirement_id: int | None = None
+    author_id: int
+    author_name: str
+    mensagem: str
+    created_at: datetime | None = None
+
+
+class RequirementStatusUpdateRequest(BaseModel):
+    status: str = Field(..., min_length=3, max_length=50)
+    observacoes: str | None = Field(default=None, max_length=2000)
+
+
 class PermitResponse(BaseModel):
     id: int
     protocolo: str
@@ -49,3 +69,4 @@ class PermitResponse(BaseModel):
     created_at: datetime | None = None
     requirements: list[RequirementResponse] = []
     attachments: list[AttachmentResponse] = []
+    comments: list[CommentResponse] = []

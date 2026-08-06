@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.infra.database.models import (
     AttachmentModel,
+    PermitCommentModel,
     PermitRequestModel,
     PermitRequirementModel,
     SecretariaModel,
@@ -13,10 +14,13 @@ from src.infra.database.models import (
 )
 from src.schemas.permit_schema import (
     AttachmentResponse,
+    CommentCreateRequest,
+    CommentResponse,
     DamAttachmentRequest,
     PermitCreateRequest,
     PermitResponse,
     RequirementResponse,
+    RequirementStatusUpdateRequest,
 )
 
 
@@ -29,6 +33,8 @@ QUESTION_RULES = {
     "tem_alimentacao": ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação"),
     "precisa_guarda": ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal"),
 }
+
+REQUIREMENT_STATUSES = {"aguardando_analise", "aprovada", "recusada", "pendente_documento"}
 
 
 class PermitService:
@@ -92,6 +98,84 @@ class PermitService:
             )
         return [self.to_response(item) for item in query.order_by(PermitRequestModel.created_at.desc()).all()]
 
+    def get_request(self, request_id: int, current_user: UserModel) -> PermitResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if not self._can_view_request(request, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        return self.to_response(request)
+
+    def update_requirement_status(
+        self,
+        requirement_id: int,
+        payload: RequirementStatusUpdateRequest,
+        current_user: UserModel,
+    ) -> RequirementResponse:
+        requirement = (
+            self.db.query(PermitRequirementModel).filter(PermitRequirementModel.id == requirement_id).first()
+        )
+        if not requirement:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
+        self._ensure_can_manage_requirement(requirement, current_user)
+
+        new_status = payload.status.strip()
+        if new_status not in REQUIREMENT_STATUSES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status de exigência inválido")
+
+        requirement.status = new_status
+        if payload.observacoes is not None:
+            requirement.observacoes = payload.observacoes
+            if payload.observacoes.strip():
+                self._add_comment(
+                    requirement.permit_request_id,
+                    current_user,
+                    payload.observacoes.strip(),
+                    requirement_id=requirement.id,
+                )
+
+        self._recalculate_request_status(requirement.permit_request)
+        self.db.commit()
+        self.db.refresh(requirement)
+        return self._requirement_to_response(requirement)
+
+    def create_comment(
+        self,
+        request_id: int,
+        payload: CommentCreateRequest,
+        current_user: UserModel,
+    ) -> CommentResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if not self._can_view_request(request, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+
+        requirement = None
+        if payload.requirement_id is not None:
+            requirement = (
+                self.db.query(PermitRequirementModel)
+                .filter(
+                    PermitRequirementModel.id == payload.requirement_id,
+                    PermitRequirementModel.permit_request_id == request.id,
+                )
+                .first()
+            )
+            if not requirement:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
+            if current_user.role.slug != "cidadao":
+                self._ensure_can_manage_requirement(requirement, current_user)
+
+        comment = self._add_comment(
+            request.id,
+            current_user,
+            payload.mensagem.strip(),
+            requirement_id=requirement.id if requirement else None,
+        )
+        self.db.commit()
+        self.db.refresh(comment)
+        return self._comment_to_response(comment)
+
     def attach_dam(
         self,
         request_id: int,
@@ -117,6 +201,7 @@ class PermitService:
             tamanho_bytes=payload.tamanho_bytes,
         )
         request.dam_status = "anexado"
+        self._recalculate_request_status(request)
         self.db.add(attachment)
         self.db.commit()
         self.db.refresh(attachment)
@@ -194,6 +279,68 @@ class PermitService:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para anexar DAM")
 
     @staticmethod
+    def _can_view_request(request: PermitRequestModel, current_user: UserModel) -> bool:
+        role = current_user.role.slug
+        if role == "admin":
+            return True
+        if role == "cidadao":
+            return request.solicitante_id == current_user.id
+        if role == "gestor_secretaria":
+            return True
+        if role == "operador_secretaria":
+            return any(item.secretaria_id == current_user.secretaria_id for item in request.requirements)
+        return False
+
+    @staticmethod
+    def _ensure_can_manage_requirement(requirement: PermitRequirementModel, current_user: UserModel) -> None:
+        role = current_user.role.slug
+        if role == "admin":
+            return
+        if role in {"gestor_secretaria", "operador_secretaria"} and requirement.secretaria_id == current_user.secretaria_id:
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para atuar nesta exigência")
+
+    @staticmethod
+    def _recalculate_request_status(request: PermitRequestModel) -> None:
+        requirement_statuses = [item.status for item in request.requirements]
+        if not requirement_statuses:
+            request.status = "enviada"
+            return
+        if "recusada" in requirement_statuses:
+            request.status = "indeferida"
+            return
+        if "pendente_documento" in requirement_statuses:
+            request.status = "pendente_correcao"
+            return
+        if all(item == "aprovada" for item in requirement_statuses):
+            if request.is_beneficente:
+                request.dam_status = "isento"
+                request.status = "isenta_dam"
+            elif request.dam_status == "anexado":
+                request.status = "autorizada"
+            else:
+                request.dam_status = "pendente_prefeitura"
+                request.status = "dam_pendente"
+            return
+        request.status = "em_analise"
+
+    def _add_comment(
+        self,
+        request_id: int,
+        author: UserModel,
+        mensagem: str,
+        requirement_id: int | None = None,
+    ) -> PermitCommentModel:
+        comment = PermitCommentModel(
+            permit_request_id=request_id,
+            requirement_id=requirement_id,
+            author_id=author.id,
+            mensagem=mensagem,
+        )
+        self.db.add(comment)
+        return comment
+
+    @staticmethod
     def _generate_protocol() -> str:
         return f"ALV-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
 
@@ -211,16 +358,21 @@ class PermitService:
             respostas=request.respostas,
             created_at=request.created_at,
             requirements=[
-                RequirementResponse(
-                    id=item.id,
-                    secretaria=item.secretaria.slug,
-                    tipo_exigencia=item.tipo_exigencia,
-                    status=item.status,
-                    observacoes=item.observacoes,
-                )
+                PermitService._requirement_to_response(item)
                 for item in request.requirements
             ],
             attachments=[PermitService._attachment_to_response(item) for item in request.attachments],
+            comments=[PermitService._comment_to_response(item) for item in request.comments],
+        )
+
+    @staticmethod
+    def _requirement_to_response(requirement: PermitRequirementModel) -> RequirementResponse:
+        return RequirementResponse(
+            id=requirement.id,
+            secretaria=requirement.secretaria.slug,
+            tipo_exigencia=requirement.tipo_exigencia,
+            status=requirement.status,
+            observacoes=requirement.observacoes,
         )
 
     @staticmethod
@@ -232,4 +384,16 @@ class PermitService:
             arquivo_url=attachment.arquivo_url,
             mime_type=attachment.mime_type,
             tamanho_bytes=attachment.tamanho_bytes,
+        )
+
+    @staticmethod
+    def _comment_to_response(comment: PermitCommentModel) -> CommentResponse:
+        return CommentResponse(
+            id=comment.id,
+            permit_request_id=comment.permit_request_id,
+            requirement_id=comment.requirement_id,
+            author_id=comment.author_id,
+            author_name=comment.author.nome,
+            mensagem=comment.mensagem,
+            created_at=comment.created_at,
         )
