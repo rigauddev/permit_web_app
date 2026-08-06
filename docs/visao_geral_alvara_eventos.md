@@ -48,6 +48,8 @@ Separar em dois apps só deve virar prioridade quando houver volume alto de uso 
 10. Acompanhar status, observações e pedidos de correção.
 11. Receber autorização condicionada à emissão/pagamento do DAM ou isenção.
 12. No primeiro momento, quando houver DAM, o documento/pagamento será anexado à solicitação aprovada. A geração automática do DAM dentro do sistema fica planejada para uma etapa posterior de integração.
+13. Após autorização final, o sistema deve gerar uma credencial do evento com QR Code para validação pela equipe de plantão/fiscalização.
+14. Ao ler o QR Code, o fiscal deve visualizar dados do evento, status das etapas, anuências, DAM anexado/pago ou isenção.
 
 ## Dados mínimos da solicitação
 
@@ -78,3 +80,4 @@ Separar em dois apps só deve virar prioridade quando houver volume alto de uso 
 - Brigadista deve ser contratado pelo responsável quando exigido.
 - Evento beneficente é isento de DAM mediante declaração de instituição beneficiada.
 - No MVP inicial, o DAM não será gerado automaticamente pelo sistema; ele deve ser anexado à solicitação após aprovação/encaminhamento pela prefeitura.
+- QR Code/credencial só deve ser emitido quando todas as etapas estiverem autorizadas e o DAM estiver anexado/pago ou a isenção validada.
