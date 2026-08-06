@@ -25,6 +25,8 @@ Aplicação web: `http://localhost:8080`
 
 API: `http://localhost:8000`
 
+MySQL local do Docker: `localhost:3307`
+
 Usuários de teste criados automaticamente no container da API:
 
 - `admin@prefeitura.local` / `123456`
@@ -34,7 +36,7 @@ Usuários de teste criados automaticamente no container da API:
 - `dmtran@prefeitura.local` / `123456`
 - `gestor@prefeitura.local` / `123456`
 
-O banco local do Docker usa SQLite persistido no volume `permit_system_data`. Para reiniciar o ambiente com banco limpo:
+O banco local do Docker usa MySQL 8 persistido no volume `permit_mysql_data`. Para reiniciar o ambiente com banco limpo:
 
 ```bash
 docker compose down -v
@@ -47,6 +49,13 @@ Para validar os containers:
 docker compose ps
 curl http://localhost:8000/health
 ```
+
+Credenciais padrão do MySQL no Docker:
+
+- database: `permit_system`
+- user: `permit_user`
+- password: `permit_password`
+- root password: `permit_root_password`
 
 Para rodar somente o frontend web estático:
 

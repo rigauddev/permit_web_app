@@ -9,7 +9,7 @@ Este é o backend FastAPI do sistema municipal de alvará de eventos. Ele fornec
 * Python-jose\[cryptography]
 * Passlib\[bcrypt]
 * PyOTP
-* SQLite no desenvolvimento local via Docker
+* MySQL no desenvolvimento local via Docker
 * Banco relacional compatível com SQLAlchemy em homologação/produção
 * SQLAlchemy
 * Pydantic
@@ -44,7 +44,7 @@ Este é o backend FastAPI do sistema municipal de alvará de eventos. Ele fornec
 
     Crie um arquivo `.env` na raiz do projeto e adicione as seguintes variáveis:
     ```env
-    DATABASE_URL=sqlite:///./permit_system.db
+    DATABASE_URL=mysql+mysqlconnector://permit_user:permit_password@localhost:3307/permit_system
     SECRET_KEY=troque-esta-chave-em-producao
     JWT_ALGORITHM=HS256
     ACCESS_TOKEN_EXPIRE_MINUTES=480
@@ -68,7 +68,7 @@ uvicorn main:app --reload
 
 ## Desenvolvimento local com seeds
 
-O backend usa `DATABASE_URL` e, por padrão, cria um SQLite local em `permit_system.db`.
+O backend usa `DATABASE_URL`. No Docker Compose do projeto, o padrão é MySQL 8 com o banco `permit_system`.
 
 ```bash
 cp .env.example .env
