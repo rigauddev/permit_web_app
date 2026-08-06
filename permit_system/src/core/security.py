@@ -1,4 +1,6 @@
 import os
+import hashlib
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -19,6 +21,14 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, password_hash: str) -> bool:
     return pwd_context.verify(password, password_hash)
+
+
+def hash_token(token: str) -> str:
+    return hmac.new(SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
+
+
+def verify_token_hash(token: str, token_hash: str) -> bool:
+    return hmac.compare_digest(hash_token(token), token_hash)
 
 
 def create_access_token(subject: str, claims: dict[str, Any] | None = None) -> str:
@@ -53,6 +63,17 @@ def create_email_verification_token(email: str) -> str:
         "purpose": "email_verification",
         "iat": int(now.timestamp()),
         "exp": expires_at,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_event_credential_token(credential_id: str, permit_request_id: int) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": credential_id,
+        "permit_request_id": permit_request_id,
+        "purpose": "event_credential",
+        "iat": int(now.timestamp()),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 

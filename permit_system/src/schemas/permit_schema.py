@@ -56,6 +56,39 @@ class RequirementStatusUpdateRequest(BaseModel):
     observacoes: str | None = Field(default=None, max_length=2000)
 
 
+class EventCredentialResponse(BaseModel):
+    id: int
+    permit_request_id: int
+    codigo_publico: str
+    status: str
+    valid_from: datetime
+    valid_until: datetime
+    issued_at: datetime | None = None
+    validation_url: str
+
+
+class EventCredentialValidationResponse(BaseModel):
+    valid: bool
+    reason: str | None = None
+    credential_status: str | None = None
+    protocolo: str | None = None
+    nome_evento: str | None = None
+    data_evento: str | None = None
+    horario_inicio: str | None = None
+    horario_termino: str | None = None
+    local_evento: str | None = None
+    responsavel: str | None = None
+    publico_estimado: str | None = None
+    status_solicitacao: str | None = None
+    dam_status: str | None = None
+    requirements: list[RequirementResponse] = []
+    dam_attachment: AttachmentResponse | None = None
+
+
+class EventCredentialRevokeRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=2000)
+
+
 class PermitResponse(BaseModel):
     id: int
     protocolo: str
@@ -70,3 +103,4 @@ class PermitResponse(BaseModel):
     requirements: list[RequirementResponse] = []
     attachments: list[AttachmentResponse] = []
     comments: list[CommentResponse] = []
+    credentials: list[EventCredentialResponse] = []

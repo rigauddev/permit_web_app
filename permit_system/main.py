@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.auth_routes import router as auth_router
-from src.api.permit_routes import router as permit_router
+from src.api.permit_routes import credential_router, router as permit_router
 from src.infra.database.mysql_db import create_tables
 
 
@@ -29,3 +29,4 @@ def health():
 
 app.include_router(auth_router)
 app.include_router(permit_router)
+app.include_router(credential_router)

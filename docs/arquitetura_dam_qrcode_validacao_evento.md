@@ -142,7 +142,6 @@ MVP/fase seguinte:
 - `POST /permit-requests/{id}/dam-attachment`
 - `POST /permit-requests/{id}/issue-authorization`
 - `GET /permit-requests/{id}/authorization`
-- `POST /permit-requests/{id}/event-credential`
 - `GET /event-credentials/{codigo_publico}/validate`
 - `POST /event-credentials/{id}/revoke`
 
@@ -174,18 +173,18 @@ Campos mínimos:
 - IP/user agent quando disponível
 - metadados da operação
 
+## Implementado no Backend
+
+- Modelo `EventCredential` vinculado à solicitação.
+- Emissão da autorização final por `admin` ou operador/gestor da Receita.
+- Geração de `codigo_publico`, token assinado e URL de validação.
+- Validação da credencial sem expor dados pessoais no QR Code.
+- Revogação administrativa da credencial.
+- Retorno dos dados de fiscalização, incluindo status da solicitação, status do DAM, exigências e referência ao anexo do DAM.
+
 ## Próximo Bloco Recomendado
 
-Implementar no backend:
-
-1. Modelo `EventCredential`.
-2. Endpoint `POST /permit-requests/{id}/issue-authorization`.
-3. Geração de `codigo_publico` e token assinado.
-4. Endpoint público/autenticado de validação do QR Code.
-5. Seed com uma solicitação autorizada para demonstração.
-
-Depois disso:
-
-1. Tela `Validar Credencial de Evento`.
-2. Geração visual do QR Code.
-3. Documento final de autorização com QR Code.
+1. Criar tela `Validar Credencial de Evento`.
+2. Renderizar QR Code visual a partir da URL da credencial.
+3. Criar documento final de autorização com QR Code.
+4. Adicionar seed com uma solicitação autorizada para demonstração.

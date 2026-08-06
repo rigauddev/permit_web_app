@@ -1,11 +1,15 @@
-from datetime import date, datetime, timedelta
+import os
+import secrets
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from src.core.security import create_event_credential_token, decode_token, hash_token, verify_token_hash
 from src.infra.database.models import (
     AttachmentModel,
+    EventCredentialModel,
     PermitCommentModel,
     PermitRequestModel,
     PermitRequirementModel,
@@ -17,6 +21,9 @@ from src.schemas.permit_schema import (
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
+    EventCredentialResponse,
+    EventCredentialRevokeRequest,
+    EventCredentialValidationResponse,
     PermitCreateRequest,
     PermitResponse,
     RequirementResponse,
@@ -52,6 +59,7 @@ QUESTION_RULES = {
 }
 
 REQUIREMENT_STATUSES = {"aguardando_analise", "aprovada", "recusada", "pendente_documento"}
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8080")
 
 
 class PermitService:
@@ -224,6 +232,137 @@ class PermitService:
         self.db.refresh(attachment)
         return self._attachment_to_response(attachment)
 
+    def issue_authorization(self, request_id: int, current_user: UserModel) -> EventCredentialResponse:
+        self._ensure_can_issue_authorization(current_user)
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        self._recalculate_request_status(request)
+        if request.status != "autorizada" and request.status != "isenta_dam":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solicitação ainda não está apta para emissão da autorização.",
+            )
+
+        active_credential = next((item for item in request.credentials if item.status == "ativa"), None)
+        if active_credential:
+            token = create_event_credential_token(active_credential.codigo_publico, request.id)
+            active_credential.token_hash = hash_token(token)
+            self.db.commit()
+            self.db.refresh(active_credential)
+            return self._credential_to_response(active_credential, token=token)
+
+        codigo_publico = self._generate_public_code()
+        token = create_event_credential_token(codigo_publico, request.id)
+        valid_from, valid_until = self._credential_validity(request)
+        credential = EventCredentialModel(
+            permit_request_id=request.id,
+            codigo_publico=codigo_publico,
+            token_hash=hash_token(token),
+            status="ativa",
+            valid_from=valid_from,
+            valid_until=valid_until,
+            issued_by=current_user.id,
+        )
+        self.db.add(credential)
+        self.db.commit()
+        self.db.refresh(credential)
+        credential.raw_token = token
+        return self._credential_to_response(credential, token=token)
+
+    def get_authorization(self, request_id: int, current_user: UserModel) -> EventCredentialResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if not self._can_view_request(request, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        credential = next((item for item in request.credentials if item.status == "ativa"), None)
+        if not credential:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credencial ativa não encontrada")
+        return self._credential_to_response(credential)
+
+    def validate_event_credential(self, codigo_publico: str, token: str) -> EventCredentialValidationResponse:
+        credential = (
+            self.db.query(EventCredentialModel)
+            .filter(EventCredentialModel.codigo_publico == codigo_publico)
+            .first()
+        )
+        if not credential:
+            return EventCredentialValidationResponse(valid=False, reason="Credencial não encontrada")
+        if not self._validate_credential_token(credential, token):
+            return EventCredentialValidationResponse(valid=False, reason="Token inválido")
+        now = datetime.now(timezone.utc)
+        valid_from = self._as_aware(credential.valid_from)
+        valid_until = self._as_aware(credential.valid_until)
+        if credential.status != "ativa":
+            return EventCredentialValidationResponse(
+                valid=False,
+                reason="Credencial não está ativa",
+                credential_status=credential.status,
+            )
+        if valid_from > now:
+            return EventCredentialValidationResponse(
+                valid=False,
+                reason="Credencial ainda não está vigente",
+                credential_status=credential.status,
+            )
+        if valid_until < now:
+            credential.status = "expirada"
+            self.db.commit()
+            return EventCredentialValidationResponse(
+                valid=False,
+                reason="Credencial expirada",
+                credential_status="expirada",
+            )
+
+        request = credential.permit_request
+        self._recalculate_request_status(request)
+        if request.status not in {"autorizada", "isenta_dam"}:
+            return EventCredentialValidationResponse(
+                valid=False,
+                reason="Solicitação não está autorizada",
+                credential_status=credential.status,
+                status_solicitacao=request.status,
+            )
+
+        evento = request.dados_evento or {}
+        responsavel = request.dados_responsavel or {}
+        dam_attachment = next((item for item in request.attachments if item.tipo_documento == "dam"), None)
+        return EventCredentialValidationResponse(
+            valid=True,
+            credential_status=credential.status,
+            protocolo=request.protocolo,
+            nome_evento=str(evento.get("nome_evento", "")),
+            data_evento=str(evento.get("data_evento", "")),
+            horario_inicio=str(evento.get("horario_inicio", "")),
+            horario_termino=str(evento.get("horario_termino", "")),
+            local_evento=str(evento.get("endereco_evento", "")),
+            responsavel=str(responsavel.get("nome", "")),
+            publico_estimado=str(evento.get("publico_estimado", "")),
+            status_solicitacao=request.status,
+            dam_status=request.dam_status,
+            requirements=[self._requirement_to_response(item) for item in request.requirements],
+            dam_attachment=self._attachment_to_response(dam_attachment) if dam_attachment else None,
+        )
+
+    def revoke_event_credential(
+        self,
+        credential_id: int,
+        payload: EventCredentialRevokeRequest,
+        current_user: UserModel,
+    ) -> EventCredentialResponse:
+        self._ensure_can_issue_authorization(current_user)
+        credential = self.db.query(EventCredentialModel).filter(EventCredentialModel.id == credential_id).first()
+        if not credential:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credencial não encontrada")
+        credential.status = "revogada"
+        credential.revoked_at = datetime.now(timezone.utc)
+        credential.revoked_by = current_user.id
+        credential.revocation_reason = payload.reason
+        self.db.commit()
+        self.db.refresh(credential)
+        return self._credential_to_response(credential)
+
     @staticmethod
     def _build_requirements(respostas: dict[str, Any]) -> list[tuple[str, str]]:
         requirements: list[tuple[str, str]] = []
@@ -298,6 +437,16 @@ class PermitService:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para anexar DAM")
 
     @staticmethod
+    def _ensure_can_issue_authorization(current_user: UserModel) -> None:
+        role = current_user.role.slug
+        secretaria = current_user.secretaria.slug if current_user.secretaria else None
+        if role == "admin":
+            return
+        if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "receita_municipal":
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para emitir autorização")
+
+    @staticmethod
     def _can_view_request(request: PermitRequestModel, current_user: UserModel) -> bool:
         role = current_user.role.slug
         if role == "admin":
@@ -363,6 +512,55 @@ class PermitService:
     def _generate_protocol() -> str:
         return f"ALV-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
 
+    def _generate_public_code(self) -> str:
+        for _ in range(10):
+            code = f"EVT-{secrets.token_urlsafe(6).replace('_', '').replace('-', '').upper()[:8]}"
+            existing = (
+                self.db.query(EventCredentialModel)
+                .filter(EventCredentialModel.codigo_publico == code)
+                .first()
+            )
+            if not existing:
+                return code
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível gerar credencial")
+
+    @staticmethod
+    def _credential_validity(request: PermitRequestModel) -> tuple[datetime, datetime]:
+        event_data = request.dados_evento or {}
+        event_date = date.fromisoformat(str(event_data.get("data_evento")))
+        end = PermitService._parse_time(str(event_data.get("horario_termino") or "23:59"))
+        valid_from = datetime.now(timezone.utc)
+        valid_until = datetime.combine(event_date, end).replace(tzinfo=timezone.utc) + timedelta(hours=12)
+        if valid_until <= valid_from:
+            valid_until = valid_from + timedelta(days=1)
+        return valid_from, valid_until
+
+    @staticmethod
+    def _parse_time(value: str) -> time:
+        try:
+            hour, minute = value.split(":", maxsplit=1)
+            return time(hour=int(hour), minute=int(minute[:2]))
+        except (ValueError, TypeError):
+            return time(hour=0, minute=0)
+
+    @staticmethod
+    def _validate_credential_token(credential: EventCredentialModel, token: str) -> bool:
+        try:
+            payload = decode_token(token)
+        except ValueError:
+            return False
+        if payload.get("purpose") != "event_credential":
+            return False
+        if payload.get("sub") != credential.codigo_publico:
+            return False
+        if payload.get("permit_request_id") != credential.permit_request_id:
+            return False
+        return verify_token_hash(token, credential.token_hash)
+
+    @staticmethod
+    def _as_aware(value: datetime) -> datetime:
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
     @staticmethod
     def _add_business_days(start_date: date, business_days: int) -> date:
         current_date = start_date
@@ -392,6 +590,7 @@ class PermitService:
             ],
             attachments=[PermitService._attachment_to_response(item) for item in request.attachments],
             comments=[PermitService._comment_to_response(item) for item in request.comments],
+            credentials=[PermitService._credential_to_response(item) for item in request.credentials],
         )
 
     @staticmethod
@@ -425,4 +624,20 @@ class PermitService:
             author_name=comment.author.nome,
             mensagem=comment.mensagem,
             created_at=comment.created_at,
+        )
+
+    @staticmethod
+    def _credential_to_response(credential: EventCredentialModel, token: str | None = None) -> EventCredentialResponse:
+        validation_url = f"{PUBLIC_BASE_URL}/validar-evento/{credential.codigo_publico}"
+        if token:
+            validation_url = f"{validation_url}?t={token}"
+        return EventCredentialResponse(
+            id=credential.id,
+            permit_request_id=credential.permit_request_id,
+            codigo_publico=credential.codigo_publico,
+            status=credential.status,
+            valid_from=credential.valid_from,
+            valid_until=credential.valid_until,
+            issued_at=credential.issued_at,
+            validation_url=validation_url,
         )
