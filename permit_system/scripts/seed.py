@@ -82,6 +82,13 @@ def seed_users(db, roles, secretarias):
             "secretaria_id": secretarias["dmtran"].id,
         },
         {
+            "email": "receita@prefeitura.local",
+            "nome": "Operador Receita Municipal",
+            "cpf_cnpj": "77777777777",
+            "role_id": roles["operador_secretaria"].id,
+            "secretaria_id": secretarias["receita_municipal"].id,
+        },
+        {
             "email": "gestor@prefeitura.local",
             "nome": "Gestor Desenvolvimento Econômico",
             "cpf_cnpj": "44444444444",

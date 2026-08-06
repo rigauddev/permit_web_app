@@ -55,7 +55,7 @@
 
 - [x] Implementar API mínima de login, usuário atual e solicitações.
 - [x] Criar autenticação no backend.
-- [ ] Remover usuários mockados do caminho de produção.
+- [x] Remover usuários mockados do caminho de produção.
 - [x] Criar modelos de usuários, secretarias, solicitações, exigências e anexos.
 - [ ] Criar modelo de comentários.
 - [ ] Criar upload com validação de tipo/tamanho.
@@ -72,14 +72,15 @@
 - [ ] Criar documento de autorização em HTML/PDF imprimível.
 - [ ] Incluir protocolo, responsável, evento, data, local, secretarias anuentes e observações.
 - [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
+- [x] Permitir anexar o DAM à solicitação aprovada.
 - [ ] Quando beneficente, exigir declaração e marcar `Isento de DAM`.
 
 ## Marco 8 - Testes
 
 - [x] Rodar `flutter analyze` e corrigir issues bloqueantes.
-- [ ] Testar cadastro PF.
-- [ ] Testar cadastro PJ.
-- [ ] Testar login.
+- [x] Testar cadastro PF.
+- [x] Testar cadastro PJ.
+- [x] Testar login.
 - [x] Testar login backend com MFA por e-mail em ambiente local.
 - [x] Testar solicitação completa.
 - [x] Testar evento com som.
@@ -88,7 +89,7 @@
 - [x] Testar evento com bloqueio de via.
 - [x] Testar evento com alimentação.
 - [ ] Testar evento beneficente.
-- [ ] Testar operador de secretaria.
+- [x] Testar operador de secretaria.
 - [ ] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar geração do documento final.
 - [ ] Testar layout mobile e desktop.

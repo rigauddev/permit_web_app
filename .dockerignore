@@ -1,4 +1,4 @@
-.build/
+build/
 .dart_tool/
 .packages
 .pub-cache/
@@ -6,5 +6,8 @@ flutter/
 test/
 .git
 .gitignore
-Dockerfile
-nginx.conf
+.DS_Store
+flutter_*.log
+android/
+ios/
+permit_system/
