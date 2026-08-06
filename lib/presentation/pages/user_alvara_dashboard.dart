@@ -5,6 +5,7 @@ import '../../features/permit_request/pages/permit_request_page.dart';
 import '../../shared/widgets/back_to_services_button.dart';
 import '../../shared/widgets/chat_comentarios.dart';
 import '../../shared/widgets/custom_drawer.dart';
+import 'event_credential_page.dart';
 
 class PermitDashboardPage extends StatefulWidget {
   final String userType;
@@ -399,6 +400,7 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                                           ),
                                         );
                                       }),
+                                  _buildAuthorizationAction(form),
                                 ],
                               ),
                             ),
@@ -411,6 +413,49 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAuthorizationAction(Map<String, dynamic> form) {
+    final status = form['status']?.toString() ?? '';
+    final canOpenCredential =
+        status == 'autorizada' ||
+        status == 'isenta_dam' ||
+        (form['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
+    if (!canOpenCredential) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Text(
+          status == 'dam_pendente'
+              ? 'Após o DAM ser anexado pela Receita Municipal, a autorização final ficará disponível.'
+              : 'A autorização final ficará disponível após todas as anuências e DAM/isenção.',
+          style: const TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ElevatedButton.icon(
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (_) => EventCredentialPage(
+                      permitForm: form,
+                      userProfile: widget.userProfile,
+                    ),
+              ),
+            );
+            if (mounted) _loadForms();
+          },
+          icon: const Icon(Icons.qr_code_2),
+          label: const Text('Ver autorização e QR Code'),
         ),
       ),
     );

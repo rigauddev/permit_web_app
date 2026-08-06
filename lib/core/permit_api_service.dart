@@ -142,6 +142,39 @@ class PermitApiService {
         .toList();
   }
 
+  Future<Map<String, dynamic>> getAuthorization({
+    required String accessToken,
+    required int requestId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/authorization'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> issueAuthorization({
+    required String accessToken,
+    required int requestId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/issue-authorization'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> validateEventCredential({
+    required String publicCode,
+    required String token,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/event-credentials/$publicCode/validate',
+    ).replace(queryParameters: {'t': token});
+    final response = await _client.get(uri);
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> createRequest({
     required String accessToken,
     required Map<String, String> responsibleData,
@@ -208,21 +241,28 @@ class PermitApiService {
     final detail = decoded is Map<String, dynamic> ? decoded['detail'] : null;
     throw PermitApiException(
       detail is String ? detail : 'Não foi possível concluir a solicitação',
+      statusCode: response.statusCode,
     );
   }
 
   static Map<String, dynamic> _toDashboardForm(Map<String, dynamic> item) {
     final evento = item['dados_evento'] as Map<String, dynamic>? ?? {};
+    final responsavel =
+        item['dados_responsavel'] as Map<String, dynamic>? ?? {};
     final requirements = item['requirements'] as List<dynamic>? ?? [];
     return {
       'formId': item['id'],
       'protocolo': item['protocolo'],
       'nome_do_evento': evento['nome_evento'] ?? 'Evento',
+      'responsavel': responsavel['nome'] ?? '',
       'permitType': 'Alvará de Evento',
       'local_evento': evento['endereco_evento'] ?? '',
       'data_do_evento': evento['data_evento'] ?? '',
+      'horario_inicio': evento['horario_inicio'] ?? '',
+      'horario_termino': evento['horario_termino'] ?? '',
       'status': item['status'] ?? 'enviada',
       'dam_status': item['dam_status'] ?? '',
+      'credentials': item['credentials'] ?? const <dynamic>[],
       'perguntas':
           requirements.map((requirement) {
             final data = requirement as Map<String, dynamic>;
@@ -263,8 +303,9 @@ class PermitApiService {
 
 class PermitApiException implements Exception {
   final String message;
+  final int? statusCode;
 
-  PermitApiException(this.message);
+  PermitApiException(this.message, {this.statusCode});
 
   @override
   String toString() => message;

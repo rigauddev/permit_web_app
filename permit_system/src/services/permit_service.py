@@ -127,7 +127,7 @@ class PermitService:
         request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
         if not request:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
-        if not self._can_view_request(request, current_user):
+        if not self._can_view_request(request, current_user) and not self._can_issue_authorization(current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
         return self.to_response(request)
 
@@ -173,7 +173,7 @@ class PermitService:
         request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
         if not request:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
-        if not self._can_view_request(request, current_user):
+        if not self._can_view_request(request, current_user) and not self._can_issue_authorization(current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
 
         requirement = None
@@ -274,12 +274,17 @@ class PermitService:
         request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
         if not request:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
-        if not self._can_view_request(request, current_user):
+        if not self._can_view_request(request, current_user) and not self._can_issue_authorization(current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
         credential = next((item for item in request.credentials if item.status == "ativa"), None)
         if not credential:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credencial ativa não encontrada")
-        return self._credential_to_response(credential)
+        token = create_event_credential_token(credential.codigo_publico, request.id)
+        if not verify_token_hash(token, credential.token_hash):
+            credential.token_hash = hash_token(token)
+            self.db.commit()
+            self.db.refresh(credential)
+        return self._credential_to_response(credential, token=token)
 
     def validate_event_credential(self, codigo_publico: str, token: str) -> EventCredentialValidationResponse:
         credential = (
@@ -438,13 +443,19 @@ class PermitService:
 
     @staticmethod
     def _ensure_can_issue_authorization(current_user: UserModel) -> None:
+        if PermitService._can_issue_authorization(current_user):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para emitir autorização")
+
+    @staticmethod
+    def _can_issue_authorization(current_user: UserModel) -> bool:
         role = current_user.role.slug
         secretaria = current_user.secretaria.slug if current_user.secretaria else None
         if role == "admin":
-            return
+            return True
         if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "receita_municipal":
-            return
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para emitir autorização")
+            return True
+        return False
 
     @staticmethod
     def _can_view_request(request: PermitRequestModel, current_user: UserModel) -> bool:
