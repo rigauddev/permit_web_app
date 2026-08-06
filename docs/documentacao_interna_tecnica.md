@@ -47,7 +47,7 @@ Backend:
    A API filtra filas por perfil/secretaria, mas ainda faltam ações de aprovar, recusar, solicitar correção, comentar e auditar.
 
 3. Autorização/DAM ainda parcial.
-   O sistema registra `DAM pendente na Receita Municipal` ou `isento`, mas ainda falta documento final imprimível/PDF e integração futura com DAM.
+   O sistema registra `DAM pendente na Receita Municipal` ou `isento`. No primeiro momento, o DAM deve ser anexado à solicitação aprovada; a geração automática do DAM fica para integração futura.
 
 4. Observabilidade e auditoria ainda faltam.
    Antes de produção, ações sensíveis devem registrar ator, data/hora, entidade afetada e metadados úteis.
@@ -100,6 +100,7 @@ DAM:
 - `pendente_prefeitura`
 - `isento`
 - `pago`
+- `anexado`
 
 ## Contratos mínimos de API para o MVP
 
@@ -109,13 +110,14 @@ DAM:
 - `POST /auth/email-verifications/confirm`
 - `POST /auth/mfa/generate`
 - `POST /auth/mfa/verify`
-- `GET /me`
+- `GET /auth/me`
 - `GET /permit-types`
 - `GET /permit-types/{id}/questions`
 - `POST /permit-requests`
 - `GET /permit-requests`
 - `GET /permit-requests/{id}`
 - `POST /permit-requests/{id}/attachments`
+- `POST /permit-requests/{id}/dam-attachment`
 - `POST /permit-requests/{id}/comments`
 - `PATCH /requirements/{id}/status`
 - `POST /permit-requests/{id}/issue-authorization`
@@ -147,3 +149,4 @@ O MVP está pronto quando:
 - Cidadão acompanha status.
 - Admin gerencia perguntas/secretarias/permissões básicas.
 - Autorização final é gerada com indicação de DAM pendente ou isenção.
+- Quando houver DAM, o documento é anexado à solicitação aprovada antes da autorização final.

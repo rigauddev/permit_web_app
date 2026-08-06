@@ -20,6 +20,22 @@ class RequirementResponse(BaseModel):
     observacoes: str | None = None
 
 
+class DamAttachmentRequest(BaseModel):
+    nome_arquivo: str = Field(..., min_length=3, max_length=255)
+    arquivo_url: str = Field(..., min_length=3, max_length=500)
+    mime_type: str | None = Field(default=None, max_length=120)
+    tamanho_bytes: int | None = Field(default=None, ge=1)
+
+
+class AttachmentResponse(BaseModel):
+    id: int
+    tipo_documento: str
+    nome_arquivo: str
+    arquivo_url: str
+    mime_type: str | None = None
+    tamanho_bytes: int | None = None
+
+
 class PermitResponse(BaseModel):
     id: int
     protocolo: str
@@ -32,3 +48,4 @@ class PermitResponse(BaseModel):
     respostas: dict[str, Any]
     created_at: datetime | None = None
     requirements: list[RequirementResponse] = []
+    attachments: list[AttachmentResponse] = []
