@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 // import 'package:permit_web_app/presentation/pages/question_page.dart';
 // import 'package:permit_web_app/presentation/pages/permit_request_page.dart';
 import 'package:permit_web_app/presentation/pages/user_alvara_dashboard.dart';
+import 'package:permit_web_app/presentation/pages/event_credential_page.dart';
 
 import '../../features/permit_request/pages/permit_request_page.dart';
 
@@ -27,8 +28,22 @@ class AppRoutes {
 
   static const String permitDashboard = '/permit-dashboard';
   static const String eventPermit = '/event-permit';
+  static const String validateEvent = '/validar-evento';
 
   static Route<dynamic>? generateRoute(RouteSettings settings) {
+    final routeName = settings.name ?? '';
+    if (routeName.startsWith('$validateEvent/')) {
+      final uri = Uri.parse(routeName);
+      return MaterialPageRoute(
+        builder:
+            (_) => EventCredentialPage(
+              publicCode:
+                  uri.pathSegments.length > 1 ? uri.pathSegments[1] : '',
+              token: uri.queryParameters['t'],
+            ),
+      );
+    }
+
     switch (settings.name) {
       case permitDashboard:
         final args = settings.arguments as Map<String, dynamic>;
@@ -53,6 +68,8 @@ class AppRoutes {
                 questions: args['questions'],
               ),
         );
+      case validateEvent:
+        return MaterialPageRoute(builder: (_) => const EventCredentialPage());
 
       default:
         return null;
