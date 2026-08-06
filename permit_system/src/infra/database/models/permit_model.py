@@ -26,6 +26,7 @@ class PermitRequestModel(Base):
     requirements = relationship("PermitRequirementModel", back_populates="permit_request")
     attachments = relationship("AttachmentModel", back_populates="permit_request")
     comments = relationship("PermitCommentModel", back_populates="permit_request")
+    credentials = relationship("EventCredentialModel", back_populates="permit_request")
 
 
 class PermitRequirementModel(Base):
@@ -77,3 +78,24 @@ class PermitCommentModel(Base):
     permit_request = relationship("PermitRequestModel", back_populates="comments")
     requirement = relationship("PermitRequirementModel", back_populates="comments")
     author = relationship("UserModel")
+
+
+class EventCredentialModel(Base):
+    __tablename__ = "credenciais_evento"
+
+    id = Column(Integer, primary_key=True, index=True)
+    permit_request_id = Column(Integer, ForeignKey("solicitacoes_alvara.id"), nullable=False, index=True)
+    codigo_publico = Column(String(32), unique=True, nullable=False, index=True)
+    token_hash = Column(String(255), nullable=False)
+    status = Column(String(50), default="ativa", nullable=False)
+    valid_from = Column(DateTime(timezone=True), nullable=False)
+    valid_until = Column(DateTime(timezone=True), nullable=False)
+    issued_at = Column(DateTime(timezone=True), server_default=func.now())
+    issued_by = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    revocation_reason = Column(Text, nullable=True)
+
+    permit_request = relationship("PermitRequestModel", back_populates="credentials")
+    issuer = relationship("UserModel", foreign_keys=[issued_by])
+    revoker = relationship("UserModel", foreign_keys=[revoked_by])

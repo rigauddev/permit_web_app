@@ -39,6 +39,11 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
   - operador de outra secretaria recebe `403`: passou;
   - solicitação muda para `dam_pendente` após todas as anuências: passou;
   - solicitação muda para `autorizada` após DAM anexado: passou.
+- Smoke test backend da credencial do evento:
+  - Receita emite autorização final após DAM anexado: passou;
+  - sistema gera código público e URL de validação: passou;
+  - validação da credencial retorna dados do evento, exigências e referência do DAM: passou;
+  - revogação da credencial invalida o link: passou.
 
 ## DAM
 
@@ -50,11 +55,23 @@ Já existe endpoint backend para registrar o anexo do DAM por metadados/URL:
 - permitido para `admin` ou usuário interno da `receita_municipal`
 - atualiza `dam_status` para `anexado`
 
+## Credencial / QR Code
+
+O backend já emite a credencial verificável do evento autorizado:
+
+- `POST /permit-requests/{request_id}/issue-authorization`
+- `GET /permit-requests/{request_id}/authorization`
+- `GET /event-credentials/{codigo_publico}/validate?t={token}`
+- `POST /event-credentials/{credential_id}/revoke`
+
+Nesta etapa foi entregue o link/token seguro para validação. A geração visual da imagem do QR Code, a tela de leitura/validação e o documento final imprimível ficam para o próximo bloco.
+
 ## Próximos passos
 
 - Implementar upload binário real de anexos, incluindo UI para anexo específico do DAM.
 - Criar telas internas para consumir os endpoints de fila, aprovação, correção e comentários.
-- Criar documento final de autorização imprimível/PDF.
+- Criar tela de validação de credencial do evento.
+- Gerar QR Code visual e documento final de autorização imprimível/PDF.
 - Definir ambiente de homologação e configurações de produção.
 
 ## Observação técnica

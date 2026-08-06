@@ -9,6 +9,9 @@ from src.schemas.permit_schema import (
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
+    EventCredentialResponse,
+    EventCredentialRevokeRequest,
+    EventCredentialValidationResponse,
     PermitCreateRequest,
     PermitResponse,
     RequirementResponse,
@@ -18,6 +21,7 @@ from src.services.permit_service import PermitService
 
 
 router = APIRouter(prefix="/permit-requests", tags=["permit-requests"])
+credential_router = APIRouter(prefix="/event-credentials", tags=["event-credentials"])
 
 
 @router.post("", response_model=PermitResponse)
@@ -66,6 +70,24 @@ def attach_dam_to_permit_request(
     return PermitService(db).attach_dam(request_id, payload, current_user)
 
 
+@router.post("/{request_id}/issue-authorization", response_model=EventCredentialResponse)
+def issue_permit_authorization(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).issue_authorization(request_id, current_user)
+
+
+@router.get("/{request_id}/authorization", response_model=EventCredentialResponse)
+def get_permit_authorization(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    return PermitService(db).get_authorization(request_id, current_user)
+
+
 @router.patch("/requirements/{requirement_id}/status", response_model=RequirementResponse)
 def update_requirement_status(
     requirement_id: int,
@@ -74,3 +96,22 @@ def update_requirement_status(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
 ):
     return PermitService(db).update_requirement_status(requirement_id, payload, current_user)
+
+
+@credential_router.get("/{codigo_publico}/validate", response_model=EventCredentialValidationResponse)
+def validate_event_credential(
+    codigo_publico: str,
+    t: str,
+    db: Session = Depends(get_db),
+):
+    return PermitService(db).validate_event_credential(codigo_publico, t)
+
+
+@credential_router.post("/{credential_id}/revoke", response_model=EventCredentialResponse)
+def revoke_event_credential(
+    credential_id: int,
+    payload: EventCredentialRevokeRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).revoke_event_credential(credential_id, payload, current_user)
