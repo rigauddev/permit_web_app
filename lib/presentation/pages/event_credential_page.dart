@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/permit_api_service.dart';
@@ -35,6 +38,7 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   bool _loadingAuthorization = false;
   bool _issuingAuthorization = false;
   bool _validatingCredential = false;
+  bool _printingPdf = false;
 
   @override
   void initState() {
@@ -167,6 +171,11 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       _authorization = authorization;
       _message = null;
     });
+    final publicCode = _publicCodeController.text.trim();
+    final token = _tokenController.text.trim();
+    if (publicCode.isNotEmpty && token.isNotEmpty) {
+      Future.microtask(_validateCredential);
+    }
   }
 
   @override
@@ -191,8 +200,10 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
                     loading: _loadingAuthorization,
                     canIssue: _canIssueAuthorization,
                     issuing: _issuingAuthorization,
+                    printingPdf: _printingPdf,
                     onIssue: _issueAuthorization,
                     onCopyUrl: _copyValidationUrl,
+                    onPrintPdf: _printAuthorizationPdf,
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -220,6 +231,32 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       context,
     ).showSnackBar(const SnackBar(content: Text('Link de validação copiado.')));
   }
+
+  Future<void> _printAuthorizationPdf() async {
+    final form = widget.permitForm;
+    final url = _validationUrl;
+    if (form == null || url == null || url.isEmpty) return;
+    setState(() => _printingPdf = true);
+    try {
+      await Printing.layoutPdf(
+        name: 'autorizacao_evento_${form['protocolo'] ?? 'alvara'}.pdf',
+        onLayout:
+            (format) => _buildAuthorizationPdf(
+              format: format,
+              form: form,
+              validation: _validation,
+              validationUrl: url,
+            ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível gerar o PDF.')),
+      );
+    } finally {
+      if (mounted) setState(() => _printingPdf = false);
+    }
+  }
 }
 
 class _AuthorizationDocument extends StatelessWidget {
@@ -229,8 +266,10 @@ class _AuthorizationDocument extends StatelessWidget {
   final bool loading;
   final bool canIssue;
   final bool issuing;
+  final bool printingPdf;
   final VoidCallback onIssue;
   final VoidCallback onCopyUrl;
+  final VoidCallback onPrintPdf;
 
   const _AuthorizationDocument({
     required this.form,
@@ -239,8 +278,10 @@ class _AuthorizationDocument extends StatelessWidget {
     required this.loading,
     required this.canIssue,
     required this.issuing,
+    required this.printingPdf,
     required this.onIssue,
     required this.onCopyUrl,
+    required this.onPrintPdf,
   });
 
   bool get _hasQr => validationUrl != null && validationUrl!.contains('?t=');
@@ -317,6 +358,19 @@ class _AuthorizationDocument extends StatelessWidget {
                     onPressed: onCopyUrl,
                     icon: const Icon(Icons.copy),
                     label: const Text('Copiar link'),
+                  ),
+                if (_hasQr)
+                  OutlinedButton.icon(
+                    onPressed: printingPdf ? null : onPrintPdf,
+                    icon:
+                        printingPdf
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Icon(Icons.picture_as_pdf_outlined),
+                    label: const Text('Gerar PDF'),
                   ),
                 if (isAuthorized && canIssue)
                   ElevatedButton.icon(
@@ -711,4 +765,210 @@ String _publicCodeFromUrl(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null || uri.pathSegments.isEmpty) return '';
   return uri.pathSegments.last;
+}
+
+Future<Uint8List> _buildAuthorizationPdf({
+  required PdfPageFormat format,
+  required Map<String, dynamic> form,
+  required Map<String, dynamic>? validation,
+  required String validationUrl,
+}) async {
+  final document = pw.Document();
+  final requirements = _pdfRequirements(form, validation);
+  final isValid = validation?['valid'] == true;
+
+  document.addPage(
+    pw.MultiPage(
+      pageFormat: format,
+      margin: const pw.EdgeInsets.all(32),
+      build:
+          (context) => [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Prefeitura Municipal de Valença',
+                        style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Central de Eventos - Autorização de Evento',
+                        style: const pw.TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(
+                      color: isValid ? PdfColors.green800 : PdfColors.orange800,
+                    ),
+                  ),
+                  child: pw.Text(
+                    isValid ? 'CREDENCIAL VÁLIDA' : 'VALIDAR NO APP',
+                    style: pw.TextStyle(
+                      color: isValid ? PdfColors.green800 : PdfColors.orange800,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            pw.Divider(height: 28),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    children: [
+                      _pdfRow('Protocolo', form['protocolo']),
+                      _pdfRow('Evento', form['nome_do_evento']),
+                      _pdfRow('Responsável', form['responsavel']),
+                      _pdfRow('Data', form['data_do_evento']),
+                      _pdfRow(
+                        'Horário',
+                        _timeRange(
+                          form['horario_inicio'],
+                          form['horario_termino'],
+                        ),
+                      ),
+                      _pdfRow('Local', form['local_evento']),
+                      _pdfRow('DAM', _damLabel(form['dam_status'])),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 24),
+                pw.Column(
+                  children: [
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.qrCode(),
+                      data: validationUrl,
+                      width: 112,
+                      height: 112,
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Validação fiscal',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 18),
+            pw.Text(
+              'Esta autorização fica mantida no sistema. A via em PDF deve ser usada apenas quando houver necessidade de impressão. '
+              'A verificação oficial deve ser feita no aplicativo por meio do QR Code.',
+              style: const pw.TextStyle(fontSize: 10),
+            ),
+            if (requirements.isNotEmpty) ...[
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'Anuências e exigências',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey400),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(1.2),
+                  1: pw.FlexColumnWidth(2.2),
+                  2: pw.FlexColumnWidth(1),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey200,
+                    ),
+                    children: [
+                      _pdfCell('Secretaria', bold: true),
+                      _pdfCell('Exigência', bold: true),
+                      _pdfCell('Status', bold: true),
+                    ],
+                  ),
+                  ...requirements.map(
+                    (item) => pw.TableRow(
+                      children: [
+                        _pdfCell(item['secretaria']),
+                        _pdfCell(item['tipo_exigencia']),
+                        _pdfCell(item['status']),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+    ),
+  );
+
+  return document.save();
+}
+
+pw.Widget _pdfRow(String label, Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 3),
+    child: pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(
+          width: 86,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+        pw.Expanded(child: pw.Text(text.isEmpty ? '-' : text)),
+      ],
+    ),
+  );
+}
+
+pw.Widget _pdfCell(Object? value, {bool bold = false}) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.all(6),
+    child: pw.Text(
+      value?.toString() ?? '-',
+      style: pw.TextStyle(
+        fontSize: 9,
+        fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+      ),
+    ),
+  );
+}
+
+List<Map<String, dynamic>> _pdfRequirements(
+  Map<String, dynamic> form,
+  Map<String, dynamic>? validation,
+) {
+  final validationRequirements =
+      validation?['requirements'] as List<dynamic>? ?? const [];
+  if (validationRequirements.isNotEmpty) {
+    return validationRequirements
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  final formRequirements = form['perguntas'] as List<dynamic>? ?? const [];
+  return formRequirements.map((item) {
+    final requirement = item as Map<String, dynamic>;
+    return {
+      'secretaria': requirement['secretaria'],
+      'tipo_exigencia': requirement['pergunta'],
+      'status': requirement['status'],
+    };
+  }).toList();
 }

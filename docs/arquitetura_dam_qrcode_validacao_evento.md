@@ -183,10 +183,12 @@ Campos mínimos:
 - Retorno dos dados de fiscalização, incluindo status da solicitação, status do DAM, exigências e referência ao anexo do DAM.
 - Recuperação da autorização com token válido para renderizar o QR Code depois da emissão.
 - Tela Flutter para autorização/QR Code e validação da credencial.
+- Geração opcional de PDF imprimível com QR Code para casos em que o documento físico for necessário.
+- Validação automática da credencial quando a autorização é aberta no app.
 
 ## Próximo Bloco Recomendado
 
-1. Criar documento final de autorização em PDF/HTML imprimível com QR Code.
-2. Adicionar seed com uma solicitação autorizada para demonstração.
-3. Ajustar antecedência mínima para 15 dias úteis no backend e frontend.
-4. Criar SLA interno de 2 dias úteis por exigência/secretaria.
+1. Adicionar seed com uma solicitação autorizada para demonstração.
+2. Ajustar antecedência mínima para 15 dias úteis no backend e frontend.
+3. Criar SLA interno de 2 dias úteis por exigência/secretaria.
+4. Testar layout mobile e desktop.
