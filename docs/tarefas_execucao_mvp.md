@@ -82,6 +82,18 @@
 - [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
 - [x] Permitir anexar o DAM à solicitação aprovada.
 - [ ] Quando beneficente, exigir declaração e marcar `Isento de DAM`.
+- [ ] Emitir autorização final após DAM anexado ou isenção validada.
+- [ ] Gerar QR Code/credencial de validação do evento autorizado.
+- [ ] Criar tela de validação de credencial do evento.
+- [ ] Exibir cópia do DAM armazenado na validação quando autorizado.
+
+## Marco 9 - Pós-MVP / Integrações
+
+- [ ] Integrar geração automática de DAM com sistema da Receita.
+- [ ] Integrar assinatura eletrônica quando exigida.
+- [ ] Criar fluxo completo de vistoria com imagens e laudo técnico.
+- [ ] Enviar e-mail para secretarias responsáveis com cópia/resumo da solicitação e link de acesso.
+- [ ] Enviar notificações push para pendências, correções e autorizações.
 
 ## Marco 8 - Testes
 
