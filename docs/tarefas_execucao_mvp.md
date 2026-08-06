@@ -13,11 +13,12 @@
 - [x] Limitar tela de serviços ao MVP de `Solicitação de Alvará de Evento`.
 - [x] Criar cadastro PF/PJ com validação de e-mail antes do formulário.
 - [x] Corrigir estado do formulário para separar dados do responsável, evento, respostas e anexos.
-- [x] Validar antecedência mínima de 15 dias.
+- [ ] Ajustar validação de antecedência mínima para 15 dias úteis.
 - [x] Validar campos obrigatórios do evento: nome, data, local, público esperado, início e término.
 - [x] Validar anexos obrigatórios: RG/CPF, comprovante de residência e alvará do local.
 - [x] Criar tela de revisão antes do envio.
 - [x] Gerar protocolo após envio.
+- [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -58,6 +59,9 @@
 - [x] Criar status por secretaria.
 - [x] Atualizar status geral a partir das anuências.
 - [ ] Criar visão de gestor/admin para todas as secretarias.
+- [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
+- [ ] Exibir alertas de análise próxima do vencimento.
+- [ ] Garantir que Receita/Fazenda só anexe DAM após todas as anuências aplicáveis.
 
 ## Marco 6 - Backend e persistência
 
@@ -81,22 +85,31 @@
 - [ ] Incluir protocolo, responsável, evento, data, local, secretarias anuentes e observações.
 - [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
 - [x] Permitir anexar o DAM à solicitação aprovada.
-- [ ] Quando beneficente, exigir declaração e marcar `Isento de DAM`.
+- [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
 - [x] Emitir autorização final após DAM anexado ou isenção validada.
 - [x] Gerar credencial/link de validação do evento autorizado no backend.
 - [ ] Gerar QR Code visual para impressão/exibição.
 - [ ] Criar tela de validação de credencial do evento.
 - [x] Exibir referência do DAM armazenado na validação quando autorizado.
+- [ ] Garantir que autorização final fique em nome do responsável pelo evento.
+
+## Marco 8 - Vistoria e análise técnica
+
+- [ ] Criar fluxo de vistoria quando exigência depender de inspeção técnica.
+- [ ] Permitir anexar imagens da vistoria.
+- [ ] Criar formulário de laudo técnico.
+- [ ] Vincular laudo à exigência da secretaria responsável.
+- [ ] Bloquear aprovação final da exigência enquanto laudo obrigatório estiver pendente.
+- [ ] Registrar ART, AVCB, planta baixa, croqui/mapa e certificado sanitário como anexos específicos.
 
 ## Marco 9 - Pós-MVP / Integrações
 
 - [ ] Integrar geração automática de DAM com sistema da Receita.
 - [ ] Integrar assinatura eletrônica quando exigida.
-- [ ] Criar fluxo completo de vistoria com imagens e laudo técnico.
 - [ ] Enviar e-mail para secretarias responsáveis com cópia/resumo da solicitação e link de acesso.
 - [ ] Enviar notificações push para pendências, correções e autorizações.
 
-## Marco 8 - Testes
+## Marco 10 - Testes
 
 - [x] Rodar `flutter analyze` e corrigir issues bloqueantes.
 - [x] Testar cadastro PF.
@@ -112,7 +125,10 @@
 - [ ] Testar evento beneficente.
 - [x] Testar operador de secretaria.
 - [x] Testar aprovação, recusa e pedido de correção.
+- [ ] Testar regra de 15 dias úteis.
+- [ ] Testar prazo interno de 2 dias úteis por secretaria.
 - [ ] Testar geração do documento final.
+- [ ] Testar QR Code visual e tela de validação.
 - [ ] Testar layout mobile e desktop.
 
 ## Prioridade de implementação
@@ -123,5 +139,7 @@
 4. Criar revisão/envio/protocolo.
 5. Implementar persistência/API mínima.
 6. Implementar fila interna por secretaria.
-7. Criar documento final.
-8. Fazer limpeza de segurança e QA.
+7. Criar documento final e QR Code visual.
+8. Criar tela de validação da credencial.
+9. Ajustar 15 dias úteis e SLA interno de 2 dias úteis.
+10. Fazer limpeza de segurança e QA.

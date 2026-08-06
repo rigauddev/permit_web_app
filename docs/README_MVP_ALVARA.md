@@ -6,6 +6,7 @@ Esta pasta reúne o planejamento executável do MVP de solicitação de alvará/
 
 - [Roadmap de entrega](./roadmap_entrega_mvp.md)
 - [Tarefas de execução](./tarefas_execucao_mvp.md)
+- [Regras da Central de Eventos](./regras_central_eventos_ata.md)
 - [Descrição sugerida da PR](./pr_mvp_documentacao.md)
 
 ## Estrutura do projeto
