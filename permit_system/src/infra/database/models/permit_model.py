@@ -99,3 +99,17 @@ class EventCredentialModel(Base):
     permit_request = relationship("PermitRequestModel", back_populates="credentials")
     issuer = relationship("UserModel", foreign_keys=[issued_by])
     revoker = relationship("UserModel", foreign_keys=[revoked_by])
+
+
+class AuthorizationTemplateModel(Base):
+    __tablename__ = "templates_autorizacao"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(80), unique=True, nullable=False, index=True)
+    header_text = Column(Text, nullable=False)
+    footer_text = Column(Text, nullable=False)
+    updated_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    updater = relationship("UserModel", foreign_keys=[updated_by])

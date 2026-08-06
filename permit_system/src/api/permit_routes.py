@@ -6,6 +6,8 @@ from src.infra.database.models import UserModel
 from src.infra.database.mysql_db import get_db
 from src.schemas.permit_schema import (
     AttachmentResponse,
+    AuthorizationTemplateRequest,
+    AuthorizationTemplateResponse,
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
@@ -39,6 +41,23 @@ def list_permit_requests(
     current_user: UserModel = Depends(get_current_user),
 ):
     return PermitService(db).list_requests(current_user)
+
+
+@router.get("/authorization-template", response_model=AuthorizationTemplateResponse)
+def get_authorization_template(
+    db: Session = Depends(get_db),
+    _: UserModel = Depends(get_current_user),
+):
+    return PermitService(db).get_authorization_template()
+
+
+@router.put("/authorization-template", response_model=AuthorizationTemplateResponse)
+def update_authorization_template(
+    payload: AuthorizationTemplateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).update_authorization_template(payload, current_user)
 
 
 @router.get("/{request_id}", response_model=PermitResponse)

@@ -185,6 +185,9 @@ Campos mínimos:
 - Tela Flutter para autorização/QR Code e validação da credencial.
 - Geração opcional de PDF imprimível com QR Code para casos em que o documento físico for necessário.
 - Validação automática da credencial quando a autorização é aberta no app.
+- Logo oficial no cabeçalho da autorização em tela e PDF.
+- Template configurável de cabeçalho e rodapé do PDF, editável por gestor/admin.
+- Campos de assinatura para responsável do evento e Central de Eventos/Prefeitura.
 
 ## Próximo Bloco Recomendado
 

@@ -83,6 +83,10 @@
 
 - [x] Criar documento de autorização em PDF imprimível como opção.
 - [x] Incluir protocolo, responsável, evento, data, local, secretarias anuentes e observações.
+- [x] Incluir logo oficial na autorização em tela e no PDF.
+- [x] Criar template configurável de cabeçalho e rodapé do PDF.
+- [x] Permitir que gestor/admin atualize textos do template do PDF.
+- [x] Incluir campos de assinatura no rodapé da autorização/PDF.
 - [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
 - [x] Permitir anexar o DAM à solicitação aprovada.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.

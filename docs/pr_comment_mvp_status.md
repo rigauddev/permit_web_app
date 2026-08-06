@@ -51,7 +51,13 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
   - autorização continua como tela principal dentro do app;
   - QR Code é gerado quando o usuário abre a autorização;
   - credencial é validada automaticamente ao abrir a autorização;
-  - PDF imprimível pode ser gerado apenas quando necessário.
+  - PDF imprimível pode ser gerado apenas quando necessário;
+  - autorização e PDF exibem logo oficial;
+  - gestor/admin pode configurar texto de cabeçalho e rodapé do PDF;
+  - PDF inclui campos de assinatura.
+- Smoke test backend do template de PDF:
+  - leitura/criação do template padrão: passou;
+  - atualização do cabeçalho/rodapé por gestor: passou.
 
 ## DAM
 
