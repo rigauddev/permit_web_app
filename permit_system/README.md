@@ -1,6 +1,6 @@
 # permit_system
 
-Este é um projeto de backend FastAPI para um sistema de gerenciamento de permissões. Ele fornece funcionalidades para autenticação de usuários, gerenciamento de entidades, permissões, formulários, solicitações e avaliações.
+Este é o backend FastAPI do sistema municipal de alvará de eventos. Ele fornece autenticação, MFA, usuários, permissões, secretarias, solicitações, exigências e anexos.
 
 ## Tecnologias Utilizadas
 
@@ -9,17 +9,16 @@ Este é um projeto de backend FastAPI para um sistema de gerenciamento de permis
 * Python-jose\[cryptography]
 * Passlib\[bcrypt]
 * PyOTP
-* MySQL
-* MongoDB
+* SQLite no desenvolvimento local via Docker
+* Banco relacional compatível com SQLAlchemy em homologação/produção
 * SQLAlchemy
 * Pydantic
 * Python-dotenv
 
 ## Pré-requisitos
 
-* Python 3.7+
-* MySQL
-* MongoDB
+* Python 3.12+
+* SQLite para desenvolvimento local ou outro banco compatível com SQLAlchemy via `DATABASE_URL`
 
 ## Instalação
 
@@ -45,25 +44,19 @@ Este é um projeto de backend FastAPI para um sistema de gerenciamento de permis
 
     Crie um arquivo `.env` na raiz do projeto e adicione as seguintes variáveis:
     ```env
-    MYSQL_HOST=localhost
-    MYSQL_USER=seu_usuario
-    MYSQL_PASSWORD=sua_senha
-    MYSQL_DATABASE=alvara_db
-    MONGO_HOST=localhost
-    MONGO_PORT=27017
-    MONGO_DATABASE=alvara_mongo
-    OTP_SECRET_KEY=sua_chave_secreta
-    SMTP_SERVER=smtp.gmail.com
-    SMTP_PORT=465
-    SMTP_EMAIL=seu_email@gmail.com
-    SMTP_PASSWORD=sua_senha
+    DATABASE_URL=sqlite:///./permit_system.db
+    SECRET_KEY=troque-esta-chave-em-producao
+    JWT_ALGORITHM=HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES=480
     ```
 
     Substitua os valores pelos seus dados de configuração.
 
-5. Crie as tabelas no banco de dados MySQL:
+5. Crie as tabelas e dados iniciais:
 
-    Execute o script de criação de tabelas no módulo de banco em `permit_system/src/infra/database/`.
+    ```bash
+    python scripts/seed.py
+    ```
 
 ## Execução
 
@@ -88,6 +81,7 @@ Usuários de teste criados pelo seed:
 
 - `admin@prefeitura.local`
 - `cidadao@teste.local`
+- `receita@prefeitura.local`
 - `meioambiente@prefeitura.local`
 - `dmtran@prefeitura.local`
 - `gestor@prefeitura.local`

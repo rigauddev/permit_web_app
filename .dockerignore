@@ -6,3 +6,8 @@ flutter/
 test/
 .git
 .gitignore
+.DS_Store
+flutter_*.log
+android/
+ios/
+permit_system/
