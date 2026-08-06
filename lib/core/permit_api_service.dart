@@ -26,60 +26,107 @@ class PermitApiService {
     },
     {
       'id': 2,
+      'key': 'local_fixo_sem_alvara',
+      'pergunta':
+          'O evento será em local fixo sem alvará de funcionamento válido?',
+      'secretaria': 'Desenvolvimento Econômico',
+      'tipos_resposta': ['Sim/Não', 'Texto'],
+      'exigencias': ['Regularização do alvará de funcionamento do local fixo'],
+    },
+    {
+      'id': 3,
+      'key': 'precisa_avcb',
+      'pergunta': 'O evento exige Auto de Vistoria do Corpo de Bombeiros?',
+      'secretaria': 'Infraestrutura',
+      'tipos_resposta': ['Sim/Não', 'Anexar Documento', 'Texto'],
+      'exigencias': ['Auto de Vistoria do Corpo de Bombeiros (AVCB)'],
+    },
+    {
+      'id': 4,
       'key': 'tem_palco',
       'pergunta': 'O evento terá palco ou estrutura montada?',
       'secretaria': 'Infraestrutura',
       'tipos_resposta': ['Sim/Não', 'Texto'],
-      'exigencia': 'Vistoria de palco/estrutura',
+      'exigencias': [
+        'Vistoria de palco/estrutura',
+        'Anotação de Responsabilidade Técnica (ART) da estrutura',
+      ],
     },
     {
-      'id': 3,
+      'id': 5,
       'key': 'tem_gerador',
       'pergunta': 'O evento terá gerador?',
       'secretaria': 'Infraestrutura',
       'tipos_resposta': ['Sim/Não', 'Texto'],
-      'exigencia': 'Vistoria de gerador',
+      'exigencias': [
+        'Vistoria de gerador',
+        'Anotação de Responsabilidade Técnica (ART) do gerador',
+      ],
     },
     {
-      'id': 4,
+      'id': 6,
+      'key': 'precisa_planta_baixa',
+      'pergunta':
+          'Evento particular de médio/grande porte em local fixo exigirá planta baixa?',
+      'secretaria': 'Infraestrutura',
+      'tipos_resposta': ['Sim/Não', 'Anexar Documento', 'Texto'],
+      'exigencias': [
+        'Planta baixa para evento particular de médio ou grande porte em local fixo',
+      ],
+    },
+    {
+      'id': 7,
       'key': 'tem_trio_eletrico',
       'pergunta': 'O evento terá trio elétrico?',
       'secretaria': 'DMTRAN',
       'tipos_resposta': ['Sim/Não', 'Texto', 'Anexar Documento'],
-      'exigencia': 'Vistoria do veículo, CNH do motorista e mapa do circuito',
+      'exigencias': [
+        'Vistoria do veículo, CNH do motorista e mapa do circuito',
+      ],
     },
     {
-      'id': 5,
+      'id': 8,
       'key': 'bloqueia_via',
       'pergunta': 'O evento usará ou bloqueará vias/ruas municipais?',
       'secretaria': 'DMTRAN',
       'tipos_resposta': ['Sim/Não', 'Texto'],
-      'exigencia': 'Autorização para uso ou bloqueio de via pública',
+      'exigencias': [
+        'Autorização para uso ou bloqueio de via pública',
+        'Croqui/mapa do circuito ou desvio de trânsito',
+      ],
     },
     {
-      'id': 6,
+      'id': 9,
       'key': 'tem_alimentacao',
       'pergunta':
           'O evento terá venda, preparo ou distribuição de alimentação?',
       'secretaria': 'Vigilância Sanitária',
       'tipos_resposta': ['Sim/Não', 'Texto'],
-      'exigencia': 'Vistoria de equipamentos e instalações de alimentação',
+      'exigencias': ['Vistoria de equipamentos e instalações de alimentação'],
     },
     {
-      'id': 7,
+      'id': 10,
+      'key': 'precisa_ambulancia',
+      'pergunta': 'O evento precisará de ambulância no local?',
+      'secretaria': 'Secretaria de Saúde',
+      'tipos_resposta': ['Sim/Não', 'Texto'],
+      'exigencias': ['Ofício solicitando ambulância no local do evento'],
+    },
+    {
+      'id': 11,
       'key': 'precisa_guarda',
       'pergunta': 'Será necessária a presença da Guarda Civil Municipal?',
       'secretaria': 'Guarda Civil Municipal',
       'tipos_resposta': ['Sim/Não', 'Texto'],
-      'exigencia': 'Ofício solicitando presença da Guarda Civil Municipal',
+      'exigencias': ['Ofício solicitando presença da Guarda Civil Municipal'],
     },
     {
-      'id': 8,
+      'id': 12,
       'key': 'precisa_brigadista',
       'pergunta': 'O evento exigirá brigadista contratado?',
       'secretaria': 'Responsável pelo evento',
       'tipos_resposta': ['Sim/Não', 'Texto'],
-      'exigencia': 'Contratação de brigadista pelo responsável',
+      'exigencias': ['Contratação de brigadista pelo responsável'],
     },
   ];
 
@@ -128,10 +175,15 @@ class PermitApiService {
     for (final question in eventPermitQuestions) {
       final key = question['key'] as String;
       if (answers[key] == true) {
-        requirements.add({
-          'secretaria': question['secretaria'] as String,
-          'exigencia': question['exigencia'] as String,
-        });
+        final exigencias = List<String>.from(
+          question['exigencias'] ?? [question['exigencia']],
+        );
+        for (final exigencia in exigencias) {
+          requirements.add({
+            'secretaria': question['secretaria'] as String,
+            'exigencia': exigencia,
+          });
+        }
       }
     }
 
@@ -193,6 +245,8 @@ class PermitApiService {
         return 'Meio Ambiente';
       case 'infraestrutura':
         return 'Infraestrutura';
+      case 'desenvolvimento_economico':
+        return 'Desenvolvimento Econômico';
       case 'dmtran':
         return 'DMTRAN';
       case 'vigilancia_sanitaria':

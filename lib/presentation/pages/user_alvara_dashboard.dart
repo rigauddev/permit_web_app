@@ -87,7 +87,7 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Solicitar o alvará com pelo menos 15 dias de antecedência!',
+                          'Solicitar o alvará com pelo menos 15 dias úteis de antecedência!',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.red,
