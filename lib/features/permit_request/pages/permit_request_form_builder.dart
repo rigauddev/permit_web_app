@@ -339,9 +339,10 @@ class _PermitRequestFormBuilderState
   }
 
   Future<void> _pickDate() async {
+    final firstValidDate = _addBusinessDays(DateTime.now(), 15);
     final selected = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 15)),
+      initialDate: firstValidDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 730)),
     );
@@ -354,6 +355,18 @@ class _PermitRequestFormBuilderState
     ref
         .read(permitRequestControllerProvider.notifier)
         .updateEventInfo(eventDate: value);
+  }
+
+  DateTime _addBusinessDays(DateTime startDate, int businessDays) {
+    var currentDate = DateTime(startDate.year, startDate.month, startDate.day);
+    var addedDays = 0;
+    while (addedDays < businessDays) {
+      currentDate = currentDate.add(const Duration(days: 1));
+      if (currentDate.weekday <= DateTime.friday) {
+        addedDays += 1;
+      }
+    }
+    return currentDate;
   }
 
   Future<void> _pickTime(

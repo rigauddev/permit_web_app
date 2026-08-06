@@ -1,4 +1,5 @@
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -140,7 +141,7 @@ def seed_permit_request(db, users, secretarias):
         },
         dados_evento={
             "nome_evento": "Festa Teste MVP",
-            "data_evento": "2026-08-25",
+            "data_evento": add_business_days(date.today(), 20).isoformat(),
             "endereco_evento": "Praça Central",
             "publico_estimado": 300,
             "horario_inicio": "18:00",
@@ -153,11 +154,15 @@ def seed_permit_request(db, users, secretarias):
         },
         respostas={
             "tem_som": True,
+            "local_fixo_sem_alvara": False,
+            "precisa_avcb": True,
             "tem_palco": False,
             "tem_gerador": False,
+            "precisa_planta_baixa": False,
             "tem_trio_eletrico": True,
             "bloqueia_via": True,
             "tem_alimentacao": False,
+            "precisa_ambulancia": False,
             "precisa_guarda": False,
         },
     )
@@ -173,6 +178,11 @@ def seed_permit_request(db, users, secretarias):
             ),
             PermitRequirementModel(
                 permit_request_id=request.id,
+                secretaria_id=secretarias["infraestrutura"].id,
+                tipo_exigencia="Auto de Vistoria do Corpo de Bombeiros (AVCB)",
+            ),
+            PermitRequirementModel(
+                permit_request_id=request.id,
                 secretaria_id=secretarias["dmtran"].id,
                 tipo_exigencia="Vistoria de trio elétrico, CNH do motorista e mapa do circuito",
             ),
@@ -184,6 +194,16 @@ def seed_permit_request(db, users, secretarias):
         ]
     )
     return request
+
+
+def add_business_days(start_date, business_days):
+    current_date = start_date
+    added_days = 0
+    while added_days < business_days:
+        current_date += timedelta(days=1)
+        if current_date.weekday() < 5:
+            added_days += 1
+    return current_date
 
 
 def main():
