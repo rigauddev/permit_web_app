@@ -44,6 +44,9 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
   - sistema gera código público e URL de validação: passou;
   - validação da credencial retorna dados do evento, exigências e referência do DAM: passou;
   - revogação da credencial invalida o link: passou.
+- Smoke test backend de recuperação da autorização:
+  - `GET /permit-requests/{id}/authorization` retorna link com token válido para QR Code: passou;
+  - validação pública do link recuperado: passou.
 
 ## DAM
 
@@ -64,14 +67,15 @@ O backend já emite a credencial verificável do evento autorizado:
 - `GET /event-credentials/{codigo_publico}/validate?t={token}`
 - `POST /event-credentials/{credential_id}/revoke`
 
-Nesta etapa foi entregue o link/token seguro para validação. A geração visual da imagem do QR Code, a tela de leitura/validação e o documento final imprimível ficam para o próximo bloco.
+Nesta etapa foi entregue o link/token seguro para validação, a recuperação da autorização com token válido, a tela Flutter de autorização e a tela de validação da credencial com QR Code visual. O documento final imprimível/PDF fica para o próximo bloco.
 
 ## Próximos passos
 
 - Implementar upload binário real de anexos, incluindo UI para anexo específico do DAM.
 - Criar telas internas para consumir os endpoints de fila, aprovação, correção e comentários.
-- Criar tela de validação de credencial do evento.
-- Gerar QR Code visual e documento final de autorização imprimível/PDF.
+- Gerar documento final de autorização imprimível/PDF com QR Code.
+- Ajustar regra de antecedência para 15 dias úteis no backend e frontend.
+- Criar SLA interno de 2 dias úteis por secretaria.
 - Definir ambiente de homologação e configurações de produção.
 
 ## Observação técnica

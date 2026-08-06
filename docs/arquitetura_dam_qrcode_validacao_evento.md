@@ -181,10 +181,12 @@ Campos mínimos:
 - Validação da credencial sem expor dados pessoais no QR Code.
 - Revogação administrativa da credencial.
 - Retorno dos dados de fiscalização, incluindo status da solicitação, status do DAM, exigências e referência ao anexo do DAM.
+- Recuperação da autorização com token válido para renderizar o QR Code depois da emissão.
+- Tela Flutter para autorização/QR Code e validação da credencial.
 
 ## Próximo Bloco Recomendado
 
-1. Criar tela `Validar Credencial de Evento`.
-2. Renderizar QR Code visual a partir da URL da credencial.
-3. Criar documento final de autorização com QR Code.
-4. Adicionar seed com uma solicitação autorizada para demonstração.
+1. Criar documento final de autorização em PDF/HTML imprimível com QR Code.
+2. Adicionar seed com uma solicitação autorizada para demonstração.
+3. Ajustar antecedência mínima para 15 dias úteis no backend e frontend.
+4. Criar SLA interno de 2 dias úteis por exigência/secretaria.

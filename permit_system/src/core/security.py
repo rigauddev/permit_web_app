@@ -68,12 +68,10 @@ def create_email_verification_token(email: str) -> str:
 
 
 def create_event_credential_token(credential_id: str, permit_request_id: int) -> str:
-    now = datetime.now(timezone.utc)
     payload = {
         "sub": credential_id,
         "permit_request_id": permit_request_id,
         "purpose": "event_credential",
-        "iat": int(now.timestamp()),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 

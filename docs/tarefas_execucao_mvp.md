@@ -88,10 +88,10 @@
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
 - [x] Emitir autorização final após DAM anexado ou isenção validada.
 - [x] Gerar credencial/link de validação do evento autorizado no backend.
-- [ ] Gerar QR Code visual para impressão/exibição.
-- [ ] Criar tela de validação de credencial do evento.
+- [x] Gerar QR Code visual para impressão/exibição.
+- [x] Criar tela de validação de credencial do evento.
 - [x] Exibir referência do DAM armazenado na validação quando autorizado.
-- [ ] Garantir que autorização final fique em nome do responsável pelo evento.
+- [x] Exibir autorização final em nome do responsável pelo evento.
 
 ## Marco 8 - Vistoria e análise técnica
 
@@ -128,7 +128,7 @@
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.
 - [ ] Testar geração do documento final.
-- [ ] Testar QR Code visual e tela de validação.
+- [x] Testar QR Code visual e tela de validação.
 - [ ] Testar layout mobile e desktop.
 
 ## Prioridade de implementação
@@ -139,7 +139,7 @@
 4. Criar revisão/envio/protocolo.
 5. Implementar persistência/API mínima.
 6. Implementar fila interna por secretaria.
-7. Criar documento final e QR Code visual.
-8. Criar tela de validação da credencial.
-9. Ajustar 15 dias úteis e SLA interno de 2 dias úteis.
+7. Criar documento final em PDF/HTML imprimível.
+8. Ajustar 15 dias úteis e SLA interno de 2 dias úteis.
+9. Criar visão gestor/admin para todas as secretarias.
 10. Fazer limpeza de segurança e QA.
