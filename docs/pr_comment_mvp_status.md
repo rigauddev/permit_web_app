@@ -54,7 +54,8 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
   - PDF imprimível pode ser gerado apenas quando necessário;
   - autorização e PDF exibem logo oficial;
   - gestor/admin pode configurar texto de cabeçalho e rodapé do PDF;
-  - PDF inclui campos de assinatura.
+  - PDF inclui campos de assinatura;
+  - usuário pode escolher imprimir/assinar/anexar ou gerar PDF para assinar eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado quando exigido.
 - Smoke test backend do template de PDF:
   - leitura/criação do template padrão: passou;
   - atualização do cabeçalho/rodapé por gestor: passou.

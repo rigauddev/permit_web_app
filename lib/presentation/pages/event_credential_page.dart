@@ -11,7 +11,7 @@ import '../../core/permit_api_service.dart';
 const _defaultHeaderText =
     'A Prefeitura Municipal de Valença, por meio da Central de Eventos, autoriza a realização do evento abaixo após as anuências dos órgãos competentes e a regularização do DAM ou isenção aplicável.';
 const _defaultFooterText =
-    'Documento mantido no sistema municipal. A validade deve ser confirmada pela leitura do QR Code. Campos de assinatura reservados para uso administrativo quando houver necessidade de impressão.';
+    'Documento mantido no sistema municipal. A validade deve ser confirmada pela leitura do QR Code. Quando houver exigência de assinatura, o responsável pode imprimir, assinar e anexar, ou assinar eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado.';
 
 class EventCredentialPage extends StatefulWidget {
   final Map<String, dynamic>? permitForm;
@@ -518,6 +518,8 @@ class _AuthorizationDocument extends StatelessWidget {
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 14),
+            if (_hasQr) _SignatureChoicePanel(onPrintPdf: onPrintPdf),
+            if (_hasQr) const SizedBox(height: 14),
             const _SignatureFields(),
             const SizedBox(height: 16),
             Wrap(
@@ -529,19 +531,6 @@ class _AuthorizationDocument extends StatelessWidget {
                     onPressed: onCopyUrl,
                     icon: const Icon(Icons.copy),
                     label: const Text('Copiar link'),
-                  ),
-                if (_hasQr)
-                  OutlinedButton.icon(
-                    onPressed: printingPdf ? null : onPrintPdf,
-                    icon:
-                        printingPdf
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Icon(Icons.picture_as_pdf_outlined),
-                    label: const Text('Gerar PDF'),
                   ),
                 if (isAuthorized && canIssue)
                   ElevatedButton.icon(
@@ -674,6 +663,54 @@ class _SignatureFields extends StatelessWidget {
           children: [fields[0], const SizedBox(height: 12), fields[1]],
         );
       },
+    );
+  }
+}
+
+class _SignatureChoicePanel extends StatelessWidget {
+  final VoidCallback onPrintPdf;
+
+  const _SignatureChoicePanel({required this.onPrintPdf});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8F5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Assinatura quando exigida',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onPrintPdf,
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('Imprimir e assinar'),
+              ),
+              Tooltip(
+                message:
+                    'Gera o PDF para baixar. Abra o aplicativo gov.br, assine eletronicamente, baixe o arquivo assinado e anexe na solicitação quando a assinatura for exigida.',
+                child: OutlinedButton.icon(
+                  onPressed: onPrintPdf,
+                  icon: const Icon(Icons.verified_user_outlined),
+                  label: const Text('Assinar pelo gov.br'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

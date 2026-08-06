@@ -188,6 +188,7 @@ Campos mínimos:
 - Logo oficial no cabeçalho da autorização em tela e PDF.
 - Template configurável de cabeçalho e rodapé do PDF, editável por gestor/admin.
 - Campos de assinatura para responsável do evento e Central de Eventos/Prefeitura.
+- Orientação de assinatura: imprimir/assinar/anexar ou baixar o PDF, assinar eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado quando exigido.
 
 ## Próximo Bloco Recomendado
 

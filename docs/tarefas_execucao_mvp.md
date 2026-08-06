@@ -87,6 +87,7 @@
 - [x] Criar template configurável de cabeçalho e rodapé do PDF.
 - [x] Permitir que gestor/admin atualize textos do template do PDF.
 - [x] Incluir campos de assinatura no rodapé da autorização/PDF.
+- [x] Orientar assinatura impressa ou assinatura eletrônica pelo aplicativo gov.br quando exigida.
 - [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
 - [x] Permitir anexar o DAM à solicitação aprovada.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.

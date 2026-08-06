@@ -70,7 +70,8 @@ DEFAULT_AUTHORIZATION_HEADER = (
 )
 DEFAULT_AUTHORIZATION_FOOTER = (
     "Documento mantido no sistema municipal. A validade deve ser confirmada pela leitura do QR Code. "
-    "Campos de assinatura reservados para uso administrativo quando houver necessidade de impressão."
+    "Quando houver exigência de assinatura, o responsável pode imprimir, assinar e anexar, ou assinar "
+    "eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado."
 )
 
 
