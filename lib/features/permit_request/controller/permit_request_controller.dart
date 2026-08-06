@@ -152,8 +152,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       final today = DateTime.now();
       final currentDate = DateTime(today.year, today.month, today.day);
-      if (eventDate.difference(currentDate).inDays < 15) {
-        return 'A solicitação precisa ser feita com pelo menos 15 dias de antecedência.';
+      if (eventDate.isBefore(_addBusinessDays(currentDate, 15))) {
+        return 'A solicitação precisa ser feita com pelo menos 15 dias úteis de antecedência.';
       }
       if (state.eventData['is_beneficente'] == 'true' &&
           (state.eventData['instituicao_beneficiada'] ?? '').trim().isEmpty) {
@@ -174,6 +174,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
 
   List<Map<String, String>> previewRequirements() {
     return PermitApiService.previewRequirements(state.answers, state.eventData);
+  }
+
+  DateTime _addBusinessDays(DateTime startDate, int businessDays) {
+    var currentDate = startDate;
+    var addedDays = 0;
+    while (addedDays < businessDays) {
+      currentDate = currentDate.add(const Duration(days: 1));
+      if (currentDate.weekday <= DateTime.friday) {
+        addedDays += 1;
+      }
+    }
+    return currentDate;
   }
 
   Future<String?> submitRequest(BuildContext context) async {

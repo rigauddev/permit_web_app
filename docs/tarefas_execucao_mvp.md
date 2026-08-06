@@ -22,11 +22,15 @@
 ## Marco 3 - Perguntas condicionais
 
 - [x] Perguntar se o evento terá som.
+- [x] Perguntar se o evento será em local fixo sem alvará de funcionamento.
+- [x] Perguntar se exigirá AVCB.
 - [x] Perguntar se terá palco.
 - [x] Perguntar se terá gerador.
+- [x] Perguntar se exigirá planta baixa.
 - [x] Perguntar se terá trio elétrico.
 - [x] Perguntar se usará ou bloqueará vias.
 - [x] Perguntar se terá alimentação.
+- [x] Perguntar se precisará de ambulância no local.
 - [x] Perguntar se precisará da Guarda Civil Municipal.
 - [x] Perguntar se exigirá brigadista.
 - [x] Perguntar se é evento beneficente.
@@ -35,10 +39,14 @@
 ## Marco 4 - Regras por secretaria
 
 - [x] Som -> Meio Ambiente.
-- [x] Palco/gerador -> Infraestrutura.
+- [x] Local fixo sem alvará -> Desenvolvimento Econômico.
+- [x] AVCB -> Infraestrutura.
+- [x] Palco/gerador -> Infraestrutura, vistoria e ART.
+- [x] Planta baixa -> Infraestrutura.
 - [x] Trio elétrico -> DMTRAN.
-- [x] Bloqueio/uso de via -> DMTRAN.
+- [x] Bloqueio/uso de via -> DMTRAN e croqui/mapa do circuito.
 - [x] Alimentação -> Vigilância Sanitária.
+- [x] Ambulância -> Secretaria de Saúde.
 - [x] Guarda Civil -> Guarda Civil Municipal.
 - [x] Beneficente -> declaração e isenção de DAM.
 

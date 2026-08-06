@@ -25,13 +25,30 @@ from src.schemas.permit_schema import (
 
 
 QUESTION_RULES = {
-    "tem_som": ("meio_ambiente", "Termo de Responsabilidade Ambiental"),
-    "tem_palco": ("infraestrutura", "Vistoria de palco/estrutura"),
-    "tem_gerador": ("infraestrutura", "Vistoria de gerador"),
-    "tem_trio_eletrico": ("dmtran", "Vistoria de trio elétrico, CNH do motorista e mapa do circuito"),
-    "bloqueia_via": ("dmtran", "Autorização para uso ou bloqueio de via pública"),
-    "tem_alimentacao": ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação"),
-    "precisa_guarda": ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal"),
+    "tem_som": [("meio_ambiente", "Termo de Responsabilidade Ambiental")],
+    "local_fixo_sem_alvara": [
+        ("desenvolvimento_economico", "Regularização do alvará de funcionamento do local fixo")
+    ],
+    "precisa_avcb": [("infraestrutura", "Auto de Vistoria do Corpo de Bombeiros (AVCB)")],
+    "tem_palco": [
+        ("infraestrutura", "Vistoria de palco/estrutura"),
+        ("infraestrutura", "Anotação de Responsabilidade Técnica (ART) da estrutura"),
+    ],
+    "tem_gerador": [
+        ("infraestrutura", "Vistoria de gerador"),
+        ("infraestrutura", "Anotação de Responsabilidade Técnica (ART) do gerador"),
+    ],
+    "precisa_planta_baixa": [
+        ("infraestrutura", "Planta baixa para evento particular de médio ou grande porte em local fixo")
+    ],
+    "tem_trio_eletrico": [("dmtran", "Vistoria de trio elétrico, CNH do motorista e mapa do circuito")],
+    "bloqueia_via": [
+        ("dmtran", "Autorização para uso ou bloqueio de via pública"),
+        ("dmtran", "Croqui/mapa do circuito ou desvio de trânsito"),
+    ],
+    "tem_alimentacao": [("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação")],
+    "precisa_ambulancia": [("vigilancia_sanitaria", "Ofício solicitando ambulância no local do evento")],
+    "precisa_guarda": [("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal")],
 }
 
 REQUIREMENT_STATUSES = {"aguardando_analise", "aprovada", "recusada", "pendente_documento"}
@@ -211,10 +228,12 @@ class PermitService:
     def _build_requirements(respostas: dict[str, Any]) -> list[tuple[str, str]]:
         requirements: list[tuple[str, str]] = []
         seen = set()
-        for answer_key, (secretaria_slug, tipo_exigencia) in QUESTION_RULES.items():
-            if respostas.get(answer_key) is True and (secretaria_slug, tipo_exigencia) not in seen:
-                requirements.append((secretaria_slug, tipo_exigencia))
-                seen.add((secretaria_slug, tipo_exigencia))
+        for answer_key, rules in QUESTION_RULES.items():
+            if respostas.get(answer_key) is True:
+                for secretaria_slug, tipo_exigencia in rules:
+                    if (secretaria_slug, tipo_exigencia) not in seen:
+                        requirements.append((secretaria_slug, tipo_exigencia))
+                        seen.add((secretaria_slug, tipo_exigencia))
         return requirements
 
     @staticmethod
@@ -249,10 +268,10 @@ class PermitService:
                 detail="Data do evento deve estar no formato AAAA-MM-DD.",
             ) from exc
 
-        if event_date < date.today() + timedelta(days=15):
+        if event_date < PermitService._add_business_days(date.today(), 15):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="A solicitação precisa ter pelo menos 15 dias de antecedência.",
+                detail="A solicitação precisa ter pelo menos 15 dias úteis de antecedência.",
             )
 
         attachment_names = payload.dados_evento.get("anexos_informados") or []
@@ -343,6 +362,16 @@ class PermitService:
     @staticmethod
     def _generate_protocol() -> str:
         return f"ALV-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+
+    @staticmethod
+    def _add_business_days(start_date: date, business_days: int) -> date:
+        current_date = start_date
+        added_days = 0
+        while added_days < business_days:
+            current_date += timedelta(days=1)
+            if current_date.weekday() < 5:
+                added_days += 1
+        return current_date
 
     @staticmethod
     def to_response(request: PermitRequestModel) -> PermitResponse:

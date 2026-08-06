@@ -64,12 +64,16 @@ Separar em dois apps só deve virar prioridade quando houver volume alto de uso 
 
 ## Regras iniciais
 
-- Solicitação deve ser feita com pelo menos 15 dias de antecedência.
+- Solicitação deve ser feita com pelo menos 15 dias úteis de antecedência.
 - Evento com som exige Meio Ambiente.
-- Evento com palco ou gerador exige Infraestrutura.
+- Evento em local fixo sem alvará de funcionamento exige regularização.
+- Evento que exigir AVCB deve apresentar Auto de Vistoria do Corpo de Bombeiros.
+- Evento com palco, gerador ou estrutura exige Infraestrutura, vistoria e ART.
+- Evento particular de médio/grande porte em local fixo pode exigir planta baixa.
 - Evento com trio elétrico exige DMTRAN, vistoria do veículo, CNH do motorista e mapa do circuito.
-- Uso ou bloqueio de vias municipais exige DMTRAN.
+- Uso ou bloqueio de vias municipais exige DMTRAN e croqui/mapa do circuito ou desvio.
 - Evento com alimentação exige Vigilância Sanitária.
+- Necessidade de ambulância exige ofício à Secretaria de Saúde.
 - Necessidade de Guarda Civil exige ofício específico.
 - Brigadista deve ser contratado pelo responsável quando exigido.
 - Evento beneficente é isento de DAM mediante declaração de instituição beneficiada.
