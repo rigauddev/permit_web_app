@@ -112,8 +112,8 @@ class UserHomePage extends StatelessWidget {
         context,
         icon: Icons.people_outline,
         title: 'Usuários internos',
-        description: 'Cadastre operadores, gestores e administradores.',
-        route: '/user-create',
+        description: 'Consulte usuários e cadastre equipes por secretaria.',
+        route: '/users',
       ),
       if (userType == 'admin')
         _buildServiceCard(

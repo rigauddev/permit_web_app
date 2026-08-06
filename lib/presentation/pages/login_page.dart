@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ class LoginPage extends HookConsumerWidget {
     final challenge = useState<LoginChallenge?>(null);
     final mfaGeneration = useState<MfaGeneration?>(null);
     final selectedMfaMethod = useState<String>('email');
+    final mfaResendSeconds = useState<int>(0);
     final accessProfile = useState<String?>(null);
     final isLoading = useState(false);
     final obscurePassword = useState(true);
@@ -28,6 +30,20 @@ class LoginPage extends HookConsumerWidget {
 
     final authService = AuthService();
     final secureStorage = const FlutterSecureStorage();
+
+    useEffect(() {
+      if (mfaResendSeconds.value <= 0) return null;
+      late final Timer timer;
+      timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mfaResendSeconds.value <= 1) {
+          mfaResendSeconds.value = 0;
+          timer.cancel();
+        } else {
+          mfaResendSeconds.value = mfaResendSeconds.value - 1;
+        }
+      });
+      return timer.cancel;
+    }, [mfaGeneration.value]);
 
     Future<void> generateMfa(
       LoginChallenge loginChallenge,
@@ -39,6 +55,10 @@ class LoginPage extends HookConsumerWidget {
       );
       mfaGeneration.value = generation;
       selectedMfaMethod.value = method;
+      mfaResendSeconds.value = 60;
+      if (generation.devCode != null) {
+        debugPrint('Código MFA de teste: ${generation.devCode}');
+      }
       Future.delayed(const Duration(milliseconds: 200), () {
         mfaFocusNode.requestFocus();
       });
@@ -130,6 +150,7 @@ class LoginPage extends HookConsumerWidget {
       challenge.value = null;
       mfaGeneration.value = null;
       selectedMfaMethod.value = 'email';
+      mfaResendSeconds.value = 0;
       mfaController.clear();
       errorMessage.value = null;
     }
@@ -319,15 +340,31 @@ class LoginPage extends HookConsumerWidget {
                             if (mfaGeneration.value!.devCode != null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  'Código de teste: ${mfaGeneration.value!.devCode}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
+                                child: SelectableText(
+                                  'Código MFA de teste: ${mfaGeneration.value!.devCode}',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.tertiary,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
                               ),
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              onPressed:
+                                  isLoading.value || mfaResendSeconds.value > 0
+                                      ? null
+                                      : () => generateMfa(
+                                        challenge.value!,
+                                        selectedMfaMethod.value,
+                                      ),
+                              icon: const Icon(Icons.refresh),
+                              label: Text(
+                                mfaResendSeconds.value > 0
+                                    ? 'Solicitar novo código em ${mfaResendSeconds.value}s'
+                                    : 'Solicitar novo código',
+                              ),
+                            ),
                             const SizedBox(height: 16),
                             TextField(
                               controller: mfaController,

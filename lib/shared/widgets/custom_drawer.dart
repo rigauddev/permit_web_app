@@ -87,24 +87,24 @@ class CustomDrawer extends ConsumerWidget implements PreferredSizeWidget {
               ],
             ),
 
-          /// Usuários (Apenas gestor admin e admin)
-          if (isAdmin)
+          /// Usuários internos por secretaria
+          if (isAdmin || userType == 'gestor')
             _buildTile(
               context,
               icon: Icons.people,
-              title: 'Usuarios',
+              title: 'Usuários',
               route: '/users',
             ),
 
-          ExpansionTile(
-            leading: Icon(Icons.people, color: primaryColor),
-            title: const Text('Secretaria'),
-            children: [
-              _buildSubTile(context, 'Cadastrar Secretaria', '/users'),
-              _buildSubTile(context, 'Gestão de Operadores', '/users'),
-              _buildSubTile(context, 'Gestão de Gestor', '/users'),
-            ],
-          ),
+          if (isAdmin || userType == 'gestor')
+            ExpansionTile(
+              leading: Icon(Icons.people, color: primaryColor),
+              title: const Text('Secretaria'),
+              children: [
+                _buildSubTile(context, 'Gestão de operadores', '/users'),
+                _buildSubTile(context, 'Gestão de gestores', '/users'),
+              ],
+            ),
 
           ExpansionTile(
             leading: Icon(Icons.people, color: primaryColor),
