@@ -26,6 +26,7 @@
 - [x] Criar menu lateral recolhível, com modo apenas ícones e item ativo destacado.
 - [x] Incluir botão de voltar nas subpáginas principais.
 - [x] Criar página `Minhas solicitações` separada por tipo de serviço.
+- [x] Permitir abrir detalhes da solicitação do cidadão com perguntas, validações e vistorias.
 - [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
 
 ## Marco 3 - Perguntas condicionais
@@ -69,6 +70,7 @@
 - [x] Atualizar status geral a partir das anuências.
 - [x] Criar visão de gestor/admin para gestão interna com escopo por secretaria.
 - [x] Criar dashboard inicial para usuários internos com serviços pertinentes ao perfil/secretaria.
+- [x] Ajustar navegação para cidadão não acessar dashboard interno de secretaria.
 - [x] Criar central interna de solicitações por tipo de serviço e secretaria responsável.
 - [x] Tornar as exigências da solicitação interativas para admin, gestor e operador autorizados.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
@@ -91,6 +93,8 @@
 - [x] Validar tipo de acesso escolhido já na etapa e-mail/senha, antes do MFA.
 - [x] Padronizar falhas de autenticação como `Credenciais inválidas`.
 - [x] Deslogar automaticamente o usuário quando a sessão/token expirar.
+- [x] Restaurar usuário salvo ao recarregar a aplicação para manter permissões corretas.
+- [x] Bloquear rotas internas no frontend para usuários cidadãos.
 - [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
@@ -161,6 +165,7 @@
 - [ ] Testar home do cidadão com carrossel em mobile e desktop.
 - [ ] Testar menu recolhível e destaque de rota ativa em mobile e desktop.
 - [ ] Testar acompanhamento de solicitações do cidadão separado por tipo.
+- [x] Testar abertura de detalhes da solicitação do cidadão.
 - [ ] Testar catálogo de serviços por categoria Prefeitura/Secretarias.
 - [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar central interna de solicitações por secretaria em mobile e desktop.

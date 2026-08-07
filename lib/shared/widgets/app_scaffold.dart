@@ -31,18 +31,31 @@ class AppScaffold extends StatelessWidget {
           asDrawer: false,
         );
 
+        if (useFixedMenu) {
+          return Scaffold(
+            backgroundColor: backgroundColor,
+            body: Row(
+              children: [
+                menu,
+                Expanded(
+                  child: Scaffold(
+                    appBar: appBar,
+                    floatingActionButton: floatingActionButton,
+                    backgroundColor: backgroundColor,
+                    body: body,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         return Scaffold(
           appBar: appBar,
-          drawer:
-              useFixedMenu
-                  ? null
-                  : CustomDrawer(userType: userType, userProfile: userProfile),
+          drawer: CustomDrawer(userType: userType, userProfile: userProfile),
           floatingActionButton: floatingActionButton,
           backgroundColor: backgroundColor,
-          body:
-              useFixedMenu
-                  ? Row(children: [menu, Expanded(child: body)])
-                  : body,
+          body: body,
         );
       },
     );

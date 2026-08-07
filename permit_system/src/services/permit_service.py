@@ -140,7 +140,7 @@ class PermitService:
         request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
         if not request:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
-        if not self._can_view_request(request, current_user) and not self._can_issue_authorization(current_user):
+        if not self._can_view_request(request, current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
         return self.to_response(request)
 
@@ -186,7 +186,7 @@ class PermitService:
         request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
         if not request:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
-        if not self._can_view_request(request, current_user) and not self._can_issue_authorization(current_user):
+        if not self._can_view_request(request, current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
 
         requirement = None
@@ -287,7 +287,7 @@ class PermitService:
         request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
         if not request:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
-        if not self._can_view_request(request, current_user) and not self._can_issue_authorization(current_user):
+        if not self._can_view_request(request, current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
         credential = next((item for item in request.credentials if item.status == "ativa"), None)
         if not credential:

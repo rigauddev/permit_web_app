@@ -118,11 +118,28 @@ class _ReceitaMunicipalServicesPageState
   Future<void> _openEventPermit() async {
     setState(() => _loading = true);
     try {
+      final isCitizen =
+          widget.userType == 'user' || widget.userType == 'cidadao';
       const storage = FlutterSecureStorage();
       final token = await storage.read(key: 'access_token');
       if (token == null || token.isEmpty) {
         if (!mounted) return;
         await SessionExpiration.logout(context);
+        return;
+      }
+
+      if (isCitizen) {
+        if (!mounted) return;
+        Navigator.pushNamed(
+          context,
+          '/event-permit',
+          arguments: {
+            'userType': widget.userType,
+            'userProfile': widget.userProfile ?? '',
+            'permitType': 'Alvará de Evento',
+            'questions': PermitApiService.eventPermitQuestions,
+          },
+        );
         return;
       }
 
