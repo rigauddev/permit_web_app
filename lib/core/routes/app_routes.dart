@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permit_web_app/data/models/user_model.dart';
 // import 'package:permit_web_app/presentation/pages/login_page.dart';
 // import 'package:permit_web_app/presentation/pages/recovery_password.dart';
 // import 'package:permit_web_app/presentation/pages/home_page.dart';
@@ -34,7 +35,10 @@ class AppRoutes {
   static const String eventPermit = '/event-permit';
   static const String validateEvent = '/validar-evento';
 
-  static Route<dynamic>? generateRoute(RouteSettings settings) {
+  static Route<dynamic>? generateRoute(
+    RouteSettings settings,
+    UserModel? user,
+  ) {
     final routeName = settings.name ?? '';
     if (routeName.startsWith('$validateEvent/')) {
       final uri = Uri.parse(routeName);
@@ -50,6 +54,12 @@ class AppRoutes {
 
     switch (settings.name) {
       case permitDashboard:
+        if (!_canAccess(user, const {'cidadao'})) {
+          return _blockedRoute(user);
+        }
+        if (settings.arguments is! Map<String, dynamic>) {
+          return _blockedRoute(user);
+        }
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
           builder:
@@ -62,6 +72,12 @@ class AppRoutes {
               ),
         );
       case eventPermit:
+        if (!_canAccess(user, const {'cidadao'})) {
+          return _blockedRoute(user);
+        }
+        if (settings.arguments is! Map<String, dynamic>) {
+          return _blockedRoute(user);
+        }
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
           builder:
@@ -78,5 +94,73 @@ class AppRoutes {
       default:
         return null;
     }
+  }
+
+  static bool _canAccess(UserModel? user, Set<String> allowedRoles) {
+    return user != null && allowedRoles.contains(user.role);
+  }
+
+  static Route<dynamic> _blockedRoute(UserModel? user) {
+    return MaterialPageRoute(
+      builder: (_) => _RouteAccessBlockedPage(loggedIn: user != null),
+    );
+  }
+}
+
+class _RouteAccessBlockedPage extends StatelessWidget {
+  const _RouteAccessBlockedPage({required this.loggedIn});
+
+  final bool loggedIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  loggedIn ? 'Acesso não permitido' : 'Sessão necessária',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  loggedIn
+                      ? 'Seu perfil não possui permissão para acessar esta página.'
+                      : 'Faça login novamente para acessar esta área.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                ElevatedButton.icon(
+                  onPressed:
+                      () => Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        loggedIn ? AppRoutes.home : AppRoutes.login,
+                        (_) => false,
+                      ),
+                  icon: const Icon(Icons.arrow_forward),
+                  label: Text(
+                    loggedIn ? 'Voltar para início' : 'Ir para login',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

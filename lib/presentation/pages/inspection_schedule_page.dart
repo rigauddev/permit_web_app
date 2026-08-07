@@ -7,7 +7,7 @@ import '../../core/routes/app_routes.dart';
 import '../../core/session_expiration.dart';
 import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
-import '../../shared/widgets/custom_drawer.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class InspectionSchedulePage extends ConsumerStatefulWidget {
   const InspectionSchedulePage({super.key, required this.userType});
@@ -81,7 +81,8 @@ class _InspectionSchedulePageState
             .where((item) => item.date == null || item.date!.isAfter(today))
             .toList();
 
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
       appBar: AppBar(
         leading: IconButton(
           tooltip: 'Voltar',
@@ -91,7 +92,6 @@ class _InspectionSchedulePageState
         ),
         title: const Text('Vistorias e pendências'),
       ),
-      drawer: CustomDrawer(userType: widget.userType),
       body: RefreshIndicator(
         onRefresh: _loadRequests,
         child: ListView(
@@ -117,22 +117,33 @@ class _InspectionSchedulePageState
                           children: [
                             _Header(total: inspections.length),
                             const SizedBox(height: 16),
-                            _Calendar(inspections: inspections),
+                            _Calendar(
+                              inspections: inspections,
+                              onDateSelected:
+                                  (date, items) => _showInspectionsForDate(
+                                    context,
+                                    date,
+                                    items,
+                                  ),
+                            ),
                             const SizedBox(height: 16),
                             _InspectionSection(
                               title: 'Vistorias de hoje',
                               icon: Icons.today_outlined,
                               items: todayItems,
+                              onOpenDetails: _showInspectionDetails,
                             ),
                             _InspectionSection(
                               title: 'Vistorias futuras',
                               icon: Icons.event_available_outlined,
                               items: future,
+                              onOpenDetails: _showInspectionDetails,
                             ),
                             _InspectionSection(
                               title: 'Vistorias realizadas',
                               icon: Icons.fact_check_outlined,
                               items: performed,
+                              onOpenDetails: _showInspectionDetails,
                             ),
                           ],
                         ),
@@ -160,6 +171,7 @@ class _InspectionSchedulePageState
         }
         items.add(
           _InspectionItem(
+            request: request,
             eventName: request['nome_do_evento']?.toString() ?? 'Evento',
             protocol: request['protocolo']?.toString() ?? '-',
             secretaria: requirement['secretaria']?.toString() ?? '',
@@ -201,6 +213,118 @@ class _InspectionSchedulePageState
     if (value == null || value.isEmpty) return null;
     return DateTime.tryParse(value);
   }
+
+  void _showInspectionsForDate(
+    BuildContext context,
+    DateTime date,
+    List<_InspectionItem> items,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (context) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 560),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Vistorias em ${_formatDate(date)}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (items.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Text('Nenhuma vistoria marcada para esta data.'),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder:
+                              (context, index) => _InspectionTile(
+                                item: items[index],
+                                onOpenDetails: (item) {
+                                  Navigator.pop(context);
+                                  _showInspectionDetails(item);
+                                },
+                              ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+    );
+  }
+
+  void _showInspectionDetails(_InspectionItem item) {
+    final request = item.request;
+    showDialog<void>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(item.eventName),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _DetailLine(label: 'Protocolo', value: item.protocol),
+                  _DetailLine(
+                    label: 'Status da solicitação',
+                    value: request['status']?.toString() ?? '-',
+                  ),
+                  _DetailLine(label: 'Secretaria', value: item.secretaria),
+                  _DetailLine(label: 'Exigência', value: item.requirement),
+                  _DetailLine(label: 'Status da exigência', value: item.status),
+                  _DetailLine(label: 'Data da vistoria', value: item.dateLabel),
+                  _DetailLine(
+                    label: 'Local',
+                    value: request['local_evento']?.toString() ?? '-',
+                  ),
+                  _DetailLine(
+                    label: 'Responsável',
+                    value: request['responsavel']?.toString() ?? '-',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Fechar'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.secretariaRequests,
+                    arguments: {'protocolo': item.protocol},
+                  );
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Abrir central'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  static String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
 }
 
 class _Header extends StatelessWidget {
@@ -234,9 +358,11 @@ class _Header extends StatelessWidget {
 }
 
 class _Calendar extends StatelessWidget {
-  const _Calendar({required this.inspections});
+  const _Calendar({required this.inspections, required this.onDateSelected});
 
   final List<_InspectionItem> inspections;
+  final void Function(DateTime date, List<_InspectionItem> items)
+  onDateSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -244,72 +370,149 @@ class _Calendar extends StatelessWidget {
     final firstDay = DateTime(now.year, now.month, 1);
     final monthDays = DateUtils.getDaysInMonth(now.year, now.month);
     final leading = firstDay.weekday % 7;
-    final counts = <int, int>{};
+    final byDay = <int, List<_InspectionItem>>{};
     for (final item in inspections) {
       final date = item.date;
       if (date == null || date.month != now.month || date.year != now.year) {
         continue;
       }
-      counts[date.day] = (counts[date.day] ?? 0) + 1;
+      byDay.putIfAbsent(date.day, () => []).add(item);
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Calendário do mês',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            GridView.builder(
-              itemCount: leading + monthDays,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 6,
-                childAspectRatio: 1.5,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 430),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Calendário do mês atual',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              itemBuilder: (context, index) {
-                if (index < leading) return const SizedBox.shrink();
-                final day = index - leading + 1;
-                final count = counts[day] ?? 0;
-                final selected = count > 0;
-                return Container(
-                  decoration: BoxDecoration(
+              const SizedBox(height: 4),
+              Text(_monthLabel(now)),
+              const SizedBox(height: 12),
+              Row(
+                children:
+                    _weekDays
+                        .map(
+                          (day) => Expanded(
+                            child: Center(
+                              child: Text(
+                                day,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+              const SizedBox(height: 6),
+              GridView.builder(
+                itemCount: leading + monthDays,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
+                  childAspectRatio: 1,
+                ),
+                itemBuilder: (context, index) {
+                  if (index < leading) return const SizedBox.shrink();
+                  final day = index - leading + 1;
+                  final date = DateTime(now.year, now.month, day);
+                  final items = byDay[day] ?? const <_InspectionItem>[];
+                  final selected = items.isNotEmpty;
+                  final isToday = DateUtils.isSameDay(date, now);
+                  return InkWell(
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          selected
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).dividerColor,
+                    onTap: selected ? () => onDateSelected(date, items) : null,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color:
+                              selected || isToday
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).dividerColor,
+                        ),
+                        color:
+                            selected
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : null,
+                      ),
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: Text(
+                              '$day',
+                              style: TextStyle(
+                                fontWeight:
+                                    isToday ? FontWeight.w800 : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            Positioned(
+                              right: 5,
+                              bottom: 4,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${items.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                    color:
-                        selected
-                            ? Theme.of(context).colorScheme.primaryContainer
-                            : null,
-                  ),
-                  child: Center(
-                    child: Text(
-                      count > 0 ? '$day\n$count vist.' : '$day',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  static String _monthLabel(DateTime date) {
+    const months = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
+    ];
+    return '${months[date.month - 1]} de ${date.year}';
+  }
+
+  static const _weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 }
 
 class _InspectionSection extends StatelessWidget {
@@ -317,11 +520,13 @@ class _InspectionSection extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.items,
+    required this.onOpenDetails,
   });
 
   final String title;
   final IconData icon;
   final List<_InspectionItem> items;
+  final ValueChanged<_InspectionItem> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -340,20 +545,29 @@ class _InspectionSection extends StatelessWidget {
                     child: Text('Nenhum registro nesta categoria.'),
                   ),
                 ]
-                : items.map((item) => _InspectionTile(item: item)).toList(),
+                : items
+                    .map(
+                      (item) => _InspectionTile(
+                        item: item,
+                        onOpenDetails: onOpenDetails,
+                      ),
+                    )
+                    .toList(),
       ),
     );
   }
 }
 
 class _InspectionTile extends StatelessWidget {
-  const _InspectionTile({required this.item});
+  const _InspectionTile({required this.item, required this.onOpenDetails});
 
   final _InspectionItem item;
+  final ValueChanged<_InspectionItem> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      onTap: () => onOpenDetails(item),
       title: Text(item.requirement),
       subtitle: Text(
         '${item.eventName} | Protocolo ${item.protocol} | ${item.secretaria}',
@@ -364,6 +578,28 @@ class _InspectionTile extends StatelessWidget {
         children: [
           Text(item.dateLabel),
           Text(item.status, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(value.isEmpty ? '-' : value),
         ],
       ),
     );
@@ -404,6 +640,7 @@ class _MessageState extends StatelessWidget {
 
 class _InspectionItem {
   const _InspectionItem({
+    required this.request,
     required this.eventName,
     required this.protocol,
     required this.secretaria,
@@ -412,6 +649,7 @@ class _InspectionItem {
     required this.date,
   });
 
+  final Map<String, dynamic> request;
   final String eventName;
   final String protocol;
   final String secretaria;

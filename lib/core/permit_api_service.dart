@@ -245,6 +245,78 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> attachDam({
+    required String accessToken,
+    required int requestId,
+    required String fileName,
+    required String fileUrl,
+    String? mimeType,
+    int? sizeBytes,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/dam-attachment'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'nome_arquivo': fileName,
+        'arquivo_url': fileUrl,
+        'mime_type': mimeType,
+        'tamanho_bytes': sizeBytes,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> attachDamPaymentProof({
+    required String accessToken,
+    required int requestId,
+    required String fileName,
+    required String fileUrl,
+    String? mimeType,
+    int? sizeBytes,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/dam-payment-proof'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'nome_arquivo': fileName,
+        'arquivo_url': fileUrl,
+        'mime_type': mimeType,
+        'tamanho_bytes': sizeBytes,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> attachFinalPermit({
+    required String accessToken,
+    required int requestId,
+    required String fileName,
+    required String fileUrl,
+    String? mimeType,
+    int? sizeBytes,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/final-permit-attachment'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'nome_arquivo': fileName,
+        'arquivo_url': fileUrl,
+        'mime_type': mimeType,
+        'tamanho_bytes': sizeBytes,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> validateEventCredential({
     required String publicCode,
     required String token,
@@ -357,7 +429,10 @@ class PermitApiService {
     final responsavel =
         item['dados_responsavel'] as Map<String, dynamic>? ?? {};
     final requirements = item['requirements'] as List<dynamic>? ?? [];
+    final attachments = item['attachments'] as List<dynamic>? ?? [];
+    final comments = item['comments'] as List<dynamic>? ?? [];
     return {
+      'id': item['id'],
       'formId': item['id'],
       'protocolo': item['protocolo'],
       'nome_do_evento': evento['nome_evento'] ?? 'Evento',
@@ -369,6 +444,8 @@ class PermitApiService {
       'horario_termino': evento['horario_termino'] ?? '',
       'status': item['status'] ?? 'enviada',
       'dam_status': item['dam_status'] ?? '',
+      'attachments': attachments.cast<Map<String, dynamic>>(),
+      'comments': comments.cast<Map<String, dynamic>>(),
       'credentials': item['credentials'] ?? const <dynamic>[],
       'perguntas':
           requirements.map((requirement) {

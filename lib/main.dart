@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permit_web_app/core/routes/app_routes.dart';
 import 'package:permit_web_app/core/themes/customer_theme.dart';
+import 'package:permit_web_app/data/models/user_model.dart';
 import 'package:permit_web_app/data/providers/user_provider.dart';
 
 import 'features/services/receita_municipal/ui/receita_municipal_services_page.dart';
@@ -38,33 +39,188 @@ class MyApp extends ConsumerWidget {
         AppRoutes.login: (context) => const LoginPage(),
         AppRoutes.recoveryPassword: (context) => RecoveryPassword(),
         AppRoutes.home:
-            (context) => UserHomePage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+                'cidadao',
+              },
+              child: UserHomePage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.profile:
-            (context) => ProfilePage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+                'cidadao',
+              },
+              child: ProfilePage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.users:
-            (context) => UsersListPage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin', 'gestor_secretaria'},
+              child: UsersListPage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.registerUser: (context) => const UserRegistrationPage(),
         AppRoutes.createUser:
-            (context) => UserCreatePage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin', 'gestor_secretaria'},
+              child: UserCreatePage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.userCreate:
-            (context) => UserCreatePage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin', 'gestor_secretaria'},
+              child: UserCreatePage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.homeContent:
-            (context) => HomeContentPage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin', 'gestor_secretaria'},
+              child: HomeContentPage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.services:
-            (context) => ReceitaMunicipalServicesPage(
-              userType: user?.userType ?? '',
-              userProfile: user?.profile ?? '',
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'cidadao'},
+              child: ReceitaMunicipalServicesPage(
+                userType: user?.userType ?? '',
+                userProfile: user?.profile ?? '',
+              ),
             ),
         AppRoutes.myRequests:
-            (context) => MyRequestsPage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'cidadao'},
+              child: MyRequestsPage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.secretariaRequests:
-            (context) => SecretariaRequestsPage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+              },
+              child: SecretariaRequestsPage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.inspections:
-            (context) => InspectionSchedulePage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+              },
+              child: InspectionSchedulePage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.questions:
-            (context) => PerguntasPage(userType: user?.userType ?? ''),
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin'},
+              child: PerguntasPage(userType: user?.userType ?? ''),
+            ),
       },
-      onGenerateRoute: AppRoutes.generateRoute,
+      onGenerateRoute: (settings) => AppRoutes.generateRoute(settings, user),
+    );
+  }
+}
+
+class _GuardedRoute extends StatelessWidget {
+  const _GuardedRoute({
+    required this.user,
+    required this.allowedRoles,
+    required this.child,
+  });
+
+  final UserModel? user;
+  final Set<String> allowedRoles;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final role = user?.role ?? '';
+    if (user == null) {
+      return const _AccessBlockedPage(
+        title: 'Sessão necessária',
+        message: 'Faça login novamente para acessar esta área.',
+        buttonLabel: 'Ir para login',
+        route: AppRoutes.login,
+      );
+    }
+    if (!allowedRoles.contains(role)) {
+      return const _AccessBlockedPage(
+        title: 'Acesso não permitido',
+        message: 'Seu perfil não possui permissão para acessar esta página.',
+        buttonLabel: 'Voltar para início',
+        route: AppRoutes.home,
+      );
+    }
+    return child;
+  }
+}
+
+class _AccessBlockedPage extends StatelessWidget {
+  const _AccessBlockedPage({
+    required this.title,
+    required this.message,
+    required this.buttonLabel,
+    required this.route,
+  });
+
+  final String title;
+  final String message;
+  final String buttonLabel;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(message, textAlign: TextAlign.center),
+                const SizedBox(height: 18),
+                ElevatedButton.icon(
+                  onPressed:
+                      () => Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        route,
+                        (_) => false,
+                      ),
+                  icon: const Icon(Icons.arrow_forward),
+                  label: Text(buttonLabel),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

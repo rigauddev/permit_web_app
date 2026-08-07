@@ -20,11 +20,15 @@ class RequirementResponse(BaseModel):
     observacoes: str | None = None
 
 
-class DamAttachmentRequest(BaseModel):
+class AttachmentCreateRequest(BaseModel):
     nome_arquivo: str = Field(..., min_length=3, max_length=255)
     arquivo_url: str = Field(..., min_length=3, max_length=500)
     mime_type: str | None = Field(default=None, max_length=120)
     tamanho_bytes: int | None = Field(default=None, ge=1)
+
+
+class DamAttachmentRequest(AttachmentCreateRequest):
+    pass
 
 
 class AttachmentResponse(BaseModel):
