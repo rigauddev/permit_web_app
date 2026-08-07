@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/permit_api_service.dart';
+import '../../core/session_expiration.dart';
 
 const _defaultHeaderText =
     'A Prefeitura Municipal de Valença, por meio da Central de Eventos, autoriza a realização do evento abaixo após as anuências dos órgãos competentes e a regularização do DAM ou isenção aplicável.';
@@ -105,6 +106,10 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       );
       _setAuthorization(authorization);
     } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
       setState(() {
         _message =
             error.statusCode == 404
@@ -151,6 +156,10 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       );
       _setAuthorization(authorization);
     } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
       setState(() => _message = error.message);
     } catch (_) {
       setState(() => _message = 'Não foi possível emitir a autorização.');
@@ -188,7 +197,10 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   Future<String> _readAccessToken() async {
     final token = await _storage.read(key: 'access_token');
     if (token == null || token.isEmpty) {
-      throw PermitApiException('Sessão expirada. Faça login novamente.');
+      throw PermitApiException(
+        'Sessão expirada. Faça login novamente.',
+        statusCode: 401,
+      );
     }
     return token;
   }
@@ -213,7 +225,16 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   Widget build(BuildContext context) {
     final form = widget.permitForm;
     return Scaffold(
-      appBar: AppBar(title: const Text('Credencial do Evento')),
+      appBar: AppBar(
+        title: const Text('Credencial do Evento'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -255,6 +276,14 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
         ),
       ),
     );
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   }
 
   Future<void> _copyValidationUrl() async {
@@ -376,6 +405,10 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
         const SnackBar(content: Text('Modelo do PDF atualizado.')),
       );
     } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
       setState(() => _message = error.message);
     } finally {
       if (mounted) setState(() => _savingTemplate = false);

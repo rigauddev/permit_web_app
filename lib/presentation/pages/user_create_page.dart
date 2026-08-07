@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/session_expiration.dart';
 
 class UserCreatePage extends StatefulWidget {
   final String userType;
@@ -68,7 +69,8 @@ class _UserCreatePageState extends State<UserCreatePage> {
 
     final token = await _secureStorage.read(key: 'access_token');
     if (token == null) {
-      _showError('Sessão expirada. Entre novamente.');
+      if (!mounted) return;
+      await SessionExpiration.logout(context);
       return;
     }
 
@@ -93,6 +95,11 @@ class _UserCreatePageState extends State<UserCreatePage> {
       );
       Navigator.pop(context);
     } on AuthException catch (error) {
+      if (error.statusCode == 401) {
+        if (!mounted) return;
+        await SessionExpiration.logout(context);
+        return;
+      }
       _showError(error.message);
     } catch (_) {
       _showError('Não foi possível cadastrar o usuário interno');
@@ -128,7 +135,16 @@ class _UserCreatePageState extends State<UserCreatePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Cadastro de usuário interno')),
+      appBar: AppBar(
+        title: const Text('Cadastro de usuário interno'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -275,5 +291,13 @@ class _UserCreatePageState extends State<UserCreatePage> {
       return {_currentSecretaria!: _secretarias[_currentSecretaria]!};
     }
     return _secretarias;
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/users');
+    }
   }
 }

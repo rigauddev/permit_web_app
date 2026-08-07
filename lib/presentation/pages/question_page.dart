@@ -44,7 +44,16 @@ class _PerguntasPageState extends State<PerguntasPage> {
     return AppScaffold(
       userType: widget.userType,
       userProfile: widget.userProfile,
-      appBar: CustomAppBar(title: 'Cadastrar Nova Pergunta', actions: []),
+      appBar: CustomAppBar(
+        title: 'Cadastrar Nova Pergunta',
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -281,4 +290,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
   void _enviarParaAPIEditar(Map<String, String> pergunta) {}
 
   void _enviarParaAPIDeletar(Map<String, String> pergunta) {}
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
 }

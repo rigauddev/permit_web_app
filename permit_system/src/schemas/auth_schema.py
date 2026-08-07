@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class LoginRequest(BaseModel):
     email: str
     senha: str = Field(..., min_length=6)
+    access_type: str | None = Field(None, pattern="^(cidadao|interno)$")
 
 
 class LoginStartResponse(BaseModel):

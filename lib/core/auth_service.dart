@@ -95,10 +95,15 @@ class AuthService {
   final http.Client _client;
   final String _baseUrl;
 
-  Future<LoginChallenge> startLogin(String email, String password) async {
+  Future<LoginChallenge> startLogin(
+    String email,
+    String password, {
+    required String accessType,
+  }) async {
     final response = await _post('/auth/login', {
       'email': email.trim(),
       'senha': password,
+      'access_type': accessType,
     });
     return LoginChallenge.fromJson(response);
   }
@@ -238,6 +243,7 @@ class AuthService {
     final detail = decoded['detail'];
     throw AuthException(
       detail is String ? detail : 'Não foi possível concluir a autenticação',
+      statusCode: response.statusCode,
     );
   }
 
@@ -260,14 +266,16 @@ class AuthService {
     final detail = decoded is Map<String, dynamic> ? decoded['detail'] : null;
     throw AuthException(
       detail is String ? detail : 'Não foi possível carregar os dados',
+      statusCode: response.statusCode,
     );
   }
 }
 
 class AuthException implements Exception {
   final String message;
+  final int? statusCode;
 
-  AuthException(this.message);
+  AuthException(this.message, {this.statusCode});
 
   @override
   String toString() => message;

@@ -142,6 +142,23 @@ class PermitApiService {
         .toList();
   }
 
+  Future<Map<String, dynamic>> updateRequirementStatus({
+    required String accessToken,
+    required int requirementId,
+    required String status,
+    String? observacoes,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/permit-requests/requirements/$requirementId/status'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'status': status, 'observacoes': observacoes}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<List<Map<String, dynamic>>> listHomeContent(String accessToken) async {
     final response = await _client.get(
       Uri.parse('$_baseUrl/home-content'),
@@ -359,6 +376,7 @@ class PermitApiService {
             return {
               'id': data['id'],
               'pergunta': data['tipo_exigencia'],
+              'secretaria_slug': data['secretaria'] ?? '',
               'secretaria': _formatSecretaria(data['secretaria'] as String?),
               'status': data['status'] ?? 'aguardando_analise',
               'observacoes':

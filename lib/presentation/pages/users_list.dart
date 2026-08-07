@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/session_expiration.dart';
 import '../../data/models/user_model.dart';
 import '../../shared/widgets/custom_appbar.dart';
 import '../../shared/widgets/app_scaffold.dart';
@@ -46,9 +47,18 @@ class _UsersListPageState extends State<UsersListPage> {
   Future<List<UserModel>> _loadUsers() async {
     final token = await _secureStorage.read(key: 'access_token');
     if (token == null) {
-      throw AuthException('Sessão expirada. Entre novamente.');
+      if (mounted) await SessionExpiration.logout(context);
+      return const [];
     }
-    return _authService.listUsers(accessToken: token);
+    try {
+      return await _authService.listUsers(accessToken: token);
+    } on AuthException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return const [];
+      }
+      rethrow;
+    }
   }
 
   void _refresh() {
@@ -67,6 +77,11 @@ class _UsersListPageState extends State<UsersListPage> {
       appBar: CustomAppBar(
         title: 'Gestão de usuários',
         actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
           IconButton(
             tooltip: 'Atualizar',
             onPressed: _refresh,
@@ -181,6 +196,14 @@ class _UsersListPageState extends State<UsersListPage> {
     final secretaria = user.secretaria;
     if (secretaria == null || secretaria.isEmpty) return 'Sem secretaria';
     return _secretariaLabels[secretaria] ?? secretaria;
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   }
 }
 
