@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
+import '../../shared/widgets/app_scaffold.dart';
 import '../../core/session_expiration.dart';
-import '../../shared/widgets/custom_drawer.dart';
 
 class HomeContentPage extends StatefulWidget {
   const HomeContentPage({super.key, required this.userType});
@@ -203,7 +203,8 @@ class _HomeContentPageState extends State<HomeContentPage> {
             )
             .length;
 
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
       appBar: AppBar(
         title: const Text('Conteúdo da página inicial'),
         actions: [
@@ -214,7 +215,6 @@ class _HomeContentPageState extends State<HomeContentPage> {
           ),
         ],
       ),
-      drawer: CustomDrawer(userType: widget.userType),
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())

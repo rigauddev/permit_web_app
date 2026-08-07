@@ -5,10 +5,16 @@ import '../../../data/providers/user_provider.dart';
 
 class CustomDrawer extends ConsumerStatefulWidget
     implements PreferredSizeWidget {
-  final String userType; // user, operador, gestor, admin
-  final String? userProfile;
+  const CustomDrawer({
+    super.key,
+    required this.userType,
+    this.userProfile,
+    this.asDrawer = true,
+  });
 
-  const CustomDrawer({super.key, required this.userType, this.userProfile});
+  final String userType;
+  final String? userProfile;
+  final bool asDrawer;
 
   @override
   ConsumerState<CustomDrawer> createState() => _CustomDrawerState();
@@ -31,129 +37,142 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
     final user = ref.watch(userProvider);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
-
-    return Drawer(
-      width: _collapsed ? 88 : 304,
-      child: SafeArea(
-        child: Column(
-          children: [
-            _DrawerHeader(
-              collapsed: _collapsed,
-              primaryColor: primaryColor,
-              userName: user?.name ?? '',
-              onToggle:
-                  () => setState(() {
-                    _collapsed = !_collapsed;
-                    _menuCollapsed = _collapsed;
-                  }),
-            ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
+    final content = SafeArea(
+      child: Column(
+        children: [
+          _DrawerHeader(
+            collapsed: _collapsed,
+            primaryColor: primaryColor,
+            userName: user?.name ?? '',
+            onToggle:
+                () => setState(() {
+                  _collapsed = !_collapsed;
+                  _menuCollapsed = _collapsed;
+                }),
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _DrawerTile(
+                  collapsed: _collapsed,
+                  icon: Icons.home,
+                  title: 'Início',
+                  route: '/home',
+                  currentRoute: currentRoute,
+                ),
+                if (isUser)
+                  _DrawerSection(
+                    collapsed: _collapsed,
+                    icon: Icons.event,
+                    title: 'Serviços',
+                    routes: const [
+                      '/services',
+                      '/my-requests',
+                      '/permit-dashboard',
+                      '/event-permit',
+                    ],
+                    currentRoute: currentRoute,
+                    children: const [
+                      _DrawerSectionItem('Serviços', '/services'),
+                      _DrawerSectionItem('Minhas solicitações', '/my-requests'),
+                    ],
+                  ),
+                if (isOperatorOrManager || isAdmin)
+                  _DrawerSection(
+                    collapsed: _collapsed,
+                    icon: Icons.work,
+                    title: 'Gestão',
+                    routes: const [
+                      '/secretaria-requests',
+                      '/inspections',
+                      '/permit-dashboard',
+                      '/event-permit',
+                      '/home-content',
+                    ],
+                    currentRoute: currentRoute,
+                    children: [
+                      const _DrawerSectionItem(
+                        'Solicitações',
+                        '/secretaria-requests',
+                      ),
+                      const _DrawerSectionItem('Vistorias', '/inspections'),
+                      if (widget.userType == 'gestor' || isAdmin)
+                        const _DrawerSectionItem(
+                          'Conteúdo da página inicial',
+                          '/home-content',
+                        ),
+                    ],
+                  ),
+                if (isAdmin || widget.userType == 'gestor')
                   _DrawerTile(
                     collapsed: _collapsed,
-                    icon: Icons.home,
-                    title: 'Início',
-                    route: '/home',
+                    icon: Icons.people,
+                    title: 'Usuários',
+                    route: '/users',
                     currentRoute: currentRoute,
                   ),
-                  if (isUser)
-                    _DrawerSection(
-                      collapsed: _collapsed,
-                      icon: Icons.event,
-                      title: 'Serviços',
-                      routes: const [
-                        '/services',
-                        '/my-requests',
-                        '/permit-dashboard',
-                        '/event-permit',
-                      ],
-                      currentRoute: currentRoute,
-                      children: const [
-                        _DrawerSectionItem('Serviços', '/services'),
-                        _DrawerSectionItem(
-                          'Minhas solicitações',
-                          '/my-requests',
-                        ),
-                      ],
-                    ),
-                  if (isOperatorOrManager || isAdmin)
-                    _DrawerSection(
-                      collapsed: _collapsed,
-                      icon: Icons.work,
-                      title: 'Gestão',
-                      routes: const [
-                        '/secretaria-requests',
-                        '/inspections',
-                        '/permit-dashboard',
-                        '/event-permit',
-                        '/home-content',
-                      ],
-                      currentRoute: currentRoute,
-                      children: [
-                        const _DrawerSectionItem(
-                          'Solicitações',
-                          '/secretaria-requests',
-                        ),
-                        const _DrawerSectionItem('Vistorias', '/inspections'),
-                        if (widget.userType == 'gestor' || isAdmin)
-                          const _DrawerSectionItem(
-                            'Conteúdo da página inicial',
-                            '/home-content',
-                          ),
-                      ],
-                    ),
-                  if (isAdmin || widget.userType == 'gestor')
-                    _DrawerTile(
-                      collapsed: _collapsed,
-                      icon: Icons.people,
-                      title: 'Usuários',
-                      route: '/users',
-                      currentRoute: currentRoute,
-                    ),
-                  if (isAdmin || widget.userType == 'gestor')
-                    _DrawerSection(
-                      collapsed: _collapsed,
-                      icon: Icons.groups,
-                      title: 'Secretaria',
-                      routes: const ['/users'],
-                      currentRoute: currentRoute,
-                      children: const [
-                        _DrawerSectionItem('Gestão de operadores', '/users'),
-                        _DrawerSectionItem('Gestão de gestores', '/users'),
-                      ],
-                    ),
-                  if (isAdmin)
-                    _DrawerSection(
-                      collapsed: _collapsed,
-                      icon: Icons.settings,
-                      title: 'Configurações',
-                      routes: const ['/users', '/questtions'],
-                      currentRoute: currentRoute,
-                      children: const [
-                        _DrawerSectionItem('Permissões', '/users'),
-                        _DrawerSectionItem('Tipo de usuários', '/users'),
-                        _DrawerSectionItem('Criar perguntas', '/questtions'),
-                      ],
-                    ),
-                ],
-              ),
+                if (isAdmin || widget.userType == 'gestor')
+                  _DrawerSection(
+                    collapsed: _collapsed,
+                    icon: Icons.groups,
+                    title: 'Secretaria',
+                    routes: const ['/users'],
+                    currentRoute: currentRoute,
+                    children: const [
+                      _DrawerSectionItem('Gestão de operadores', '/users'),
+                      _DrawerSectionItem('Gestão de gestores', '/users'),
+                    ],
+                  ),
+                if (isAdmin)
+                  _DrawerSection(
+                    collapsed: _collapsed,
+                    icon: Icons.settings,
+                    title: 'Configurações',
+                    routes: const ['/users', '/questtions'],
+                    currentRoute: currentRoute,
+                    children: const [
+                      _DrawerSectionItem('Permissões', '/users'),
+                      _DrawerSectionItem('Tipo de usuários', '/users'),
+                      _DrawerSectionItem('Criar perguntas', '/questtions'),
+                    ],
+                  ),
+              ],
             ),
-            const Divider(height: 1),
-            _DrawerTile(
-              collapsed: _collapsed,
-              icon: Icons.logout,
-              iconColor: Colors.red,
-              title: 'Sair',
-              route: '/',
-              currentRoute: currentRoute,
-              replaceAll: true,
-            ),
-          ],
-        ),
+          ),
+          const Divider(height: 1),
+          _DrawerTile(
+            collapsed: _collapsed,
+            icon: Icons.logout,
+            iconColor: Colors.red,
+            title: 'Sair',
+            route: '/',
+            currentRoute: currentRoute,
+            replaceAll: true,
+          ),
+        ],
       ),
     );
+
+    final menu = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      width: _collapsed ? 88 : 304,
+      decoration: BoxDecoration(
+        color:
+            Theme.of(context).drawerTheme.backgroundColor ??
+            Theme.of(context).colorScheme.surface,
+        border: Border(
+          right: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+      ),
+      child: content,
+    );
+
+    if (!widget.asDrawer) {
+      return Material(elevation: 1, child: menu);
+    }
+    return Drawer(width: _collapsed ? 88 : 304, child: content);
   }
 }
 
@@ -258,7 +277,9 @@ class _DrawerTile extends StatelessWidget {
           return;
         }
         if (currentRoute == route) {
-          Navigator.pop(context);
+          if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
+            Navigator.pop(context);
+          }
           return;
         }
         Navigator.pushReplacementNamed(context, route);
@@ -309,7 +330,9 @@ class _DrawerSection extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 28),
           onTap: () {
             if (currentRoute == targetRoute) {
-              Navigator.pop(context);
+              if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
+                Navigator.pop(context);
+              }
               return;
             }
             Navigator.pushReplacementNamed(context, targetRoute);
@@ -339,29 +362,44 @@ class _DrawerSection extends StatelessWidget {
       children:
           children
               .map(
-                (item) => ListTile(
-                  selected: currentRoute == item.route,
-                  selectedTileColor:
-                      Theme.of(context).colorScheme.primaryContainer,
-                  contentPadding: const EdgeInsets.only(left: 72, right: 16),
-                  title: Text(item.title),
-                  onTap: () {
-                    if (currentRoute == item.route) {
-                      Navigator.pop(context);
-                      return;
-                    }
-                    Navigator.pushReplacementNamed(context, item.route);
-                  },
-                ),
+                (item) =>
+                    _DrawerSubTile(item: item, currentRoute: currentRoute),
               )
               .toList(),
     );
   }
 }
 
+class _DrawerSubTile extends StatelessWidget {
+  const _DrawerSubTile({required this.item, required this.currentRoute});
+
+  final _DrawerSectionItem item;
+  final String currentRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = currentRoute == item.route;
+    return ListTile(
+      selected: selected,
+      selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+      contentPadding: const EdgeInsets.only(left: 72, right: 16),
+      title: Text(item.title),
+      onTap: () {
+        if (currentRoute == item.route) {
+          if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
+            Navigator.pop(context);
+          }
+          return;
+        }
+        Navigator.pushReplacementNamed(context, item.route);
+      },
+    );
+  }
+}
+
 class _DrawerSectionItem {
+  const _DrawerSectionItem(this.title, this.route);
+
   final String title;
   final String route;
-
-  const _DrawerSectionItem(this.title, this.route);
 }

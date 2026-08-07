@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../../core/permit_api_service.dart';
+import '../../../../shared/widgets/app_scaffold.dart';
 import '../../../../core/session_expiration.dart';
-import '../../../../shared/widgets/custom_drawer.dart';
 
 class ReceitaMunicipalServicesPage extends StatefulWidget {
   final String userType;
@@ -29,7 +29,9 @@ class _ReceitaMunicipalServicesPageState
   @override
   Widget build(BuildContext context) {
     final isCitizen = widget.userType == 'user' || widget.userType == 'cidadao';
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
       appBar: AppBar(
         title: Text(isCitizen ? 'Serviços municipais' : 'Serviços da área'),
         actions: [
@@ -40,7 +42,6 @@ class _ReceitaMunicipalServicesPageState
           ),
         ],
       ),
-      drawer: CustomDrawer(userType: widget.userType),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
