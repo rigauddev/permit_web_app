@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/permit_api_service.dart';
+import '../../core/session_expiration.dart';
 import '../../features/permit_request/pages/permit_request_page.dart';
 import '../../shared/widgets/back_to_services_button.dart';
 import '../../shared/widgets/chat_comentarios.dart';
@@ -43,10 +44,17 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
     try {
       const storage = FlutterSecureStorage();
       final token = await storage.read(key: 'access_token');
-      if (token == null || token.isEmpty) return;
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
       final forms = await PermitApiService().listRequests(token);
       if (!mounted) return;
       setState(() => _forms = forms);
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+      }
     } catch (_) {
       // Mantém a lista atual para não bloquear o usuário por falha temporária.
     } finally {

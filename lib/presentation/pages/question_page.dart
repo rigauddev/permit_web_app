@@ -42,7 +42,16 @@ class _PerguntasPageState extends State<PerguntasPage> {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
-      appBar: CustomAppBar(title: 'Cadastrar Nova Pergunta', actions: []),
+      appBar: CustomAppBar(
+        title: 'Cadastrar Nova Pergunta',
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       drawer: CustomDrawer(
         userType: widget.userType,
         userProfile: widget.userProfile,
@@ -283,4 +292,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
   void _enviarParaAPIEditar(Map<String, String> pergunta) {}
 
   void _enviarParaAPIDeletar(Map<String, String> pergunta) {}
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
 }

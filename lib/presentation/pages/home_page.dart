@@ -148,8 +148,8 @@ class _CitizenHome extends StatelessWidget {
                         icon: Icons.folder_copy_outlined,
                         title: 'Minhas solicitações',
                         description:
-                            'Consulte status, pendências e autorizações emitidas.',
-                        route: '/services',
+                            'Acompanhe seus protocolos separados por tipo de serviço.',
+                        route: '/my-requests',
                       ),
                     ],
                   );
@@ -232,14 +232,14 @@ class _InternalHome extends StatelessWidget {
                         title: 'Solicitações da secretaria',
                         description:
                             'Analise aprovações, recusas e pedidos de correção pertinentes ao seu órgão.',
-                        route: '/services',
+                        route: '/secretaria-requests',
                       ),
                       const _HomeActionCard(
                         icon: Icons.fact_check_outlined,
                         title: 'Vistorias e pendências',
                         description:
                             'Acompanhe exigências técnicas, documentos e retornos do cidadão.',
-                        route: '/services',
+                        route: '/inspections',
                       ),
                       if (_canManageUsers)
                         const _HomeActionCard(

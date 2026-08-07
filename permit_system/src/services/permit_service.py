@@ -128,7 +128,7 @@ class PermitService:
         role = current_user.role.slug
         if role == "cidadao":
             query = query.filter(PermitRequestModel.solicitante_id == current_user.id)
-        elif role == "operador_secretaria":
+        elif role in {"gestor_secretaria", "operador_secretaria"}:
             query = (
                 query.join(PermitRequirementModel)
                 .filter(PermitRequirementModel.secretaria_id == current_user.secretaria_id)
@@ -496,9 +496,7 @@ class PermitService:
             return True
         if role == "cidadao":
             return request.solicitante_id == current_user.id
-        if role == "gestor_secretaria":
-            return True
-        if role == "operador_secretaria":
+        if role in {"gestor_secretaria", "operador_secretaria"}:
             return any(item.secretaria_id == current_user.secretaria_id for item in request.requirements)
         return False
 

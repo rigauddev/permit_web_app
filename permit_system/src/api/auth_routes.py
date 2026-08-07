@@ -25,7 +25,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=LoginStartResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    return AuthService(db).start_login(str(payload.email), payload.senha)
+    return AuthService(db).start_login(str(payload.email), payload.senha, payload.access_type)
 
 
 @router.post("/mfa/generate", response_model=MfaGenerateResponse)

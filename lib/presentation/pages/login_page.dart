@@ -71,6 +71,7 @@ class LoginPage extends HookConsumerWidget {
         final loginChallenge = await authService.startLogin(
           emailController.text,
           passwordController.text,
+          accessType: accessProfile.value == 'cidadao' ? 'cidadao' : 'interno',
         );
         challenge.value = loginChallenge;
         selectedMfaMethod.value = loginChallenge.defaultMethod;
@@ -100,15 +101,6 @@ class LoginPage extends HookConsumerWidget {
           selectedMfaMethod.value,
           mfaController.text,
         );
-        final isCitizen = session.user.role == 'cidadao';
-        final selectedCitizen = accessProfile.value == 'cidadao';
-        if (selectedCitizen != isCitizen) {
-          errorMessage.value =
-              selectedCitizen
-                  ? 'Este login pertence a um usuário interno. Use o acesso Prefeitura.'
-                  : 'Este login pertence a um cidadão. Use o acesso Cidadão.';
-          return;
-        }
         await secureStorage.write(
           key: 'access_token',
           value: session.accessToken,
