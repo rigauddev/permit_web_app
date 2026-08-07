@@ -6,6 +6,7 @@ from src.infra.database.models import UserModel
 from src.infra.database.mysql_db import get_db
 from src.schemas.permit_schema import (
     AttachmentResponse,
+    AttachmentCreateRequest,
     AuthorizationTemplateRequest,
     AuthorizationTemplateResponse,
     CommentCreateRequest,
@@ -87,6 +88,26 @@ def attach_dam_to_permit_request(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
 ):
     return PermitService(db).attach_dam(request_id, payload, current_user)
+
+
+@router.post("/{request_id}/dam-payment-proof", response_model=AttachmentResponse)
+def attach_dam_payment_proof_to_permit_request(
+    request_id: int,
+    payload: AttachmentCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("cidadao")),
+):
+    return PermitService(db).attach_dam_payment_proof(request_id, payload, current_user)
+
+
+@router.post("/{request_id}/final-permit-attachment", response_model=EventCredentialResponse)
+def attach_final_permit_to_request(
+    request_id: int,
+    payload: AttachmentCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).attach_final_permit(request_id, payload, current_user)
 
 
 @router.post("/{request_id}/issue-authorization", response_model=EventCredentialResponse)

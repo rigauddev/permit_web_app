@@ -5,11 +5,13 @@
 Preparar o sistema para o fluxo pós-aprovação do Alvará de Evento:
 
 1. Todas as secretarias responsáveis analisam e aprovam suas etapas.
-2. A solicitação fica `dam_pendente`, quando não for beneficente.
-3. O cidadão ou operador da Receita acessa a solicitação na Receita Municipal.
-4. O DAM é gerado fora do sistema, no primeiro momento, e anexado à solicitação.
-5. O sistema registra o DAM, gera a autorização final e cria uma credencial do evento com QR Code.
-6. A equipe de plantão pode ler o QR Code e validar a permissão no sistema.
+2. A solicitação fica `aguardando_geracao_dam`, quando não for beneficente.
+3. A Secretaria de Desenvolvimento Econômico recebe notificação por e-mail com link para a central filtrada.
+4. O DAM é gerado fora do sistema, no primeiro momento, e anexado à solicitação pela Secretaria de Desenvolvimento Econômico.
+5. A solicitação fica `aguardando_pagamento_dam` e o cidadão é notificado para pagar e anexar o comprovante.
+6. Após o comprovante, a solicitação fica `aguardando_geracao_alvara`.
+7. A Secretaria de Desenvolvimento Econômico anexa o alvará final, finaliza a solicitação e o sistema cria a credencial do evento com QR Code.
+8. A equipe de plantão pode ler o QR Code e validar a permissão no sistema.
 
 ## Status Esperados
 
@@ -19,17 +21,19 @@ Solicitação:
 - `em_analise`: ao menos uma secretaria ainda analisa.
 - `pendente_correcao`: existe exigência pendente de documento/correção.
 - `indeferida`: alguma secretaria recusou.
-- `dam_pendente`: todas as anuências foram aprovadas, mas DAM ainda não foi anexado/pago.
+- `aguardando_geracao_dam`: todas as anuências foram aprovadas e a SDE deve gerar/anexar o DAM.
+- `aguardando_pagamento_dam`: DAM anexado; cidadão deve pagar e anexar o comprovante.
+- `aguardando_geracao_alvara`: comprovante do DAM anexado ou evento isento; SDE deve anexar o alvará final.
 - `isenta_dam`: evento beneficente com declaração validada.
-- `autorizada`: evento liberado, com DAM anexado ou isenção validada.
+- `autorizada`: evento liberado, com alvará final anexado e QR Code emitido.
 - `cancelada`: solicitação cancelada por usuário autorizado.
 
 DAM:
 
 - `nao_gerado`: ainda não aplicável.
 - `pendente_prefeitura`: precisa ser emitido/solicitado na Receita.
-- `anexado`: DAM foi anexado ao processo.
-- `pago`: confirmação futura de pagamento, quando houver integração.
+- `gerado`: DAM foi anexado ao processo.
+- `pago`: comprovante de pagamento foi anexado pelo cidadão.
 - `isento`: evento beneficente com declaração aceita.
 
 Credencial do evento:
@@ -44,11 +48,13 @@ Credencial do evento:
 ### MVP atual
 
 - O sistema não gera DAM diretamente.
-- Após aprovação das secretarias, o status muda para `dam_pendente`.
-- Receita Municipal gera o DAM no sistema externo/presencial.
-- Receita ou admin anexa o DAM no sistema.
-- O sistema atualiza `dam_status` para `anexado`.
-- Se todas as exigências estiverem aprovadas, a solicitação passa para `autorizada`.
+- Após aprovação das secretarias, o status muda para `aguardando_geracao_dam`.
+- O sistema notifica a Secretaria de Desenvolvimento Econômico por e-mail com link para `/secretaria-requests?status=aguardando_geracao_dam`.
+- A SDE gera o DAM no sistema externo/presencial e anexa o documento no sistema.
+- O sistema atualiza `dam_status` para `gerado`, muda a solicitação para `aguardando_pagamento_dam` e notifica o cidadão.
+- O cidadão paga o DAM e anexa o comprovante.
+- O sistema atualiza `dam_status` para `pago`, muda a solicitação para `aguardando_geracao_alvara` e notifica a SDE com link filtrado para DAM/alvará.
+- A SDE anexa o alvará final, finaliza a solicitação como `autorizada` e o sistema emite a credencial/QR Code.
 
 ### Futuro
 
@@ -116,15 +122,16 @@ O sistema só deve emitir QR Code/credencial quando:
 
 - Todas as exigências aplicáveis estiverem `aprovada`.
 - Solicitação não estiver `indeferida`, `cancelada` ou `pendente_correcao`.
-- Para evento não beneficente: DAM estiver `anexado` no MVP, e futuramente `pago`.
+- Para evento não beneficente: DAM gerado e comprovante de pagamento anexado no MVP.
 - Para evento beneficente: declaração estiver validada e `dam_status = isento`.
 
 ## Dependências entre Etapas
 
 Algumas ações só devem ser liberadas depois de outras:
 
-- Receita só pode anexar/confirmar DAM após todas as secretarias aprovarem.
-- Autorização final só pode ser emitida após DAM anexado ou isenção validada.
+- A SDE só pode anexar o DAM após todas as secretarias aprovarem.
+- O cidadão só pode anexar comprovante depois que o DAM estiver anexado.
+- Autorização final só pode ser emitida após comprovante do DAM ou isenção validada.
 - QR Code só pode ser emitido após autorização final.
 - Validação pública/fiscal só deve mostrar evento com credencial ativa.
 
@@ -140,6 +147,8 @@ Regras futuras mais granulares:
 MVP/fase seguinte:
 
 - `POST /permit-requests/{id}/dam-attachment`
+- `POST /permit-requests/{id}/dam-payment-proof`
+- `POST /permit-requests/{id}/final-permit-attachment`
 - `POST /permit-requests/{id}/issue-authorization`
 - `GET /permit-requests/{id}/authorization`
 - `GET /event-credentials/{codigo_publico}/validate`
@@ -156,6 +165,9 @@ Futuro com integração DAM:
 Registrar logs para:
 
 - Anexo do DAM.
+- Anexo do comprovante de pagamento do DAM.
+- Anexo do alvará final.
+- Notificações por e-mail enviadas ou registradas.
 - Emissão da autorização.
 - Emissão do QR Code.
 - Leitura/validação da credencial.
@@ -176,7 +188,7 @@ Campos mínimos:
 ## Implementado no Backend
 
 - Modelo `EventCredential` vinculado à solicitação.
-- Emissão da autorização final por `admin` ou operador/gestor da Receita.
+- Emissão da autorização final por `admin` ou operador/gestor da Secretaria de Desenvolvimento Econômico.
 - Geração de `codigo_publico`, token assinado e URL de validação.
 - Validação da credencial sem expor dados pessoais no QR Code.
 - Revogação administrativa da credencial.
@@ -189,6 +201,10 @@ Campos mínimos:
 - Template configurável de cabeçalho e rodapé do PDF, editável por gestor/admin.
 - Campos de assinatura para responsável do evento e Central de Eventos/Prefeitura.
 - Orientação de assinatura: imprimir/assinar/anexar ou baixar o PDF, assinar eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado quando exigido.
+- Estados separados para geração do DAM, pagamento do DAM e geração do alvará final.
+- Notificação por e-mail via SMTP quando configurado, com fallback registrado nos comentários da solicitação.
+- Tela interna com filtro por status para a SDE operar `aguardando_geracao_dam` e `aguardando_geracao_alvara`.
+- Tela do cidadão permite anexar comprovante quando a solicitação está `aguardando_pagamento_dam`.
 
 ## Próximo Bloco Recomendado
 

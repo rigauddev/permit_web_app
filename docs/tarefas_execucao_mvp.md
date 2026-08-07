@@ -73,7 +73,7 @@
 - [x] Tornar as exigências da solicitação interativas para admin, gestor e operador autorizados.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
-- [ ] Garantir que Receita/Fazenda só anexe DAM após todas as anuências aplicáveis.
+- [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
 
 ## Marco 6 - Backend e persistência
 
@@ -109,10 +109,15 @@
 - [x] Permitir que gestor/admin atualize textos do template do PDF.
 - [x] Incluir campos de assinatura no rodapé da autorização/PDF.
 - [x] Orientar assinatura impressa ou assinatura eletrônica pelo aplicativo gov.br quando exigida.
-- [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
+- [x] Quando não beneficente, marcar `Aguardando geração do DAM` após todas as anuências.
 - [x] Permitir anexar o DAM à solicitação aprovada.
+- [x] Notificar a Secretaria de Desenvolvimento Econômico quando a solicitação estiver pronta para geração do DAM.
+- [x] Após anexo do DAM, marcar `Aguardando pagamento do DAM` e notificar o cidadão.
+- [x] Permitir que o cidadão anexe o comprovante de pagamento do DAM.
+- [x] Após comprovante, marcar `Aguardando geração do alvará` e notificar a Secretaria de Desenvolvimento Econômico.
+- [x] Permitir que a Secretaria de Desenvolvimento Econômico anexe o alvará final.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
-- [x] Emitir autorização final após DAM anexado ou isenção validada.
+- [x] Emitir autorização final após alvará anexado ou isenção validada.
 - [x] Gerar credencial/link de validação do evento autorizado no backend.
 - [x] Gerar QR Code visual para impressão/exibição.
 - [x] Criar tela de validação de credencial do evento.
@@ -136,7 +141,9 @@
 
 - [ ] Integrar geração automática de DAM com sistema da Receita.
 - [ ] Integrar assinatura eletrônica quando exigida.
-- [ ] Enviar e-mail para secretarias responsáveis com cópia/resumo da solicitação e link de acesso.
+- [x] Enviar e-mail para a Secretaria de Desenvolvimento Econômico nas etapas de geração do DAM e geração do alvará, com link filtrado da central.
+- [ ] Enviar e-mail para todas as secretarias responsáveis com cópia/resumo da solicitação e link de acesso.
+- [ ] Configurar provedor SMTP de produção e validar entregabilidade.
 - [ ] Enviar notificações push para pendências, correções e autorizações.
 
 ## Marco 10 - Testes
