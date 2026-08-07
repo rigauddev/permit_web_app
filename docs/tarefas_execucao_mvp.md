@@ -19,6 +19,10 @@
 - [x] Criar tela de revisão antes do envio.
 - [x] Gerar protocolo após envio.
 - [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.
+- [x] Corrigir seleção de respostas para não carregar resposta da pergunta anterior no wizard.
+- [x] Corrigir menu do cidadão para ocultar áreas internas de gestão, secretaria e configurações.
+- [x] Criar página inicial do cidadão com carrossel de informações da prefeitura/secretarias.
+- [x] Centralizar formulários de solicitação em largura adequada para desktop.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -58,7 +62,8 @@
 - [x] Criar ações: aprovar, recusar, solicitar correção e comentar.
 - [x] Criar status por secretaria.
 - [x] Atualizar status geral a partir das anuências.
-- [ ] Criar visão de gestor/admin para todas as secretarias.
+- [x] Criar visão de gestor/admin para gestão interna com escopo por secretaria.
+- [x] Criar dashboard inicial para usuários internos com serviços pertinentes ao perfil/secretaria.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [ ] Garantir que Receita/Fazenda só anexe DAM após todas as anuências aplicáveis.
@@ -76,13 +81,24 @@
 - [x] Substituir mock de login por chamadas HTTP com MFA.
 - [x] Identificar tipo de usuário pelo `role` retornado no login/JWT.
 - [x] Exibir escolha de acesso Cidadão ou Prefeitura antes do login.
+- [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
+- [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
+- [x] Substituir lista mockada de usuários por endpoint real com secretaria e perfil.
+- [x] Restringir gestor a usuários da própria secretaria e impedir criação de admin por gestor.
+- [x] Criar gestão de conteúdo da página inicial com até 5 cards ativos por prefeitura/secretaria.
+- [x] Persistir cards de carrossel com título, texto, imagem e ordem de exibição.
 
 ## Marco 7 - Documento final e DAM
 
-- [ ] Criar documento de autorização em HTML/PDF imprimível.
-- [ ] Incluir protocolo, responsável, evento, data, local, secretarias anuentes e observações.
+- [x] Criar documento de autorização em PDF imprimível como opção.
+- [x] Incluir protocolo, responsável, evento, data, local, secretarias anuentes e observações.
+- [x] Incluir logo oficial na autorização em tela e no PDF.
+- [x] Criar template configurável de cabeçalho e rodapé do PDF.
+- [x] Permitir que gestor/admin atualize textos do template do PDF.
+- [x] Incluir campos de assinatura no rodapé da autorização/PDF.
+- [x] Orientar assinatura impressa ou assinatura eletrônica pelo aplicativo gov.br quando exigida.
 - [ ] Quando não beneficente, marcar `DAM pendente na Receita Municipal`.
 - [x] Permitir anexar o DAM à solicitação aprovada.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
@@ -90,6 +106,7 @@
 - [x] Gerar credencial/link de validação do evento autorizado no backend.
 - [x] Gerar QR Code visual para impressão/exibição.
 - [x] Criar tela de validação de credencial do evento.
+- [x] Validar automaticamente a credencial quando a autorização é aberta no app.
 - [x] Exibir referência do DAM armazenado na validação quando autorizado.
 - [x] Exibir autorização final em nome do responsável pelo evento.
 
@@ -116,6 +133,7 @@
 - [x] Testar cadastro PJ.
 - [x] Testar login.
 - [x] Testar login backend com MFA por e-mail em ambiente local.
+- [x] Testar contador/reenvio de MFA em desenvolvimento.
 - [x] Testar solicitação completa.
 - [x] Testar evento com som.
 - [x] Testar evento com palco/gerador.
@@ -124,10 +142,13 @@
 - [x] Testar evento com alimentação.
 - [ ] Testar evento beneficente.
 - [x] Testar operador de secretaria.
+- [x] Testar listagem de usuários: admin vê todos e gestor vê apenas sua secretaria.
+- [ ] Testar gestão de conteúdo por admin e gestor de secretaria.
+- [ ] Testar home do cidadão com carrossel em mobile e desktop.
 - [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.
-- [ ] Testar geração do documento final.
+- [x] Testar geração do documento final.
 - [x] Testar QR Code visual e tela de validação.
 - [ ] Testar layout mobile e desktop.
 
@@ -139,7 +160,7 @@
 4. Criar revisão/envio/protocolo.
 5. Implementar persistência/API mínima.
 6. Implementar fila interna por secretaria.
-7. Criar documento final em PDF/HTML imprimível.
-8. Ajustar 15 dias úteis e SLA interno de 2 dias úteis.
-9. Criar visão gestor/admin para todas as secretarias.
+7. Ajustar 15 dias úteis e SLA interno de 2 dias úteis.
+8. Criar visão gestor/admin para todas as secretarias.
+9. Testar layout mobile e desktop.
 10. Fazer limpeza de segurança e QA.

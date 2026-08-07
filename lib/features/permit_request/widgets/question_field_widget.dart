@@ -32,6 +32,25 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   @override
   void initState() {
     super.initState();
+    _loadCurrentValue();
+  }
+
+  @override
+  void didUpdateWidget(covariant QuestionFieldWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.questionId != widget.questionId ||
+        oldWidget.currentValue != widget.currentValue) {
+      _loadCurrentValue();
+    }
+  }
+
+  void _loadCurrentValue() {
+    respostaSimNao = null;
+    textoController.clear();
+    dataSelecionada = null;
+    horaSelecionada = null;
+    arquivoSelecionado = null;
+
     if (widget.currentValue is Map) {
       respostaSimNao = widget.currentValue['resposta'];
       textoController.text = widget.currentValue['texto'] ?? '';
@@ -39,6 +58,12 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       horaSelecionada = widget.currentValue['hora'];
       arquivoSelecionado = widget.currentValue['arquivo'];
     }
+  }
+
+  @override
+  void dispose() {
+    textoController.dispose();
+    super.dispose();
   }
 
   void salvarResposta() {

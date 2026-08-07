@@ -142,6 +142,70 @@ class PermitApiService {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> listHomeContent(String accessToken) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createHomeContent({
+    required String accessToken,
+    required String scope,
+    required String title,
+    required String body,
+    required String imageUrl,
+    required int displayOrder,
+    required bool isActive,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/home-content'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'scope': scope,
+        'title': title,
+        'body': body,
+        'image_url': imageUrl,
+        'display_order': displayOrder,
+        'is_active': isActive,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateHomeContent({
+    required String accessToken,
+    required int cardId,
+    required String scope,
+    required String title,
+    required String body,
+    required String imageUrl,
+    required int displayOrder,
+    required bool isActive,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/$cardId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'scope': scope,
+        'title': title,
+        'body': body,
+        'image_url': imageUrl,
+        'display_order': displayOrder,
+        'is_active': isActive,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getAuthorization({
     required String accessToken,
     required int requestId,
@@ -172,6 +236,32 @@ class PermitApiService {
       '$_baseUrl/event-credentials/$publicCode/validate',
     ).replace(queryParameters: {'t': token});
     final response = await _client.get(uri);
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getAuthorizationTemplate({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/authorization-template'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateAuthorizationTemplate({
+    required String accessToken,
+    required String headerText,
+    required String footerText,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/permit-requests/authorization-template'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'header_text': headerText, 'footer_text': footerText}),
+    );
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 

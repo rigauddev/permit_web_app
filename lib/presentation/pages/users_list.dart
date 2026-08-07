@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-// import 'dart:math';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/auth_service.dart';
+import '../../data/models/user_model.dart';
 import '../../shared/widgets/custom_appbar.dart';
 import '../../shared/widgets/custom_drawer.dart';
 
@@ -14,179 +16,193 @@ class UsersListPage extends StatefulWidget {
 }
 
 class _UsersListPageState extends State<UsersListPage> {
-  List<Map<String, String>> users = [
-    {
-      'nome': 'João',
-      'sobrenome': 'Silva',
-      'telefone': '11999999999',
-      'endereco': 'Rua A, 123',
-      'email': 'joao@exemplo.com',
-    },
-    {
-      'nome': 'Maria',
-      'sobrenome': 'Oliveira',
-      'telefone': '11888888888',
-      'endereco': 'Rua B, 456',
-      'email': 'maria@exemplo.com',
-      'empresa': 'Empresa 1',
-    },
-    {
-      'nome': 'Maria',
-      'sobrenome': 'Oliveira',
-      'telefone': '11888888888',
-      'endereco': 'Rua B, 456',
-      'email': 'maria@exemplo.com',
-      'empresa': 'Empresa 2',
-    },
-  ];
+  final _authService = AuthService();
+  final _secureStorage = const FlutterSecureStorage();
+  late Future<List<UserModel>> _usersFuture;
 
-  void _openUserForm(Map<String, String> user) {
-    final nomeController = TextEditingController(text: user['nome']);
-    final sobrenomeController = TextEditingController(text: user['sobrenome']);
-    final telefoneController = TextEditingController(text: user['telefone']);
-    final enderecoController = TextEditingController(text: user['endereco']);
-    final emailController = TextEditingController(text: user['email']);
-    final empresaController = TextEditingController(
-      text: user['empresa'] ?? '',
-    );
+  static const _secretariaLabels = {
+    'desenvolvimento_economico': 'Desenvolvimento Econômico',
+    'meio_ambiente': 'Meio Ambiente',
+    'infraestrutura': 'Infraestrutura',
+    'dmtran': 'DMTRAN',
+    'vigilancia_sanitaria': 'Vigilância Sanitária',
+    'guarda_civil': 'Guarda Civil Municipal',
+    'receita_municipal': 'Receita Municipal',
+  };
 
-    showDialog(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Editar Usuário'),
-            content: SingleChildScrollView(
-              child: Column(
-                children: [
-                  TextField(
-                    controller: nomeController,
-                    decoration: const InputDecoration(labelText: 'Nome'),
-                  ),
-                  TextField(
-                    controller: sobrenomeController,
-                    decoration: const InputDecoration(labelText: 'Sobrenome'),
-                  ),
-                  TextField(
-                    controller: telefoneController,
-                    decoration: const InputDecoration(labelText: 'Telefone'),
-                  ),
-                  TextField(
-                    controller: enderecoController,
-                    decoration: const InputDecoration(labelText: 'Endereço'),
-                  ),
-                  TextField(
-                    controller: emailController,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                  ),
-                  TextField(
-                    controller: empresaController,
-                    decoration: const InputDecoration(labelText: 'Empresa'),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      // final novaSenha = _gerarSenha();
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Nova senha enviada para ${emailController.text}',
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.lock_reset),
-                    label: const Text('Gerar nova senha e enviar'),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    user['nome'] = nomeController.text;
-                    user['sobrenome'] = sobrenomeController.text;
-                    user['telefone'] = telefoneController.text;
-                    user['endereco'] = enderecoController.text;
-                    user['email'] = emailController.text;
-                    user['empresa'] = empresaController.text;
-                  });
-                  Navigator.pop(context);
-                },
-                child: const Text('Salvar'),
-              ),
-            ],
-          ),
-    );
+  static const _roleLabels = {
+    'admin': 'Administrador',
+    'gestor_secretaria': 'Gestor de secretaria',
+    'operador_secretaria': 'Operador de secretaria',
+    'cidadao': 'Cidadão',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _usersFuture = _loadUsers();
   }
+
+  Future<List<UserModel>> _loadUsers() async {
+    final token = await _secureStorage.read(key: 'access_token');
+    if (token == null) {
+      throw AuthException('Sessão expirada. Entre novamente.');
+    }
+    return _authService.listUsers(accessToken: token);
+  }
+
+  void _refresh() {
+    setState(() {
+      _usersFuture = _loadUsers();
+    });
+  }
+
+  bool get _canManageUsers =>
+      widget.userType == 'admin' || widget.userType == 'gestor';
 
   @override
   Widget build(BuildContext context) {
-    final isAdminOrGestor =
-        widget.userType == 'admin' || widget.userType == 'gestor';
-
     return Scaffold(
-      appBar: CustomAppBar(title: 'Lista de Usuários', actions: []),
+      appBar: CustomAppBar(
+        title: 'Gestão de usuários',
+        actions: [
+          IconButton(
+            tooltip: 'Atualizar',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
       drawer: CustomDrawer(userType: widget.userType),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            if (isAdminOrGestor) ...[
-              Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      // Navegar para página de cadastro comum
-                      Navigator.pushNamed(context, '/cadastro_usuario');
-                    },
-                    child: const Text('Cadastrar Usuário'),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      // Navegar para página de cadastro com empresa
-                      Navigator.pushNamed(context, '/cadastro_usuario_empresa');
-                    },
-                    child: const Text('Usuário da Empresa'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-            Expanded(
-              child: ListView.builder(
-                itemCount: users.length,
-                itemBuilder: (context, index) {
-                  final user = users[index];
-                  return Card(
-                    child: ListTile(
-                      title: Text('${user['nome']} ${user['sobrenome']}'),
-                      subtitle: Text(user['email']!),
-                      trailing: const Icon(Icons.edit),
-                      onTap: () => _openUserForm(user),
-                    ),
-                  );
+      floatingActionButton:
+          _canManageUsers
+              ? FloatingActionButton.extended(
+                onPressed: () async {
+                  await Navigator.pushNamed(context, '/cadastro_usuario');
+                  if (mounted) _refresh();
                 },
-              ),
-            ),
-            if (isAdminOrGestor)
-              Align(
-                alignment: Alignment.bottomRight,
-                child: FloatingActionButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/cadastro_usuario');
-                  },
-                  child: const Icon(Icons.add),
+                icon: const Icon(Icons.person_add_alt_1),
+                label: const Text('Novo usuário'),
+              )
+              : null,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: FutureBuilder<List<UserModel>>(
+          future: _usersFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      snapshot.error.toString(),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Tentar novamente'),
+                    ),
+                  ],
                 ),
-              ),
-          ],
+              );
+            }
+
+            final users = snapshot.data ?? const <UserModel>[];
+            if (users.isEmpty) {
+              return const Center(
+                child: Text('Nenhum usuário encontrado para sua secretaria.'),
+              );
+            }
+
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 720) {
+                  return ListView.separated(
+                    itemCount: users.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder:
+                        (context, index) => _UserCard(
+                          user: users[index],
+                          secretariaLabel: _formatSecretaria(users[index]),
+                          roleLabel: _formatRole(users[index].role),
+                        ),
+                  );
+                }
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Nome')),
+                      DataColumn(label: Text('E-mail')),
+                      DataColumn(label: Text('Perfil')),
+                      DataColumn(label: Text('Secretaria')),
+                      DataColumn(label: Text('Telefone')),
+                    ],
+                    rows:
+                        users
+                            .map(
+                              (user) => DataRow(
+                                cells: [
+                                  DataCell(Text(_fullName(user))),
+                                  DataCell(Text(user.email)),
+                                  DataCell(Text(_formatRole(user.role))),
+                                  DataCell(Text(_formatSecretaria(user))),
+                                  DataCell(Text(user.phone)),
+                                ],
+                              ),
+                            )
+                            .toList(),
+                  ),
+                );
+              },
+            );
+          },
         ),
+      ),
+    );
+  }
+
+  static String _fullName(UserModel user) {
+    final parts = [user.name, user.lastName].where((item) => item.isNotEmpty);
+    return parts.join(' ');
+  }
+
+  static String _formatRole(String role) => _roleLabels[role] ?? role;
+
+  static String _formatSecretaria(UserModel user) {
+    if (user.role == 'admin') return 'Todas';
+    final secretaria = user.secretaria;
+    if (secretaria == null || secretaria.isEmpty) return 'Sem secretaria';
+    return _secretariaLabels[secretaria] ?? secretaria;
+  }
+}
+
+class _UserCard extends StatelessWidget {
+  const _UserCard({
+    required this.user,
+    required this.secretariaLabel,
+    required this.roleLabel,
+  });
+
+  final UserModel user;
+  final String secretariaLabel;
+  final String roleLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.account_circle_outlined),
+        title: Text('${user.name} ${user.lastName}'.trim()),
+        subtitle: Text('$roleLabel\n$secretariaLabel\n${user.email}'),
+        isThreeLine: true,
       ),
     );
   }

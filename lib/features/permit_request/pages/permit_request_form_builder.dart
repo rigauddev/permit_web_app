@@ -286,6 +286,7 @@ class _PermitRequestFormBuilderState
       final questionKey = question['key'] as String;
 
       return QuestionFieldWidget(
+        key: ValueKey(questionKey),
         questionId: question['id'] as int,
         questionText: question['pergunta'] as String,
         tiposResposta: List<String>.from(question['tipos_resposta'] ?? []),

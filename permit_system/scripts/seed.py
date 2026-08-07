@@ -6,7 +6,14 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT_DIR))
 
 from src.core.security import hash_password
-from src.infra.database.models import PermitRequestModel, PermitRequirementModel, RoleModel, SecretariaModel, UserModel
+from src.infra.database.models import (
+    HomeContentCardModel,
+    PermitRequestModel,
+    PermitRequirementModel,
+    RoleModel,
+    SecretariaModel,
+    UserModel,
+)
 from src.infra.database.mysql_db import SessionLocal, create_tables
 
 
@@ -196,6 +203,67 @@ def seed_permit_request(db, users, secretarias):
     return request
 
 
+def seed_home_content(db, users):
+    admin_id = users["admin@prefeitura.local"].id
+    cards = [
+        (
+            "prefeitura",
+            "Central de Eventos",
+            "Solicite o alvará de evento em um único fluxo digital, com acompanhamento das secretarias responsáveis.",
+            "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=1200&q=80",
+            1,
+        ),
+        (
+            "prefeitura",
+            "Atendimento ao cidadão",
+            "A Prefeitura de Valença reúne serviços municipais para facilitar o acesso de pessoas físicas e jurídicas.",
+            "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80",
+            2,
+        ),
+        (
+            "desenvolvimento_economico",
+            "Desenvolvimento Econômico",
+            "A Secretaria coordena a Central de Eventos e acompanha a emissão final da autorização municipal.",
+            "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80",
+            1,
+        ),
+        (
+            "meio_ambiente",
+            "Responsabilidade ambiental",
+            "Eventos com som passam pela análise ambiental para orientar limites e responsabilidades.",
+            "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80",
+            1,
+        ),
+        (
+            "dmtran",
+            "Mobilidade e vias públicas",
+            "Bloqueios, desvios e trio elétrico são avaliados pelo DMTRAN para organizar o trânsito com segurança.",
+            "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80",
+            1,
+        ),
+    ]
+    for scope, title, body, image_url, display_order in cards:
+        existing = (
+            db.query(HomeContentCardModel)
+            .filter(HomeContentCardModel.scope == scope, HomeContentCardModel.title == title)
+            .first()
+        )
+        if existing:
+            continue
+        db.add(
+            HomeContentCardModel(
+                scope=scope,
+                title=title,
+                body=body,
+                image_url=image_url,
+                display_order=display_order,
+                is_active=True,
+                created_by=admin_id,
+                updated_by=admin_id,
+            )
+        )
+
+
 def add_business_days(start_date, business_days):
     current_date = start_date
     added_days = 0
@@ -214,6 +282,7 @@ def main():
         secretarias = seed_secretarias(db)
         users = seed_users(db, roles, secretarias)
         seed_permit_request(db, users, secretarias)
+        seed_home_content(db, users)
         db.commit()
         print("Seed executado com sucesso.")
         print("Usuários de teste: admin@prefeitura.local, cidadao@teste.local, meioambiente@prefeitura.local")

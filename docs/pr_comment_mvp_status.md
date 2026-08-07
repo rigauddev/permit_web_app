@@ -47,6 +47,18 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
 - Smoke test backend de recuperação da autorização:
   - `GET /permit-requests/{id}/authorization` retorna link com token válido para QR Code: passou;
   - validação pública do link recuperado: passou.
+- Frontend:
+  - autorização continua como tela principal dentro do app;
+  - QR Code é gerado quando o usuário abre a autorização;
+  - credencial é validada automaticamente ao abrir a autorização;
+  - PDF imprimível pode ser gerado apenas quando necessário;
+  - autorização e PDF exibem logo oficial;
+  - gestor/admin pode configurar texto de cabeçalho e rodapé do PDF;
+  - PDF inclui campos de assinatura;
+  - usuário pode escolher imprimir/assinar/anexar ou gerar PDF para assinar eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado quando exigido.
+- Smoke test backend do template de PDF:
+  - leitura/criação do template padrão: passou;
+  - atualização do cabeçalho/rodapé por gestor: passou.
 
 ## DAM
 
@@ -67,15 +79,15 @@ O backend já emite a credencial verificável do evento autorizado:
 - `GET /event-credentials/{codigo_publico}/validate?t={token}`
 - `POST /event-credentials/{credential_id}/revoke`
 
-Nesta etapa foi entregue o link/token seguro para validação, a recuperação da autorização com token válido, a tela Flutter de autorização e a tela de validação da credencial com QR Code visual. O documento final imprimível/PDF fica para o próximo bloco.
+Nesta etapa foi entregue o link/token seguro para validação, a recuperação da autorização com token válido, a tela Flutter de autorização, a tela de validação da credencial com QR Code visual e a geração opcional de PDF imprimível. A operação principal permanece dentro do app.
 
 ## Próximos passos
 
 - Implementar upload binário real de anexos, incluindo UI para anexo específico do DAM.
 - Criar telas internas para consumir os endpoints de fila, aprovação, correção e comentários.
-- Gerar documento final de autorização imprimível/PDF com QR Code.
 - Ajustar regra de antecedência para 15 dias úteis no backend e frontend.
 - Criar SLA interno de 2 dias úteis por secretaria.
+- Testar layout mobile e desktop.
 - Definir ambiente de homologação e configurações de produção.
 
 ## Observação técnica

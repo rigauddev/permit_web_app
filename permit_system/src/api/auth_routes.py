@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.api.dependencies import get_current_user, require_roles
@@ -66,6 +66,11 @@ def create_company_user(
 ):
     secretaria = payload.secretaria
     if current_user.role.slug == "gestor_secretaria":
+        if payload.role == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Gestor de secretaria não pode criar administrador",
+            )
         secretaria = current_user.secretaria.slug if current_user.secretaria else None
     return AuthService(db).create_user(payload, force_secretaria=secretaria)
 
@@ -78,7 +83,10 @@ def me(current_user: UserModel = Depends(get_current_user)):
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
-    _: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
 ):
-    users = db.query(UserModel).order_by(UserModel.nome).all()
+    query = db.query(UserModel)
+    if current_user.role.slug == "gestor_secretaria":
+        query = query.filter(UserModel.secretaria_id == current_user.secretaria_id)
+    users = query.order_by(UserModel.nome).all()
     return [AuthService.to_response(user) for user in users]

@@ -7,6 +7,7 @@ import 'package:permit_web_app/data/providers/user_provider.dart';
 import 'features/services/receita_municipal/ui/receita_municipal_services_page.dart';
 import 'presentation/pages/login_page.dart';
 import 'presentation/pages/home_page.dart';
+import 'presentation/pages/home_content_page.dart';
 import 'presentation/pages/recovery_password.dart';
 import 'presentation/pages/user_profile.dart';
 import 'presentation/pages/users_list.dart';
@@ -44,6 +45,8 @@ class MyApp extends ConsumerWidget {
             (context) => UserCreatePage(userType: user?.userType ?? ''),
         AppRoutes.userCreate:
             (context) => UserCreatePage(userType: user?.userType ?? ''),
+        AppRoutes.homeContent:
+            (context) => HomeContentPage(userType: user?.userType ?? ''),
         AppRoutes.services:
             (context) => ReceitaMunicipalServicesPage(
               userType: user?.userType ?? '',

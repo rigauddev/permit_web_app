@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/permit_api_service.dart';
+
+const _defaultHeaderText =
+    'A Prefeitura Municipal de Valença, por meio da Central de Eventos, autoriza a realização do evento abaixo após as anuências dos órgãos competentes e a regularização do DAM ou isenção aplicável.';
+const _defaultFooterText =
+    'Documento mantido no sistema municipal. A validade deve ser confirmada pela leitura do QR Code. Quando houver exigência de assinatura, o responsável pode imprimir, assinar e anexar, ou assinar eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado.';
 
 class EventCredentialPage extends StatefulWidget {
   final Map<String, dynamic>? permitForm;
@@ -31,10 +39,13 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
 
   Map<String, dynamic>? _authorization;
   Map<String, dynamic>? _validation;
+  Map<String, dynamic>? _template;
   String? _message;
   bool _loadingAuthorization = false;
   bool _issuingAuthorization = false;
   bool _validatingCredential = false;
+  bool _printingPdf = false;
+  bool _savingTemplate = false;
 
   @override
   void initState() {
@@ -66,6 +77,11 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
         profile == 'operador_secretaria';
   }
 
+  bool get _canEditTemplate {
+    final profile = widget.userProfile;
+    return profile == 'admin' || profile == 'gestor_secretaria';
+  }
+
   int? get _requestId {
     final value = widget.permitForm?['formId'];
     return value is int ? value : int.tryParse(value.toString());
@@ -82,6 +98,7 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
     });
     try {
       final accessToken = await _readAccessToken();
+      await _loadTemplate(accessToken);
       final authorization = await _api.getAuthorization(
         accessToken: accessToken,
         requestId: requestId,
@@ -98,6 +115,24 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       setState(() => _message = 'Não foi possível carregar a autorização.');
     } finally {
       if (mounted) setState(() => _loadingAuthorization = false);
+    }
+  }
+
+  Future<void> _loadTemplate(String accessToken) async {
+    try {
+      final template = await _api.getAuthorizationTemplate(
+        accessToken: accessToken,
+      );
+      if (mounted) setState(() => _template = template);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _template = {
+            'header_text': _defaultHeaderText,
+            'footer_text': _defaultFooterText,
+          };
+        });
+      }
     }
   }
 
@@ -167,6 +202,11 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       _authorization = authorization;
       _message = null;
     });
+    final publicCode = _publicCodeController.text.trim();
+    final token = _tokenController.text.trim();
+    if (publicCode.isNotEmpty && token.isNotEmpty) {
+      Future.microtask(_validateCredential);
+    }
   }
 
   @override
@@ -191,8 +231,14 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
                     loading: _loadingAuthorization,
                     canIssue: _canIssueAuthorization,
                     issuing: _issuingAuthorization,
+                    printingPdf: _printingPdf,
+                    canEditTemplate: _canEditTemplate,
+                    savingTemplate: _savingTemplate,
+                    template: _currentTemplate,
                     onIssue: _issueAuthorization,
                     onCopyUrl: _copyValidationUrl,
+                    onPrintPdf: _printAuthorizationPdf,
+                    onEditTemplate: _openTemplateEditor,
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -220,6 +266,121 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       context,
     ).showSnackBar(const SnackBar(content: Text('Link de validação copiado.')));
   }
+
+  Future<void> _printAuthorizationPdf() async {
+    final form = widget.permitForm;
+    final url = _validationUrl;
+    if (form == null || url == null || url.isEmpty) return;
+    setState(() => _printingPdf = true);
+    try {
+      await Printing.layoutPdf(
+        name: 'autorizacao_evento_${form['protocolo'] ?? 'alvara'}.pdf',
+        onLayout:
+            (format) => _buildAuthorizationPdf(
+              format: format,
+              form: form,
+              validation: _validation,
+              validationUrl: url,
+              template: _currentTemplate,
+            ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível gerar o PDF.')),
+      );
+    } finally {
+      if (mounted) setState(() => _printingPdf = false);
+    }
+  }
+
+  Map<String, dynamic> get _currentTemplate =>
+      _template ??
+      const {
+        'header_text': _defaultHeaderText,
+        'footer_text': _defaultFooterText,
+      };
+
+  Future<void> _openTemplateEditor() async {
+    final template = _currentTemplate;
+    final headerController = TextEditingController(
+      text: template['header_text']?.toString() ?? _defaultHeaderText,
+    );
+    final footerController = TextEditingController(
+      text: template['footer_text']?.toString() ?? _defaultFooterText,
+    );
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Modelo do PDF'),
+            content: SizedBox(
+              width: 560,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: headerController,
+                    minLines: 4,
+                    maxLines: 6,
+                    decoration: const InputDecoration(
+                      labelText: 'Texto do cabeçalho',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: footerController,
+                    minLines: 4,
+                    maxLines: 6,
+                    decoration: const InputDecoration(
+                      labelText: 'Texto do rodapé',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed:
+                    () => Navigator.pop(context, {
+                      'header_text': headerController.text.trim(),
+                      'footer_text': footerController.text.trim(),
+                    }),
+                child: const Text('Salvar'),
+              ),
+            ],
+          ),
+    );
+    headerController.dispose();
+    footerController.dispose();
+    if (result == null) return;
+    await _saveTemplate(result);
+  }
+
+  Future<void> _saveTemplate(Map<String, String> values) async {
+    setState(() => _savingTemplate = true);
+    try {
+      final accessToken = await _readAccessToken();
+      final template = await _api.updateAuthorizationTemplate(
+        accessToken: accessToken,
+        headerText: values['header_text'] ?? _defaultHeaderText,
+        footerText: values['footer_text'] ?? _defaultFooterText,
+      );
+      setState(() => _template = template);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Modelo do PDF atualizado.')),
+      );
+    } on PermitApiException catch (error) {
+      setState(() => _message = error.message);
+    } finally {
+      if (mounted) setState(() => _savingTemplate = false);
+    }
+  }
 }
 
 class _AuthorizationDocument extends StatelessWidget {
@@ -229,8 +390,14 @@ class _AuthorizationDocument extends StatelessWidget {
   final bool loading;
   final bool canIssue;
   final bool issuing;
+  final bool printingPdf;
+  final bool canEditTemplate;
+  final bool savingTemplate;
+  final Map<String, dynamic> template;
   final VoidCallback onIssue;
   final VoidCallback onCopyUrl;
+  final VoidCallback onPrintPdf;
+  final VoidCallback onEditTemplate;
 
   const _AuthorizationDocument({
     required this.form,
@@ -239,8 +406,14 @@ class _AuthorizationDocument extends StatelessWidget {
     required this.loading,
     required this.canIssue,
     required this.issuing,
+    required this.printingPdf,
+    required this.canEditTemplate,
+    required this.savingTemplate,
+    required this.template,
     required this.onIssue,
     required this.onCopyUrl,
+    required this.onPrintPdf,
+    required this.onEditTemplate,
   });
 
   bool get _hasQr => validationUrl != null && validationUrl!.contains('?t=');
@@ -261,22 +434,60 @@ class _AuthorizationDocument extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               runSpacing: 12,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Autorização de Evento',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Image.asset(
+                      'assets/images/logo_prefeitura_1.png',
+                      width: 74,
+                      fit: BoxFit.contain,
                     ),
-                    Text('Protocolo ${form['protocolo'] ?? '-'}'),
+                    const SizedBox(width: 14),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Autorização de Evento',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text('Protocolo ${form['protocolo'] ?? '-'}'),
+                      ],
+                    ),
                   ],
                 ),
-                _StatusChip(label: _statusLabel(status), status: status),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (canEditTemplate)
+                      OutlinedButton.icon(
+                        onPressed: savingTemplate ? null : onEditTemplate,
+                        icon:
+                            savingTemplate
+                                ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Icon(Icons.edit_document),
+                        label: const Text('Modelo PDF'),
+                      ),
+                    _StatusChip(label: _statusLabel(status), status: status),
+                  ],
+                ),
               ],
             ),
             const Divider(height: 28),
+            Text(
+              template['header_text']?.toString() ?? _defaultHeaderText,
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 18),
             LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 720;
@@ -303,10 +514,13 @@ class _AuthorizationDocument extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Esta autorização deve ser apresentada às autoridades fiscais quando solicitada. '
-              'A Receita/Fazenda atua no DAM após anuências completas; no MVP, o DAM é anexado ao processo.',
+              template['footer_text']?.toString() ?? _defaultFooterText,
               style: theme.textTheme.bodySmall,
             ),
+            const SizedBox(height: 14),
+            if (_hasQr) _SignatureChoicePanel(onPrintPdf: onPrintPdf),
+            if (_hasQr) const SizedBox(height: 14),
+            const _SignatureFields(),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -421,6 +635,98 @@ class _QrBox extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SignatureFields extends StatelessWidget {
+  const _SignatureFields();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fields = [
+          _SignatureLine(label: 'Responsável pelo evento'),
+          _SignatureLine(label: 'Central de Eventos / Prefeitura'),
+        ];
+        if (constraints.maxWidth >= 680) {
+          return Row(
+            children: [
+              Expanded(child: fields[0]),
+              const SizedBox(width: 18),
+              Expanded(child: fields[1]),
+            ],
+          );
+        }
+        return Column(
+          children: [fields[0], const SizedBox(height: 12), fields[1]],
+        );
+      },
+    );
+  }
+}
+
+class _SignatureChoicePanel extends StatelessWidget {
+  final VoidCallback onPrintPdf;
+
+  const _SignatureChoicePanel({required this.onPrintPdf});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8F5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Assinatura quando exigida',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onPrintPdf,
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('Imprimir e assinar'),
+              ),
+              Tooltip(
+                message:
+                    'Gera o PDF para baixar. Abra o aplicativo gov.br, assine eletronicamente, baixe o arquivo assinado e anexe na solicitação quando a assinatura for exigida.',
+                child: OutlinedButton.icon(
+                  onPressed: onPrintPdf,
+                  icon: const Icon(Icons.verified_user_outlined),
+                  label: const Text('Assinar pelo gov.br'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignatureLine extends StatelessWidget {
+  final String label;
+
+  const _SignatureLine({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Divider(height: 28, color: Color(0xFF8FA18F)),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 }
@@ -711,4 +1017,247 @@ String _publicCodeFromUrl(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null || uri.pathSegments.isEmpty) return '';
   return uri.pathSegments.last;
+}
+
+Future<Uint8List> _buildAuthorizationPdf({
+  required PdfPageFormat format,
+  required Map<String, dynamic> form,
+  required Map<String, dynamic>? validation,
+  required String validationUrl,
+  required Map<String, dynamic> template,
+}) async {
+  final document = pw.Document();
+  final requirements = _pdfRequirements(form, validation);
+  final isValid = validation?['valid'] == true;
+  final logoBytes =
+      (await rootBundle.load(
+        'assets/images/logo_prefeitura_1.png',
+      )).buffer.asUint8List();
+  final logo = pw.MemoryImage(logoBytes);
+
+  document.addPage(
+    pw.MultiPage(
+      pageFormat: format,
+      margin: const pw.EdgeInsets.all(32),
+      build:
+          (context) => [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Image(logo, width: 74),
+                      pw.SizedBox(width: 14),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Prefeitura Municipal de Valença',
+                            style: pw.TextStyle(
+                              fontSize: 16,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text(
+                            'Central de Eventos - Autorização de Evento',
+                            style: const pw.TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(
+                      color: isValid ? PdfColors.green800 : PdfColors.orange800,
+                    ),
+                  ),
+                  child: pw.Text(
+                    isValid ? 'CREDENCIAL VÁLIDA' : 'VALIDAR NO APP',
+                    style: pw.TextStyle(
+                      color: isValid ? PdfColors.green800 : PdfColors.orange800,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            pw.Divider(height: 28),
+            pw.Text(
+              template['header_text']?.toString() ?? _defaultHeaderText,
+              style: const pw.TextStyle(fontSize: 11),
+            ),
+            pw.SizedBox(height: 18),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    children: [
+                      _pdfRow('Protocolo', form['protocolo']),
+                      _pdfRow('Evento', form['nome_do_evento']),
+                      _pdfRow('Responsável', form['responsavel']),
+                      _pdfRow('Data', form['data_do_evento']),
+                      _pdfRow(
+                        'Horário',
+                        _timeRange(
+                          form['horario_inicio'],
+                          form['horario_termino'],
+                        ),
+                      ),
+                      _pdfRow('Local', form['local_evento']),
+                      _pdfRow('DAM', _damLabel(form['dam_status'])),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 24),
+                pw.Column(
+                  children: [
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.qrCode(),
+                      data: validationUrl,
+                      width: 112,
+                      height: 112,
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Validação fiscal',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 18),
+            pw.Text(
+              template['footer_text']?.toString() ?? _defaultFooterText,
+              style: const pw.TextStyle(fontSize: 10),
+            ),
+            pw.SizedBox(height: 28),
+            pw.Row(
+              children: [
+                pw.Expanded(child: _pdfSignature('Responsável pelo evento')),
+                pw.SizedBox(width: 24),
+                pw.Expanded(
+                  child: _pdfSignature('Central de Eventos / Prefeitura'),
+                ),
+              ],
+            ),
+            if (requirements.isNotEmpty) ...[
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'Anuências e exigências',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey400),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(1.2),
+                  1: pw.FlexColumnWidth(2.2),
+                  2: pw.FlexColumnWidth(1),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey200,
+                    ),
+                    children: [
+                      _pdfCell('Secretaria', bold: true),
+                      _pdfCell('Exigência', bold: true),
+                      _pdfCell('Status', bold: true),
+                    ],
+                  ),
+                  ...requirements.map(
+                    (item) => pw.TableRow(
+                      children: [
+                        _pdfCell(item['secretaria']),
+                        _pdfCell(item['tipo_exigencia']),
+                        _pdfCell(item['status']),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+    ),
+  );
+
+  return document.save();
+}
+
+pw.Widget _pdfRow(String label, Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 3),
+    child: pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(
+          width: 86,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+        pw.Expanded(child: pw.Text(text.isEmpty ? '-' : text)),
+      ],
+    ),
+  );
+}
+
+pw.Widget _pdfCell(Object? value, {bool bold = false}) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.all(6),
+    child: pw.Text(
+      value?.toString() ?? '-',
+      style: pw.TextStyle(
+        fontSize: 9,
+        fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+      ),
+    ),
+  );
+}
+
+pw.Widget _pdfSignature(String label) {
+  return pw.Column(
+    children: [
+      pw.Container(height: 1, color: PdfColors.grey600),
+      pw.SizedBox(height: 5),
+      pw.Text(label, style: const pw.TextStyle(fontSize: 9)),
+    ],
+  );
+}
+
+List<Map<String, dynamic>> _pdfRequirements(
+  Map<String, dynamic> form,
+  Map<String, dynamic>? validation,
+) {
+  final validationRequirements =
+      validation?['requirements'] as List<dynamic>? ?? const [];
+  if (validationRequirements.isNotEmpty) {
+    return validationRequirements
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  final formRequirements = form['perguntas'] as List<dynamic>? ?? const [];
+  return formRequirements.map((item) {
+    final requirement = item as Map<String, dynamic>;
+    return {
+      'secretaria': requirement['secretaria'],
+      'tipo_exigencia': requirement['pergunta'],
+      'status': requirement['status'],
+    };
+  }).toList();
 }
