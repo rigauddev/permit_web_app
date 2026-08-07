@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/permit_api_service.dart';
 import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
-import '../../shared/widgets/custom_drawer.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class UserHomePage extends ConsumerStatefulWidget {
   const UserHomePage({super.key, required this.userType, this.userProfile});
@@ -51,13 +51,11 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
       appBar: AppBar(
         title: Text(_isCitizen ? 'Página inicial' : 'Painel da secretaria'),
-      ),
-      drawer: CustomDrawer(
-        userType: widget.userType,
-        userProfile: widget.userProfile,
       ),
       body:
           _isCitizen

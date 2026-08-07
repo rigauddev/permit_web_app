@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../../core/permit_api_service.dart';
-import '../../../../shared/widgets/custom_drawer.dart';
+import '../../../../shared/widgets/app_scaffold.dart';
 
 class ReceitaMunicipalServicesPage extends StatefulWidget {
   final String userType;
@@ -27,9 +27,10 @@ class _ReceitaMunicipalServicesPageState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
       appBar: AppBar(title: const Text('Serviços da Receita Municipal')),
-      drawer: CustomDrawer(userType: widget.userType),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Align(

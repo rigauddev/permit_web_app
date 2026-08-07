@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/auth_service.dart';
 import '../../data/models/user_model.dart';
 import '../../shared/widgets/custom_appbar.dart';
-import '../../shared/widgets/custom_drawer.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class UsersListPage extends StatefulWidget {
   final String userType;
@@ -62,7 +62,8 @@ class _UsersListPageState extends State<UsersListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
       appBar: CustomAppBar(
         title: 'Gestão de usuários',
         actions: [
@@ -73,7 +74,6 @@ class _UsersListPageState extends State<UsersListPage> {
           ),
         ],
       ),
-      drawer: CustomDrawer(userType: widget.userType),
       floatingActionButton:
           _canManageUsers
               ? FloatingActionButton.extended(

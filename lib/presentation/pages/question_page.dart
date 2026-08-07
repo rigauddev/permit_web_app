@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/custom_appbar.dart';
-import '../../shared/widgets/custom_drawer.dart';
 
 class PerguntasPage extends StatefulWidget {
   const PerguntasPage({super.key, required this.userType, this.userProfile});
@@ -41,12 +41,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
       appBar: CustomAppBar(title: 'Cadastrar Nova Pergunta', actions: []),
-      drawer: CustomDrawer(
-        userType: widget.userType,
-        userProfile: widget.userProfile,
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
