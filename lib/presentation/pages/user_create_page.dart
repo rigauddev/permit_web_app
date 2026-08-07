@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -40,7 +42,15 @@ class _UserCreatePageState extends State<UserCreatePage> {
 
   String? _selectedRole = 'operador_secretaria';
   String? _selectedSecretaria = 'desenvolvimento_economico';
+  String? _currentRole;
+  String? _currentSecretaria;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUserScope();
+  }
 
   @override
   void dispose() {
@@ -89,6 +99,20 @@ class _UserCreatePageState extends State<UserCreatePage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _loadCurrentUserScope() async {
+    final rawUser = await _secureStorage.read(key: 'user');
+    if (rawUser == null || !mounted) return;
+    final user = jsonDecode(rawUser) as Map<String, dynamic>;
+    setState(() {
+      _currentRole = user['role'] as String?;
+      _currentSecretaria = user['secretaria'] as String?;
+      if (_currentRole == 'gestor_secretaria') {
+        _selectedRole = 'operador_secretaria';
+        _selectedSecretaria = _currentSecretaria;
+      }
+    });
   }
 
   void _showError(String message) {
@@ -163,7 +187,7 @@ class _UserCreatePageState extends State<UserCreatePage> {
                     initialValue: _selectedRole,
                     decoration: const InputDecoration(labelText: 'Perfil'),
                     items:
-                        _roles.entries
+                        _availableRoles.entries
                             .map(
                               (entry) => DropdownMenuItem(
                                 value: entry.key,
@@ -171,7 +195,17 @@ class _UserCreatePageState extends State<UserCreatePage> {
                               ),
                             )
                             .toList(),
-                    onChanged: (value) => setState(() => _selectedRole = value),
+                    onChanged:
+                        (value) => setState(() {
+                          _selectedRole = value;
+                          if (value == 'admin') {
+                            _selectedSecretaria = null;
+                          } else {
+                            _selectedSecretaria ??=
+                                _currentSecretaria ??
+                                'desenvolvimento_economico';
+                          }
+                        }),
                   ),
                   if (_selectedRole != 'admin') ...[
                     const SizedBox(height: 12),
@@ -181,7 +215,7 @@ class _UserCreatePageState extends State<UserCreatePage> {
                         labelText: 'Secretaria',
                       ),
                       items:
-                          _secretarias.entries
+                          _availableSecretarias.entries
                               .map(
                                 (entry) => DropdownMenuItem(
                                   value: entry.key,
@@ -190,9 +224,18 @@ class _UserCreatePageState extends State<UserCreatePage> {
                               )
                               .toList(),
                       onChanged:
-                          (value) =>
-                              setState(() => _selectedSecretaria = value),
+                          _currentRole == 'gestor_secretaria'
+                              ? null
+                              : (value) =>
+                                  setState(() => _selectedSecretaria = value),
                     ),
+                    if (_currentRole == 'gestor_secretaria')
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Gestores criam usuários apenas para sua secretaria.',
+                        ),
+                      ),
                   ],
                   const SizedBox(height: 20),
                   ElevatedButton(
@@ -213,5 +256,24 @@ class _UserCreatePageState extends State<UserCreatePage> {
         ),
       ),
     );
+  }
+
+  Map<String, String> get _availableRoles {
+    if (_currentRole == 'gestor_secretaria') {
+      return const {
+        'gestor_secretaria': 'Gestor de secretaria',
+        'operador_secretaria': 'Operador de secretaria',
+      };
+    }
+    return _roles;
+  }
+
+  Map<String, String> get _availableSecretarias {
+    if (_currentRole == 'gestor_secretaria' &&
+        _currentSecretaria != null &&
+        _secretarias.containsKey(_currentSecretaria)) {
+      return {_currentSecretaria!: _secretarias[_currentSecretaria]!};
+    }
+    return _secretarias;
   }
 }

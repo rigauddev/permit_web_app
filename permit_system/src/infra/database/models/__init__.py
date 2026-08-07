@@ -1,4 +1,5 @@
 from .base import Base
+from .content_model import HomeContentCardModel
 from .permit_model import (
     AttachmentModel,
     AuthorizationTemplateModel,
@@ -14,6 +15,7 @@ __all__ = [
     "AuthorizationTemplateModel",
     "Base",
     "EventCredentialModel",
+    "HomeContentCardModel",
     "PermitRequestModel",
     "PermitCommentModel",
     "PermitRequirementModel",

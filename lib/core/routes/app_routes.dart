@@ -25,6 +25,7 @@ class AppRoutes {
   static const String services = '/services';
   static const String questions = '/questtions';
   static const String userCreate = '/user-create';
+  static const String homeContent = '/home-content';
 
   static const String permitDashboard = '/permit-dashboard';
   static const String eventPermit = '/event-permit';

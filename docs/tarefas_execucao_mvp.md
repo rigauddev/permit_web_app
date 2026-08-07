@@ -19,6 +19,10 @@
 - [x] Criar tela de revisão antes do envio.
 - [x] Gerar protocolo após envio.
 - [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.
+- [x] Corrigir seleção de respostas para não carregar resposta da pergunta anterior no wizard.
+- [x] Corrigir menu do cidadão para ocultar áreas internas de gestão, secretaria e configurações.
+- [x] Criar página inicial do cidadão com carrossel de informações da prefeitura/secretarias.
+- [x] Centralizar formulários de solicitação em largura adequada para desktop.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -58,7 +62,8 @@
 - [x] Criar ações: aprovar, recusar, solicitar correção e comentar.
 - [x] Criar status por secretaria.
 - [x] Atualizar status geral a partir das anuências.
-- [ ] Criar visão de gestor/admin para todas as secretarias.
+- [x] Criar visão de gestor/admin para gestão interna com escopo por secretaria.
+- [x] Criar dashboard inicial para usuários internos com serviços pertinentes ao perfil/secretaria.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [ ] Garantir que Receita/Fazenda só anexe DAM após todas as anuências aplicáveis.
@@ -76,8 +81,14 @@
 - [x] Substituir mock de login por chamadas HTTP com MFA.
 - [x] Identificar tipo de usuário pelo `role` retornado no login/JWT.
 - [x] Exibir escolha de acesso Cidadão ou Prefeitura antes do login.
+- [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
+- [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
+- [x] Substituir lista mockada de usuários por endpoint real com secretaria e perfil.
+- [x] Restringir gestor a usuários da própria secretaria e impedir criação de admin por gestor.
+- [x] Criar gestão de conteúdo da página inicial com até 5 cards ativos por prefeitura/secretaria.
+- [x] Persistir cards de carrossel com título, texto, imagem e ordem de exibição.
 
 ## Marco 7 - Documento final e DAM
 
@@ -122,6 +133,7 @@
 - [x] Testar cadastro PJ.
 - [x] Testar login.
 - [x] Testar login backend com MFA por e-mail em ambiente local.
+- [x] Testar contador/reenvio de MFA em desenvolvimento.
 - [x] Testar solicitação completa.
 - [x] Testar evento com som.
 - [x] Testar evento com palco/gerador.
@@ -130,6 +142,9 @@
 - [x] Testar evento com alimentação.
 - [ ] Testar evento beneficente.
 - [x] Testar operador de secretaria.
+- [x] Testar listagem de usuários: admin vê todos e gestor vê apenas sua secretaria.
+- [ ] Testar gestão de conteúdo por admin e gestor de secretaria.
+- [ ] Testar home do cidadão com carrossel em mobile e desktop.
 - [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.
