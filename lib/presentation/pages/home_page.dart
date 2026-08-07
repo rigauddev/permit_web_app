@@ -148,8 +148,8 @@ class _CitizenHome extends StatelessWidget {
                         icon: Icons.folder_copy_outlined,
                         title: 'Minhas solicitações',
                         description:
-                            'Consulte status, pendências e autorizações emitidas.',
-                        route: '/services',
+                            'Acompanhe seus protocolos separados por tipo de serviço.',
+                        route: '/my-requests',
                       ),
                     ],
                   );

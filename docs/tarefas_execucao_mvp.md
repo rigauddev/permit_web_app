@@ -25,6 +25,8 @@
 - [x] Centralizar formulários de solicitação em largura adequada para desktop.
 - [x] Criar menu lateral recolhível, com modo apenas ícones e item ativo destacado.
 - [x] Incluir botão de voltar nas subpáginas principais.
+- [x] Criar página `Minhas solicitações` separada por tipo de serviço.
+- [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -148,6 +150,8 @@
 - [ ] Testar gestão de conteúdo por admin e gestor de secretaria.
 - [ ] Testar home do cidadão com carrossel em mobile e desktop.
 - [ ] Testar menu recolhível e destaque de rota ativa em mobile e desktop.
+- [ ] Testar acompanhamento de solicitações do cidadão separado por tipo.
+- [ ] Testar catálogo de serviços por categoria Prefeitura/Secretarias.
 - [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.

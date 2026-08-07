@@ -65,12 +65,17 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       title: 'Serviços',
                       routes: const [
                         '/services',
+                        '/my-requests',
                         '/permit-dashboard',
                         '/event-permit',
                       ],
                       currentRoute: currentRoute,
                       children: const [
                         _DrawerSectionItem('Serviços', '/services'),
+                        _DrawerSectionItem(
+                          'Minhas solicitações',
+                          '/my-requests',
+                        ),
                       ],
                     ),
                   if (isOperatorOrManager || isAdmin)

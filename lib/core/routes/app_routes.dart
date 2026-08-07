@@ -23,6 +23,7 @@ class AppRoutes {
   static const String registerUser = '/registrar_usuario';
   static const String createUser = '/cadastro_usuario';
   static const String services = '/services';
+  static const String myRequests = '/my-requests';
   static const String questions = '/questtions';
   static const String userCreate = '/user-create';
   static const String homeContent = '/home-content';

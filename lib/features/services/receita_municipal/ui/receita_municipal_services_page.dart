@@ -27,9 +27,10 @@ class _ReceitaMunicipalServicesPageState
 
   @override
   Widget build(BuildContext context) {
+    final isCitizen = widget.userType == 'user' || widget.userType == 'cidadao';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Serviços da Receita Municipal'),
+        title: Text(isCitizen ? 'Serviços municipais' : 'Serviços da área'),
         actions: [
           IconButton(
             tooltip: 'Voltar',
@@ -39,52 +40,72 @@ class _ReceitaMunicipalServicesPageState
         ],
       ),
       drawer: CustomDrawer(userType: widget.userType),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Align(
-          alignment: Alignment.topCenter,
+        child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            constraints: const BoxConstraints(maxWidth: 980),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Catálogo de serviços',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isCitizen
+                      ? 'Os serviços estão organizados por categoria. Nesta primeira entrega, o serviço ativo é o Alvará de Evento.'
+                      : 'Acompanhe as solicitações relacionadas ao serviço de Alvará de Evento.',
+                ),
+                const SizedBox(height: 18),
+                _ServiceCategorySection(
+                  title: 'Prefeitura',
+                  description:
+                      'Serviços centralizados pela Prefeitura e acompanhados por mais de uma secretaria.',
                   children: [
-                    Icon(
-                      Icons.event_available,
-                      size: 40,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Alvará de Evento',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Solicite autorização para eventos no município com análise das secretarias responsáveis.',
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _loading ? null : _openEventPermit,
-                        icon: const Icon(Icons.assignment),
-                        label: Text(_loading ? 'Carregando...' : 'Acessar'),
-                      ),
+                    _ServiceCard(
+                      icon: Icons.event_available_outlined,
+                      title: 'Alvará de Evento',
+                      tag: 'MVP ativo',
+                      description:
+                          'Solicitação de autorização para festas e eventos, com análise das secretarias responsáveis.',
+                      loading: _loading,
+                      onTap: _openEventPermit,
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 16),
+                const _ServiceCategorySection(
+                  title: 'Secretarias',
+                  description:
+                      'Na v2, cada secretaria terá seus próprios serviços neste catálogo.',
+                  children: [
+                    _FutureServiceCard(
+                      title: 'Meio Ambiente',
+                      description:
+                          'Serviços ambientais serão adicionados em versões futuras.',
+                    ),
+                    _FutureServiceCard(
+                      title: 'Infraestrutura',
+                      description:
+                          'Vistorias e serviços técnicos serão organizados aqui.',
+                    ),
+                    _FutureServiceCard(
+                      title: 'DMTRAN',
+                      description:
+                          'Serviços de mobilidade e trânsito serão incluídos na v2.',
+                    ),
+                    _FutureServiceCard(
+                      title: 'Vigilância Sanitária',
+                      description:
+                          'Serviços sanitários ficarão separados por secretaria.',
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -131,5 +152,165 @@ class _ReceitaMunicipalServicesPageState
     } else {
       Navigator.pushReplacementNamed(context, '/home');
     }
+  }
+}
+
+class _ServiceCategorySection extends StatelessWidget {
+  const _ServiceCategorySection({
+    required this.title,
+    required this.description,
+    required this.children,
+  });
+
+  final String title;
+  final String description;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(description),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount = constraints.maxWidth < 760 ? 1 : 2;
+            return GridView.count(
+              crossAxisCount: crossAxisCount,
+              shrinkWrap: true,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: constraints.maxWidth < 760 ? 2.9 : 2.2,
+              physics: const NeverScrollableScrollPhysics(),
+              children: children,
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceCard extends StatelessWidget {
+  const _ServiceCard({
+    required this.icon,
+    required this.title,
+    required this.tag,
+    required this.description,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String tag;
+  final String description;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: loading ? null : onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 40,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Chip(label: Text(tag)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (loading) ...[
+                      const SizedBox(height: 8),
+                      const LinearProgressIndicator(),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FutureServiceCard extends StatelessWidget {
+  const _FutureServiceCard({required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.lock_clock_outlined,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
