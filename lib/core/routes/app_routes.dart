@@ -43,6 +43,7 @@ class AppRoutes {
     if (routeName.startsWith('$validateEvent/')) {
       final uri = Uri.parse(routeName);
       return MaterialPageRoute(
+        settings: settings,
         builder:
             (_) => EventCredentialPage(
               publicCode:
@@ -62,6 +63,7 @@ class AppRoutes {
         }
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
+          settings: settings,
           builder:
               (_) => PermitDashboardPage(
                 userType: args['userType'],
@@ -80,6 +82,7 @@ class AppRoutes {
         }
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
+          settings: settings,
           builder:
               (_) => PermitRequestPage(
                 userType: args['userType'],
@@ -89,7 +92,10 @@ class AppRoutes {
               ),
         );
       case validateEvent:
-        return MaterialPageRoute(builder: (_) => const EventCredentialPage());
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const EventCredentialPage(),
+        );
 
       default:
         return null;

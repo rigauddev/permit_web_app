@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/permit_request/controller/permit_request_controller.dart';
 import '../../features/permit_request/pages/permit_request_form_builder.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class PermitRequestPage extends ConsumerStatefulWidget {
   final String userType;
@@ -39,7 +40,9 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
     final controller = ref.read(permitRequestControllerProvider.notifier);
     final state = ref.watch(permitRequestControllerProvider);
 
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
       appBar: AppBar(title: Text('Solicitação de ${widget.permitType}')),
       body: Center(
         child: ConstrainedBox(

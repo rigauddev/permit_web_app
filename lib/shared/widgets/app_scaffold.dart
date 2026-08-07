@@ -33,10 +33,20 @@ class AppScaffold extends StatelessWidget {
         );
 
         return Scaffold(
-          appBar: appBar,
           floatingActionButton: floatingActionButton,
           backgroundColor: backgroundColor,
-          body: Row(children: [menu, Expanded(child: body)]),
+          body: Row(
+            children: [
+              menu,
+              Expanded(
+                child: Scaffold(
+                  appBar: appBar,
+                  backgroundColor: backgroundColor,
+                  body: body,
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
