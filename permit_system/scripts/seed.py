@@ -137,7 +137,7 @@ def seed_permit_request(db, users, secretarias):
         solicitante_id=users["cidadao@teste.local"].id,
         tipo="alvara_evento",
         status="em_analise",
-        dam_status="pendente_prefeitura",
+        dam_status="nao_gerado",
         is_beneficente=False,
         dados_responsavel={
             "nome": "Maria Solicitante",

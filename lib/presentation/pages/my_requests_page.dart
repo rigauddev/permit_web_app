@@ -3,7 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
-import '../../shared/widgets/custom_drawer.dart';
+import '../../shared/widgets/app_scaffold.dart';
 import 'event_credential_page.dart';
 
 class MyRequestsPage extends StatefulWidget {
@@ -51,7 +51,8 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
       appBar: AppBar(
         title: const Text('Minhas solicitações'),
         actions: [
@@ -67,7 +68,6 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
           ),
         ],
       ),
-      drawer: CustomDrawer(userType: widget.userType),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _requestsFuture,
         builder: (context, snapshot) {
@@ -125,6 +125,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                       description:
                           'Autorizações municipais para festas e eventos, com análise das secretarias responsáveis.',
                       requests: grouped['Alvará de Evento'] ?? const [],
+                      onAttachPaymentProof: _attachPaymentProof,
                       onOpenCredential: _openCredential,
                     ),
                     const SizedBox(height: 14),
@@ -153,6 +154,108 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     if (mounted) _refresh();
   }
 
+  Future<void> _attachPaymentProof(Map<String, dynamic> request) async {
+    final attachment = await _askAttachment('Anexar comprovante do DAM');
+    if (attachment == null) return;
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      final requestId = request['formId'] as int? ?? request['id'] as int?;
+      if (requestId == null) return;
+      await _api.attachDamPaymentProof(
+        accessToken: token,
+        requestId: requestId,
+        fileName: attachment.fileName,
+        fileUrl: attachment.fileUrl,
+        mimeType: attachment.mimeType,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Comprovante anexado.')));
+      _refresh();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<_AttachmentInput?> _askAttachment(String title) {
+    final fileController = TextEditingController();
+    final urlController = TextEditingController();
+    final mimeController = TextEditingController(text: 'application/pdf');
+    return showDialog<_AttachmentInput>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(title),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: fileController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome do arquivo',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'URL ou referência do arquivo',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: mimeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo MIME',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (fileController.text.trim().length < 3 ||
+                      urlController.text.trim().length < 3) {
+                    return;
+                  }
+                  Navigator.pop(
+                    context,
+                    _AttachmentInput(
+                      fileName: fileController.text.trim(),
+                      fileUrl: urlController.text.trim(),
+                      mimeType:
+                          mimeController.text.trim().isEmpty
+                              ? null
+                              : mimeController.text.trim(),
+                    ),
+                  );
+                },
+                child: const Text('Anexar'),
+              ),
+            ],
+          ),
+    );
+  }
+
   static Map<String, List<Map<String, dynamic>>> _groupByType(
     List<Map<String, dynamic>> requests,
   ) {
@@ -179,6 +282,7 @@ class _RequestTypeSection extends StatelessWidget {
     required this.serviceName,
     required this.description,
     required this.requests,
+    required this.onAttachPaymentProof,
     required this.onOpenCredential,
   });
 
@@ -186,6 +290,7 @@ class _RequestTypeSection extends StatelessWidget {
   final String serviceName;
   final String description;
   final List<Map<String, dynamic>> requests;
+  final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
 
   @override
@@ -228,6 +333,7 @@ class _RequestTypeSection extends StatelessWidget {
               ...requests.map(
                 (request) => _RequestListTile(
                   request: request,
+                  onAttachPaymentProof: onAttachPaymentProof,
                   onOpenCredential: onOpenCredential,
                 ),
               ),
@@ -241,10 +347,12 @@ class _RequestTypeSection extends StatelessWidget {
 class _RequestListTile extends StatelessWidget {
   const _RequestListTile({
     required this.request,
+    required this.onAttachPaymentProof,
     required this.onOpenCredential,
   });
 
   final Map<String, dynamic> request;
+  final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
 
   @override
@@ -254,6 +362,7 @@ class _RequestListTile extends StatelessWidget {
         status == 'autorizada' ||
         status == 'isenta_dam' ||
         (request['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
+    final canAttachPayment = status == 'aguardando_pagamento_dam';
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -275,6 +384,12 @@ class _RequestListTile extends StatelessWidget {
           spacing: 8,
           children: [
             Chip(label: Text(_formatStatus(status))),
+            if (canAttachPayment)
+              IconButton(
+                tooltip: 'Anexar comprovante do DAM',
+                onPressed: () => onAttachPaymentProof(request),
+                icon: const Icon(Icons.upload_file),
+              ),
             if (canOpenCredential)
               IconButton(
                 tooltip: 'Ver autorização',
@@ -293,6 +408,12 @@ class _RequestListTile extends StatelessWidget {
         return 'Em análise';
       case 'dam_pendente':
         return 'DAM pendente';
+      case 'aguardando_geracao_dam':
+        return 'Aguardando geração do DAM';
+      case 'aguardando_pagamento_dam':
+        return 'Aguardando pagamento do DAM';
+      case 'aguardando_geracao_alvara':
+        return 'Aguardando geração do alvará';
       case 'autorizada':
         return 'Autorizada';
       case 'recusada':
@@ -321,4 +442,16 @@ class _FutureTypeSection extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AttachmentInput {
+  const _AttachmentInput({
+    required this.fileName,
+    required this.fileUrl,
+    this.mimeType,
+  });
+
+  final String fileName;
+  final String fileUrl;
+  final String? mimeType;
 }

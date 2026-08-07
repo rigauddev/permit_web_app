@@ -8,7 +8,7 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
 - Cadastro PF/PJ com validação prévia de e-mail.
 - Usuário admin seedado com permissão total: `admin@prefeitura.local` / senha `123456`.
 - Cadastro de usuários internos pela prefeitura via endpoint protegido.
-- Operador da Receita seedado para fluxo de DAM: `receita@prefeitura.local` / senha `123456`.
+- Gestor da Secretaria de Desenvolvimento Econômico seedado para fluxo de DAM/alvará: `gestor@prefeitura.local` / senha `123456`.
 - Serviço limitado ao MVP de Alvará de Evento, removendo IPTU, notas fiscais e outros alvarás do caminho principal.
 - Formulário separado em responsável, documentos, dados do evento, perguntas condicionais e revisão.
 - Validação de 15 dias de antecedência, campos obrigatórios e anexos mínimos.
@@ -29,18 +29,21 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
   - cadastro PJ com validação de e-mail: passou;
   - operador de Meio Ambiente visualiza apenas solicitação da secretaria: passou;
   - admin visualiza solicitações sem filtro de secretaria: passou.
-- Smoke test backend do DAM:
-  - operador da Receita anexa DAM à solicitação: passou;
-  - `dam_status` muda para `anexado`: passou;
-  - operador de outra secretaria recebe `403`: passou.
+- Smoke test backend do DAM/alvará:
+  - SDE recebe notificação quando todas as exigências são aprovadas: previsto no fluxo.
+  - SDE anexa DAM à solicitação em `aguardando_geracao_dam`: implementado.
+  - `dam_status` muda para `gerado` e a solicitação fica `aguardando_pagamento_dam`: implementado.
+  - cidadão anexa comprovante do DAM e a solicitação fica `aguardando_geracao_alvara`: implementado.
+  - SDE anexa alvará final e o sistema emite credencial/QR Code: implementado.
+  - operador de outra secretaria recebe `403`: esperado.
 - Smoke test backend do fluxo interno:
   - admin cria comentário geral na solicitação: passou;
   - operador aprova exigência da própria secretaria: passou;
   - operador de outra secretaria recebe `403`: passou;
-  - solicitação muda para `dam_pendente` após todas as anuências: passou;
-  - solicitação muda para `autorizada` após DAM anexado: passou.
+  - solicitação muda para `aguardando_geracao_dam` após todas as anuências: implementado;
+  - solicitação só muda para `autorizada` após anexo do alvará final: implementado.
 - Smoke test backend da credencial do evento:
-  - Receita emite autorização final após DAM anexado: passou;
+  - SDE emite autorização final após comprovante de DAM e alvará anexado: implementado;
   - sistema gera código público e URL de validação: passou;
   - validação da credencial retorna dados do evento, exigências e referência do DAM: passou;
   - revogação da credencial invalida o link: passou.
@@ -62,13 +65,20 @@ O fluxo principal do cidadão para `Solicitação de Alvará de Evento` está co
 
 ## DAM
 
-Neste primeiro momento, o DAM não será gerado automaticamente pelo sistema. O fluxo definido agora é: após aprovação/encaminhamento, o DAM deve ser anexado à solicitação aprovada. A geração automática do DAM fica planejada para uma integração futura.
+Neste primeiro momento, o DAM não será gerado automaticamente pelo sistema. O fluxo definido agora é: após todas as anuências, a Secretaria de Desenvolvimento Econômico gera o DAM fora do sistema e anexa o documento. O cidadão paga e anexa o comprovante. Depois a SDE anexa o alvará final e finaliza a solicitação. A geração automática do DAM fica planejada para uma integração futura.
 
 Já existe endpoint backend para registrar o anexo do DAM por metadados/URL:
 
 - `POST /permit-requests/{request_id}/dam-attachment`
-- permitido para `admin` ou usuário interno da `receita_municipal`
-- atualiza `dam_status` para `anexado`
+- permitido para `admin` ou usuário interno da `desenvolvimento_economico`
+- atualiza `dam_status` para `gerado`
+- muda a solicitação para `aguardando_pagamento_dam`
+
+Também foram adicionados:
+
+- `POST /permit-requests/{request_id}/dam-payment-proof`
+- `POST /permit-requests/{request_id}/final-permit-attachment`
+- notificação por e-mail via SMTP quando configurado, com fallback registrado no histórico da solicitação.
 
 ## Credencial / QR Code
 

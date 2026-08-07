@@ -7,7 +7,7 @@ import '../../core/routes/app_routes.dart';
 import '../../core/session_expiration.dart';
 import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
-import '../../shared/widgets/custom_drawer.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class SecretariaRequestsPage extends ConsumerStatefulWidget {
   const SecretariaRequestsPage({super.key, required this.userType});
@@ -27,10 +27,12 @@ class _SecretariaRequestsPageState
   bool _loading = true;
   List<Map<String, dynamic>> _requests = [];
   String? _error;
+  late Set<String> _statusFilter;
 
   @override
   void initState() {
     super.initState();
+    _statusFilter = _initialStatusFilter();
     _loadRequests();
   }
 
@@ -129,13 +131,146 @@ class _SecretariaRequestsPageState
     );
   }
 
+  Set<String> _initialStatusFilter() {
+    final value = Uri.base.queryParameters['status'];
+    if (value == null || value.trim().isEmpty) return <String>{};
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+  }
+
+  Future<void> _attachWorkflowDocument({
+    required Map<String, dynamic> request,
+    required String title,
+    required String action,
+  }) async {
+    final attachment = await _askAttachment(title);
+    if (attachment == null) return;
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      final requestId = request['formId'] as int? ?? request['id'] as int?;
+      if (requestId == null) return;
+      if (action == 'dam') {
+        await _api.attachDam(
+          accessToken: token,
+          requestId: requestId,
+          fileName: attachment.fileName,
+          fileUrl: attachment.fileUrl,
+          mimeType: attachment.mimeType,
+        );
+      } else {
+        await _api.attachFinalPermit(
+          accessToken: token,
+          requestId: requestId,
+          fileName: attachment.fileName,
+          fileUrl: attachment.fileUrl,
+          mimeType: attachment.mimeType,
+        );
+      }
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(action == 'dam' ? 'DAM anexado.' : 'Alvará anexado.'),
+        ),
+      );
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<_AttachmentInput?> _askAttachment(String title) async {
+    final fileController = TextEditingController();
+    final urlController = TextEditingController();
+    final mimeController = TextEditingController(text: 'application/pdf');
+    return showDialog<_AttachmentInput>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(title),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: fileController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome do arquivo',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'URL ou referência do arquivo',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: mimeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo MIME',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (fileController.text.trim().length < 3 ||
+                      urlController.text.trim().length < 3) {
+                    return;
+                  }
+                  Navigator.pop(
+                    context,
+                    _AttachmentInput(
+                      fileName: fileController.text.trim(),
+                      fileUrl: urlController.text.trim(),
+                      mimeType:
+                          mimeController.text.trim().isEmpty
+                              ? null
+                              : mimeController.text.trim(),
+                    ),
+                  );
+                },
+                child: const Text('Anexar'),
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
-    final visibleRequests = _filterRequestsForUser(_requests, user);
+    final visibleRequests = _filterRequestsForUser(
+      _requests,
+      user,
+      _statusFilter,
+    );
     final byType = _groupByType(visibleRequests);
 
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
       appBar: AppBar(
         leading: IconButton(
           tooltip: 'Voltar',
@@ -145,7 +280,6 @@ class _SecretariaRequestsPageState
         ),
         title: const Text('Central de solicitações'),
       ),
-      drawer: CustomDrawer(userType: widget.userType),
       body: RefreshIndicator(
         onRefresh: _loadRequests,
         child: ListView(
@@ -158,6 +292,11 @@ class _SecretariaRequestsPageState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _Header(user: user, total: visibleRequests.length),
+                    const SizedBox(height: 16),
+                    _StatusFilters(
+                      selected: _statusFilter,
+                      onChanged: (next) => setState(() => _statusFilter = next),
+                    ),
                     const SizedBox(height: 16),
                     if (_loading)
                       const Center(
@@ -203,6 +342,18 @@ class _SecretariaRequestsPageState
                                 status: 'recusada',
                                 title: 'Recusar exigência',
                               ),
+                          onAttachDam:
+                              (request) => _attachWorkflowDocument(
+                                request: request,
+                                title: 'Anexar DAM gerado',
+                                action: 'dam',
+                              ),
+                          onAttachFinalPermit:
+                              (request) => _attachWorkflowDocument(
+                                request: request,
+                                title: 'Anexar alvará final',
+                                action: 'alvara',
+                              ),
                         ),
                       ),
                   ],
@@ -218,11 +369,19 @@ class _SecretariaRequestsPageState
   static List<Map<String, dynamic>> _filterRequestsForUser(
     List<Map<String, dynamic>> requests,
     UserModel? user,
+    Set<String> statusFilter,
   ) {
-    if (user?.userType == 'admin') return requests;
+    bool matchesStatus(Map<String, dynamic> request) =>
+        statusFilter.isEmpty ||
+        statusFilter.contains(request['status']?.toString() ?? '');
+    if (user?.userType == 'admin') {
+      return requests.where(matchesStatus).toList();
+    }
     final secretaria = user?.secretaria;
     if (secretaria == null || secretaria.isEmpty) return const [];
     return requests.where((request) {
+      if (!matchesStatus(request)) return false;
+      if (secretaria == 'desenvolvimento_economico') return true;
       final requirements = request['perguntas'] as List<dynamic>? ?? [];
       return requirements.any(
         (item) =>
@@ -279,6 +438,55 @@ class _Header extends StatelessWidget {
   }
 }
 
+class _StatusFilters extends StatelessWidget {
+  const _StatusFilters({required this.selected, required this.onChanged});
+
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+
+  static const _filters = [
+    'aguardando_geracao_dam',
+    'aguardando_pagamento_dam',
+    'aguardando_geracao_alvara',
+    'em_analise',
+    'pendente_correcao',
+    'autorizada',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        const Text('Filtrar:'),
+        FilterChip(
+          label: const Text('Todos'),
+          selected: selected.isEmpty,
+          onSelected: (_) => onChanged(<String>{}),
+        ),
+        ..._filters.map((status) {
+          final isSelected = selected.contains(status);
+          return FilterChip(
+            label: Text(_formatStatus(status)),
+            selected: isSelected,
+            onSelected: (value) {
+              final next = Set<String>.from(selected);
+              if (value) {
+                next.add(status);
+              } else {
+                next.remove(status);
+              }
+              onChanged(next);
+            },
+          );
+        }),
+      ],
+    );
+  }
+}
+
 class _ServiceGroup extends StatelessWidget {
   const _ServiceGroup({
     required this.title,
@@ -287,6 +495,8 @@ class _ServiceGroup extends StatelessWidget {
     required this.onApprove,
     required this.onPending,
     required this.onReject,
+    required this.onAttachDam,
+    required this.onAttachFinalPermit,
   });
 
   final String title;
@@ -295,6 +505,8 @@ class _ServiceGroup extends StatelessWidget {
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
   final void Function(int requirementId) onReject;
+  final ValueChanged<Map<String, dynamic>> onAttachDam;
+  final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +527,8 @@ class _ServiceGroup extends StatelessWidget {
                   onApprove: onApprove,
                   onPending: onPending,
                   onReject: onReject,
+                  onAttachDam: onAttachDam,
+                  onAttachFinalPermit: onAttachFinalPermit,
                 ),
               );
             }).toList(),
@@ -344,6 +558,8 @@ class _RequestCard extends StatelessWidget {
     required this.onApprove,
     required this.onPending,
     required this.onReject,
+    required this.onAttachDam,
+    required this.onAttachFinalPermit,
   });
 
   final Map<String, dynamic> request;
@@ -351,6 +567,8 @@ class _RequestCard extends StatelessWidget {
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
   final void Function(int requirementId) onReject;
+  final ValueChanged<Map<String, dynamic>> onAttachDam;
+  final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
 
   @override
   Widget build(BuildContext context) {
@@ -383,6 +601,12 @@ class _RequestCard extends StatelessWidget {
             '${request['responsavel'] ?? '-'} | ${request['data_do_evento'] ?? '-'} | ${request['local_evento'] ?? '-'}',
           ),
           const Divider(height: 24),
+          _WorkflowActions(
+            request: request,
+            onAttachDam: onAttachDam,
+            onAttachFinalPermit: onAttachFinalPermit,
+          ),
+          if (requirements.isNotEmpty) const Divider(height: 24),
           ...requirements.map(
             (requirement) => _RequirementRow(
               requirement: requirement,
@@ -393,6 +617,47 @@ class _RequestCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WorkflowActions extends StatelessWidget {
+  const _WorkflowActions({
+    required this.request,
+    required this.onAttachDam,
+    required this.onAttachFinalPermit,
+  });
+
+  final Map<String, dynamic> request;
+  final ValueChanged<Map<String, dynamic>> onAttachDam;
+  final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = request['status']?.toString() ?? '';
+    final actions = <Widget>[];
+    if (status == 'aguardando_geracao_dam') {
+      actions.add(
+        ElevatedButton.icon(
+          onPressed: () => onAttachDam(request),
+          icon: const Icon(Icons.upload_file),
+          label: const Text('Anexar DAM gerado'),
+        ),
+      );
+    }
+    if (status == 'aguardando_geracao_alvara' || status == 'isenta_dam') {
+      actions.add(
+        ElevatedButton.icon(
+          onPressed: () => onAttachFinalPermit(request),
+          icon: const Icon(Icons.verified_outlined),
+          label: const Text('Anexar alvará e gerar QR Code'),
+        ),
+      );
+    }
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(spacing: 10, runSpacing: 8, children: actions),
     );
   }
 }
@@ -463,7 +728,10 @@ class _StatusChip extends StatelessWidget {
       'aprovada' || 'autorizada' || 'isenta_dam' => Colors.green,
       'recusada' || 'indeferida' => Colors.red,
       'pendente_documento' || 'pendente_correcao' => Colors.orange,
-      'dam_pendente' => Colors.blueGrey,
+      'dam_pendente' ||
+      'aguardando_geracao_dam' ||
+      'aguardando_pagamento_dam' ||
+      'aguardando_geracao_alvara' => Colors.blueGrey,
       _ => Colors.blue,
     };
     return Chip(
@@ -509,6 +777,18 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+class _AttachmentInput {
+  const _AttachmentInput({
+    required this.fileName,
+    required this.fileUrl,
+    this.mimeType,
+  });
+
+  final String fileName;
+  final String fileUrl;
+  final String? mimeType;
+}
+
 String _formatSecretaria(String? slug) {
   switch (slug) {
     case 'meio_ambiente':
@@ -542,6 +822,12 @@ String _formatStatus(String status) {
       return 'Pendente de documento';
     case 'em_analise':
       return 'Em análise';
+    case 'aguardando_geracao_dam':
+      return 'Aguardando geração do DAM';
+    case 'aguardando_pagamento_dam':
+      return 'Aguardando pagamento do DAM';
+    case 'aguardando_geracao_alvara':
+      return 'Aguardando geração do alvará';
     case 'dam_pendente':
       return 'DAM pendente';
     case 'autorizada':

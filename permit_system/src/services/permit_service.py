@@ -1,5 +1,7 @@
 import os
 import secrets
+import smtplib
+from email.message import EmailMessage
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -19,6 +21,7 @@ from src.infra.database.models import (
 )
 from src.schemas.permit_schema import (
     AttachmentResponse,
+    AttachmentCreateRequest,
     AuthorizationTemplateRequest,
     AuthorizationTemplateResponse,
     CommentCreateRequest,
@@ -63,6 +66,18 @@ QUESTION_RULES = {
 
 REQUIREMENT_STATUSES = {"aguardando_analise", "aprovada", "recusada", "pendente_documento"}
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8080")
+SDE_EMAIL = os.getenv("SDE_EMAIL", "sde@valenca.ba.gov.br")
+STATUS_AGUARDANDO_GERACAO_DAM = "aguardando_geracao_dam"
+STATUS_AGUARDANDO_PAGAMENTO_DAM = "aguardando_pagamento_dam"
+STATUS_AGUARDANDO_GERACAO_ALVARA = "aguardando_geracao_alvara"
+STATUS_AUTORIZADA = "autorizada"
+DAM_STATUS_PENDENTE_PREFEITURA = "pendente_prefeitura"
+DAM_STATUS_GERADO = "gerado"
+DAM_STATUS_PAGO = "pago"
+DAM_STATUS_ISENTO = "isento"
+ATTACHMENT_DAM = "dam"
+ATTACHMENT_DAM_PAYMENT = "comprovante_pagamento_dam"
+ATTACHMENT_FINAL_PERMIT = "alvara_evento"
 AUTHORIZATION_TEMPLATE_SLUG = "alvara_evento"
 DEFAULT_AUTHORIZATION_HEADER = (
     "A Prefeitura Municipal de Valença, por meio da Central de Eventos, autoriza a realização do evento abaixo "
@@ -82,7 +97,7 @@ class PermitService:
     def create_request(self, payload: PermitCreateRequest, solicitante: UserModel) -> PermitResponse:
         self._validate_payload(payload)
         protocolo = self._generate_protocol()
-        dam_status = "isento" if payload.is_beneficente else "pendente_prefeitura"
+        dam_status = DAM_STATUS_ISENTO if payload.is_beneficente else "nao_gerado"
         request = PermitRequestModel(
             protocolo=protocolo,
             solicitante_id=solicitante.id,
@@ -126,9 +141,10 @@ class PermitService:
     def list_requests(self, current_user: UserModel) -> list[PermitResponse]:
         query = self.db.query(PermitRequestModel)
         role = current_user.role.slug
+        secretaria = current_user.secretaria.slug if current_user.secretaria else None
         if role == "cidadao":
             query = query.filter(PermitRequestModel.solicitante_id == current_user.id)
-        elif role in {"gestor_secretaria", "operador_secretaria"}:
+        elif role in {"gestor_secretaria", "operador_secretaria"} and secretaria != "desenvolvimento_economico":
             query = (
                 query.join(PermitRequirementModel)
                 .filter(PermitRequirementModel.secretaria_id == current_user.secretaria_id)
@@ -161,6 +177,9 @@ class PermitService:
         if new_status not in REQUIREMENT_STATUSES:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status de exigência inválido")
 
+        permit_request = requirement.permit_request
+        previous_status = permit_request.status
+
         requirement.status = new_status
         if payload.observacoes is not None:
             requirement.observacoes = payload.observacoes
@@ -172,7 +191,12 @@ class PermitService:
                     requirement_id=requirement.id,
                 )
 
-        self._recalculate_request_status(requirement.permit_request)
+        self._recalculate_request_status(permit_request)
+        if (
+            previous_status != STATUS_AGUARDANDO_GERACAO_DAM
+            and permit_request.status == STATUS_AGUARDANDO_GERACAO_DAM
+        ):
+            self._notify_development_economico_ready_for_dam(permit_request, current_user)
         self.db.commit()
         self.db.refresh(requirement)
         return self._requirement_to_response(requirement)
@@ -229,21 +253,72 @@ class PermitService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Evento beneficente é isento de DAM.",
             )
-
-        attachment = AttachmentModel(
-            permit_request_id=request.id,
-            tipo_documento="dam",
-            nome_arquivo=payload.nome_arquivo,
-            arquivo_url=payload.arquivo_url,
-            mime_type=payload.mime_type,
-            tamanho_bytes=payload.tamanho_bytes,
-        )
-        request.dam_status = "anexado"
         self._recalculate_request_status(request)
+        if request.status != STATUS_AGUARDANDO_GERACAO_DAM:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="DAM só pode ser anexado após todas as anuências serem aprovadas.",
+            )
+
+        attachment = self._create_attachment(request, payload, ATTACHMENT_DAM)
+        request.dam_status = DAM_STATUS_GERADO
+        request.status = STATUS_AGUARDANDO_PAGAMENTO_DAM
+        self._notify_citizen_dam_ready(request, current_user)
         self.db.add(attachment)
         self.db.commit()
         self.db.refresh(attachment)
         return self._attachment_to_response(attachment)
+
+    def attach_dam_payment_proof(
+        self,
+        request_id: int,
+        payload: AttachmentCreateRequest,
+        current_user: UserModel,
+    ) -> AttachmentResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if request.solicitante_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        self._recalculate_request_status(request)
+        if request.status != STATUS_AGUARDANDO_PAGAMENTO_DAM:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Comprovante só pode ser anexado quando o DAM estiver aguardando pagamento.",
+            )
+
+        attachment = self._create_attachment(request, payload, ATTACHMENT_DAM_PAYMENT)
+        request.dam_status = DAM_STATUS_PAGO
+        request.status = STATUS_AGUARDANDO_GERACAO_ALVARA
+        self._notify_development_economico_ready_for_final_permit(request, current_user)
+        self.db.add(attachment)
+        self.db.commit()
+        self.db.refresh(attachment)
+        return self._attachment_to_response(attachment)
+
+    def attach_final_permit(
+        self,
+        request_id: int,
+        payload: AttachmentCreateRequest,
+        current_user: UserModel,
+    ) -> EventCredentialResponse:
+        self._ensure_can_finalize_permit(current_user)
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        self._recalculate_request_status(request)
+        if request.status not in {STATUS_AGUARDANDO_GERACAO_ALVARA, "isenta_dam"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Alvará só pode ser anexado após pagamento do DAM ou isenção validada.",
+            )
+        attachment = self._create_attachment(request, payload, ATTACHMENT_FINAL_PERMIT)
+        request.status = STATUS_AUTORIZADA if not request.is_beneficente else "isenta_dam"
+        self.db.add(attachment)
+        self.db.commit()
+        self.db.refresh(attachment)
+        self._notify_citizen_final_permit_ready(request, current_user)
+        return self.issue_authorization(request.id, current_user)
 
     def issue_authorization(self, request_id: int, current_user: UserModel) -> EventCredentialResponse:
         self._ensure_can_issue_authorization(current_user)
@@ -469,9 +544,19 @@ class PermitService:
         secretaria = current_user.secretaria.slug if current_user.secretaria else None
         if role == "admin":
             return
-        if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "receita_municipal":
+        if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "desenvolvimento_economico":
             return
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para anexar DAM")
+
+    @staticmethod
+    def _ensure_can_finalize_permit(current_user: UserModel) -> None:
+        role = current_user.role.slug
+        secretaria = current_user.secretaria.slug if current_user.secretaria else None
+        if role == "admin":
+            return
+        if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "desenvolvimento_economico":
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para finalizar alvará")
 
     @staticmethod
     def _ensure_can_issue_authorization(current_user: UserModel) -> None:
@@ -485,7 +570,7 @@ class PermitService:
         secretaria = current_user.secretaria.slug if current_user.secretaria else None
         if role == "admin":
             return True
-        if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "receita_municipal":
+        if role in {"gestor_secretaria", "operador_secretaria"} and secretaria == "desenvolvimento_economico":
             return True
         return False
 
@@ -496,6 +581,8 @@ class PermitService:
             return True
         if role == "cidadao":
             return request.solicitante_id == current_user.id
+        if role in {"gestor_secretaria", "operador_secretaria"} and current_user.secretaria and current_user.secretaria.slug == "desenvolvimento_economico":
+            return True
         if role in {"gestor_secretaria", "operador_secretaria"}:
             return any(item.secretaria_id == current_user.secretaria_id for item in request.requirements)
         return False
@@ -512,6 +599,7 @@ class PermitService:
     @staticmethod
     def _recalculate_request_status(request: PermitRequestModel) -> None:
         requirement_statuses = [item.status for item in request.requirements]
+        attachment_types = {item.tipo_documento for item in request.attachments}
         if not requirement_statuses:
             request.status = "enviada"
             return
@@ -523,13 +611,23 @@ class PermitService:
             return
         if all(item == "aprovada" for item in requirement_statuses):
             if request.is_beneficente:
-                request.dam_status = "isento"
-                request.status = "isenta_dam"
-            elif request.dam_status == "anexado":
-                request.status = "autorizada"
+                request.dam_status = DAM_STATUS_ISENTO
+                if ATTACHMENT_FINAL_PERMIT in attachment_types:
+                    request.status = "isenta_dam"
+                else:
+                    request.status = STATUS_AGUARDANDO_GERACAO_ALVARA
+            elif ATTACHMENT_FINAL_PERMIT in attachment_types:
+                request.dam_status = DAM_STATUS_PAGO
+                request.status = STATUS_AUTORIZADA
+            elif ATTACHMENT_DAM_PAYMENT in attachment_types or request.dam_status == DAM_STATUS_PAGO:
+                request.dam_status = DAM_STATUS_PAGO
+                request.status = STATUS_AGUARDANDO_GERACAO_ALVARA
+            elif ATTACHMENT_DAM in attachment_types or request.dam_status == DAM_STATUS_GERADO:
+                request.dam_status = DAM_STATUS_GERADO
+                request.status = STATUS_AGUARDANDO_PAGAMENTO_DAM
             else:
-                request.dam_status = "pendente_prefeitura"
-                request.status = "dam_pendente"
+                request.dam_status = DAM_STATUS_PENDENTE_PREFEITURA
+                request.status = STATUS_AGUARDANDO_GERACAO_DAM
             return
         request.status = "em_analise"
 
@@ -548,6 +646,132 @@ class PermitService:
         )
         self.db.add(comment)
         return comment
+
+    @staticmethod
+    def _create_attachment(
+        request: PermitRequestModel,
+        payload: AttachmentCreateRequest,
+        tipo_documento: str,
+    ) -> AttachmentModel:
+        return AttachmentModel(
+            permit_request_id=request.id,
+            tipo_documento=tipo_documento,
+            nome_arquivo=payload.nome_arquivo,
+            arquivo_url=payload.arquivo_url,
+            mime_type=payload.mime_type,
+            tamanho_bytes=payload.tamanho_bytes,
+        )
+
+    def _notify_development_economico_ready_for_dam(
+        self,
+        request: PermitRequestModel,
+        actor: UserModel,
+    ) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=SDE_EMAIL,
+            assunto="Solicitação pronta para geração do DAM",
+            link=f"{PUBLIC_BASE_URL}/secretaria-requests?status={STATUS_AGUARDANDO_GERACAO_DAM}",
+            mensagem=(
+                "Todas as exigências da solicitação foram aprovadas. "
+                "A solicitação está aguardando geração/anexo do DAM."
+            ),
+        )
+
+    def _notify_citizen_dam_ready(self, request: PermitRequestModel, actor: UserModel) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=str((request.dados_responsavel or {}).get("email") or request.solicitante.email),
+            assunto="DAM disponível para pagamento",
+            link=f"{PUBLIC_BASE_URL}/my-requests?status={STATUS_AGUARDANDO_PAGAMENTO_DAM}",
+            mensagem=(
+                "O DAM foi anexado pela Secretaria de Desenvolvimento Econômico. "
+                "O solicitante deve realizar o pagamento e anexar o comprovante no sistema."
+            ),
+        )
+
+    def _notify_development_economico_ready_for_final_permit(
+        self,
+        request: PermitRequestModel,
+        actor: UserModel,
+    ) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=SDE_EMAIL,
+            assunto="Comprovante do DAM anexado - gerar alvará",
+            link=(
+                f"{PUBLIC_BASE_URL}/secretaria-requests?"
+                f"status={STATUS_AGUARDANDO_GERACAO_DAM},{STATUS_AGUARDANDO_GERACAO_ALVARA}"
+            ),
+            mensagem=(
+                "O solicitante anexou o comprovante de pagamento do DAM. "
+                "A solicitação está aguardando geração/anexo do alvará."
+            ),
+        )
+
+    def _notify_citizen_final_permit_ready(self, request: PermitRequestModel, actor: UserModel) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=str((request.dados_responsavel or {}).get("email") or request.solicitante.email),
+            assunto="Alvará de evento emitido",
+            link=f"{PUBLIC_BASE_URL}/my-requests?status={STATUS_AUTORIZADA}",
+            mensagem=(
+                "O alvará foi anexado e a credencial/QR Code de validação está disponível no sistema."
+            ),
+        )
+
+    def _record_email_notification(
+        self,
+        request: PermitRequestModel,
+        actor: UserModel,
+        destinatario: str,
+        assunto: str,
+        link: str,
+        mensagem: str,
+    ) -> None:
+        body = (
+            f"[NOTIFICAÇÃO POR E-MAIL - MVP]\n"
+            f"Destinatário: {destinatario}\n"
+            f"Assunto: {assunto}\n"
+            f"Link: {link}\n"
+            f"Mensagem: {mensagem}"
+        )
+        email_status = self._send_email(destinatario, assunto, f"{mensagem}\n\nAcesse: {link}")
+        if email_status:
+            body = f"{body}\nStatus do envio: {email_status}"
+        print(body)
+        self._add_comment(request.id, actor, body)
+
+    @staticmethod
+    def _send_email(destinatario: str, assunto: str, mensagem: str) -> str:
+        host = os.getenv("SMTP_HOST")
+        if not host:
+            return "SMTP não configurado; notificação registrada no processo."
+
+        port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_from = os.getenv("SMTP_FROM") or os.getenv("SMTP_USER") or "no-reply@valenca.ba.gov.br"
+        msg = EmailMessage()
+        msg["From"] = smtp_from
+        msg["To"] = destinatario
+        msg["Subject"] = assunto
+        msg.set_content(mensagem)
+
+        try:
+            with smtplib.SMTP(host, port, timeout=10) as smtp:
+                if os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}:
+                    smtp.starttls()
+                user = os.getenv("SMTP_USER")
+                password = os.getenv("SMTP_PASSWORD")
+                if user and password:
+                    smtp.login(user, password)
+                smtp.send_message(msg)
+            return "E-mail enviado via SMTP."
+        except Exception as exc:  # pragma: no cover - depende do provedor SMTP externo.
+            return f"Falha no SMTP; notificação registrada no processo. Erro: {exc}"
 
     @staticmethod
     def _generate_protocol() -> str:
