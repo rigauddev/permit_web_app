@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
+import '../../core/session_expiration.dart';
 import '../../shared/widgets/custom_drawer.dart';
 
 class HomeContentPage extends StatefulWidget {
@@ -72,10 +73,21 @@ class _HomeContentPageState extends State<HomeContentPage> {
         }
       }
       final token = await _storage.read(key: 'access_token');
-      if (token == null) throw PermitApiException('Sessão expirada.');
+      if (token == null) {
+        if (!mounted) return;
+        await SessionExpiration.logout(context);
+        return;
+      }
       final cards = await _api.listHomeContent(token);
       if (!mounted) return;
       setState(() => _cards = cards);
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      _showMessage(error.toString(), isError: true);
     } catch (error) {
       if (!mounted) return;
       _showMessage(error.toString(), isError: true);
@@ -88,7 +100,8 @@ class _HomeContentPageState extends State<HomeContentPage> {
     if (!_formKey.currentState!.validate()) return;
     final token = await _storage.read(key: 'access_token');
     if (token == null) {
-      _showMessage('Sessão expirada.', isError: true);
+      if (!mounted) return;
+      await SessionExpiration.logout(context);
       return;
     }
 
@@ -120,6 +133,12 @@ class _HomeContentPageState extends State<HomeContentPage> {
       _clearForm();
       await _load();
       _showMessage('Conteúdo salvo com sucesso.');
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      _showMessage(error.toString(), isError: true);
     } catch (error) {
       _showMessage(error.toString(), isError: true);
     } finally {
@@ -185,7 +204,16 @@ class _HomeContentPageState extends State<HomeContentPage> {
             .length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Conteúdo da página inicial')),
+      appBar: AppBar(
+        title: const Text('Conteúdo da página inicial'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       drawer: CustomDrawer(userType: widget.userType),
       body:
           _loading
@@ -365,5 +393,13 @@ class _HomeContentPageState extends State<HomeContentPage> {
                 ),
               ),
     );
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   }
 }

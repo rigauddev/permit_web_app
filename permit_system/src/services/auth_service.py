@@ -28,13 +28,14 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
 
-    def start_login(self, email: str, senha: str) -> LoginStartResponse:
+    def start_login(self, email: str, senha: str, access_type: str | None = None) -> LoginStartResponse:
         user = self.db.query(UserModel).filter(UserModel.email == email, UserModel.is_active.is_(True)).first()
         if not user or not verify_password(senha, user.senha_hash):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email ou senha inválidos",
-            )
+            self._invalid_credentials()
+        if access_type == "cidadao" and user.role.slug != "cidadao":
+            self._invalid_credentials()
+        if access_type == "interno" and user.role.slug == "cidadao":
+            self._invalid_credentials()
 
         methods = self._available_mfa_methods(user)
         if not methods:
@@ -49,7 +50,7 @@ class AuthService:
         user = self._get_user_from_challenge(challenge_token)
         methods = self._available_mfa_methods(user)
         if method not in methods:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Método MFA não habilitado")
+            self._invalid_credentials()
 
         code = f"{random.randint(0, 999999):06d}"
         user.mfa_code_hash = hash_password(code)
@@ -67,15 +68,15 @@ class AuthService:
         methods = self._available_mfa_methods(user)
         expires_at = user.mfa_code_expires_at
         if method not in methods:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Método MFA não habilitado")
+            self._invalid_credentials()
         if not user.mfa_code_hash or not expires_at:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código MFA não gerado")
+            self._invalid_credentials()
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         if expires_at < datetime.now(timezone.utc):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código MFA expirado")
+            self._invalid_credentials()
         if not verify_password(code, user.mfa_code_hash):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Código MFA inválido")
+            self._invalid_credentials()
 
         user.mfa_code_hash = None
         user.mfa_code_expires_at = None
@@ -206,13 +207,17 @@ class AuthService:
         try:
             payload = decode_token(challenge_token)
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Desafio MFA inválido") from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas") from exc
         if payload.get("purpose") != "mfa":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Desafio MFA inválido")
+            self._invalid_credentials()
         user = self.db.query(UserModel).filter(UserModel.id == int(payload["sub"]), UserModel.is_active.is_(True)).first()
         if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário inválido")
+            self._invalid_credentials()
         return user
+
+    @staticmethod
+    def _invalid_credentials() -> None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
     @staticmethod
     def _available_mfa_methods(user: UserModel) -> list[str]:

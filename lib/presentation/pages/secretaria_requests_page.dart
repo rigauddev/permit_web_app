@@ -1,0 +1,558 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../../core/permit_api_service.dart';
+import '../../core/routes/app_routes.dart';
+import '../../core/session_expiration.dart';
+import '../../data/models/user_model.dart';
+import '../../data/providers/user_provider.dart';
+import '../../shared/widgets/custom_drawer.dart';
+
+class SecretariaRequestsPage extends ConsumerStatefulWidget {
+  const SecretariaRequestsPage({super.key, required this.userType});
+
+  final String userType;
+
+  @override
+  ConsumerState<SecretariaRequestsPage> createState() =>
+      _SecretariaRequestsPageState();
+}
+
+class _SecretariaRequestsPageState
+    extends ConsumerState<SecretariaRequestsPage> {
+  final _api = PermitApiService();
+  final _storage = const FlutterSecureStorage();
+
+  bool _loading = true;
+  List<Map<String, dynamic>> _requests = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRequests();
+  }
+
+  Future<void> _loadRequests() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      final requests = await _api.listRequests(token);
+      if (!mounted) return;
+      setState(() => _requests = requests);
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Não foi possível carregar as solicitações.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _updateRequirement({
+    required int requirementId,
+    required String status,
+    required String title,
+  }) async {
+    final observation = await _askObservation(title);
+    if (observation == null) return;
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      await _api.updateRequirementStatus(
+        accessToken: token,
+        requirementId: requirementId,
+        status: status,
+        observacoes: observation.trim().isEmpty ? null : observation.trim(),
+      );
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Solicitação atualizada.')));
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<String?> _askObservation(String title) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(title),
+            content: TextField(
+              controller: controller,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Observação',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, controller.text),
+                child: const Text('Confirmar'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(userProvider);
+    final visibleRequests = _filterRequestsForUser(_requests, user);
+    final byType = _groupByType(visibleRequests);
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Voltar',
+          icon: const Icon(Icons.arrow_back),
+          onPressed:
+              () => Navigator.pushReplacementNamed(context, AppRoutes.home),
+        ),
+        title: const Text('Central de solicitações'),
+      ),
+      drawer: CustomDrawer(userType: widget.userType),
+      body: RefreshIndicator(
+        onRefresh: _loadRequests,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Header(user: user, total: visibleRequests.length),
+                    const SizedBox(height: 16),
+                    if (_loading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else if (_error != null)
+                      _EmptyState(
+                        icon: Icons.error_outline,
+                        title: _error!,
+                        action: _loadRequests,
+                      )
+                    else if (byType.isEmpty)
+                      _EmptyState(
+                        icon: Icons.inbox_outlined,
+                        title:
+                            'Nenhuma solicitação aguardando esta secretaria.',
+                        action: _loadRequests,
+                      )
+                    else
+                      ...byType.entries.map(
+                        (entry) => _ServiceGroup(
+                          title: entry.key,
+                          requests: entry.value,
+                          currentUser: user,
+                          onApprove:
+                              (id) => _updateRequirement(
+                                requirementId: id,
+                                status: 'aprovada',
+                                title: 'Aprovar exigência',
+                              ),
+                          onPending:
+                              (id) => _updateRequirement(
+                                requirementId: id,
+                                status: 'pendente_documento',
+                                title: 'Solicitar correção/documento',
+                              ),
+                          onReject:
+                              (id) => _updateRequirement(
+                                requirementId: id,
+                                status: 'recusada',
+                                title: 'Recusar exigência',
+                              ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static List<Map<String, dynamic>> _filterRequestsForUser(
+    List<Map<String, dynamic>> requests,
+    UserModel? user,
+  ) {
+    if (user?.userType == 'admin') return requests;
+    final secretaria = user?.secretaria;
+    if (secretaria == null || secretaria.isEmpty) return const [];
+    return requests.where((request) {
+      final requirements = request['perguntas'] as List<dynamic>? ?? [];
+      return requirements.any(
+        (item) =>
+            item is Map<String, dynamic> &&
+            item['secretaria_slug'] == secretaria,
+      );
+    }).toList();
+  }
+
+  static Map<String, List<Map<String, dynamic>>> _groupByType(
+    List<Map<String, dynamic>> requests,
+  ) {
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final request in requests) {
+      final type = request['permitType']?.toString() ?? 'Serviço';
+      grouped.putIfAbsent(type, () => []).add(request);
+    }
+    return grouped;
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.user, required this.total});
+
+  final UserModel? user;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final secretaria =
+        user?.userType == 'admin'
+            ? 'Todas as secretarias'
+            : _formatSecretaria(user?.secretaria);
+    return Row(
+      children: [
+        Image.asset('assets/images/logo_prefeitura_1.png', height: 64),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                secretaria,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              Text('$total solicitação(ões) com exigências vinculadas.'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceGroup extends StatelessWidget {
+  const _ServiceGroup({
+    required this.title,
+    required this.requests,
+    required this.currentUser,
+    required this.onApprove,
+    required this.onPending,
+    required this.onReject,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> requests;
+  final UserModel? currentUser;
+  final void Function(int requirementId) onApprove;
+  final void Function(int requirementId) onPending;
+  final void Function(int requirementId) onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text('${requests.length} solicitação(ões)'),
+        children:
+            requests.map((request) {
+              final requirements = _visibleRequirements(request, currentUser);
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                child: _RequestCard(
+                  request: request,
+                  requirements: requirements,
+                  onApprove: onApprove,
+                  onPending: onPending,
+                  onReject: onReject,
+                ),
+              );
+            }).toList(),
+      ),
+    );
+  }
+
+  static List<Map<String, dynamic>> _visibleRequirements(
+    Map<String, dynamic> request,
+    UserModel? user,
+  ) {
+    final requirements =
+        (request['perguntas'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    if (user?.userType == 'admin') return requirements;
+    return requirements
+        .where((item) => item['secretaria_slug'] == user?.secretaria)
+        .toList();
+  }
+}
+
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({
+    required this.request,
+    required this.requirements,
+    required this.onApprove,
+    required this.onPending,
+    required this.onReject,
+  });
+
+  final Map<String, dynamic> request;
+  final List<Map<String, dynamic>> requirements;
+  final void Function(int requirementId) onApprove;
+  final void Function(int requirementId) onPending;
+  final void Function(int requirementId) onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                request['nome_do_evento']?.toString() ?? 'Evento',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              _StatusChip(status: request['status']?.toString() ?? ''),
+              Text('Protocolo: ${request['protocolo'] ?? '-'}'),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${request['responsavel'] ?? '-'} | ${request['data_do_evento'] ?? '-'} | ${request['local_evento'] ?? '-'}',
+          ),
+          const Divider(height: 24),
+          ...requirements.map(
+            (requirement) => _RequirementRow(
+              requirement: requirement,
+              onApprove: onApprove,
+              onPending: onPending,
+              onReject: onReject,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequirementRow extends StatelessWidget {
+  const _RequirementRow({
+    required this.requirement,
+    required this.onApprove,
+    required this.onPending,
+    required this.onReject,
+  });
+
+  final Map<String, dynamic> requirement;
+  final void Function(int requirementId) onApprove;
+  final void Function(int requirementId) onPending;
+  final void Function(int requirementId) onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = requirement['id'] as int?;
+    final status = requirement['status']?.toString() ?? '';
+    final canAct = id != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox(
+            width: 330,
+            child: Text(requirement['pergunta']?.toString() ?? 'Exigência'),
+          ),
+          SizedBox(
+            width: 180,
+            child: Text(requirement['secretaria']?.toString() ?? ''),
+          ),
+          _StatusChip(status: status),
+          OutlinedButton.icon(
+            onPressed: canAct ? () => onPending(id) : null,
+            icon: const Icon(Icons.assignment_late_outlined),
+            label: const Text('Correção'),
+          ),
+          OutlinedButton.icon(
+            onPressed: canAct ? () => onReject(id) : null,
+            icon: const Icon(Icons.block_outlined),
+            label: const Text('Recusar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: canAct ? () => onApprove(id) : null,
+            icon: const Icon(Icons.check_circle_outline),
+            label: const Text('Aprovar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      'aprovada' || 'autorizada' || 'isenta_dam' => Colors.green,
+      'recusada' || 'indeferida' => Colors.red,
+      'pendente_documento' || 'pendente_correcao' => Colors.orange,
+      'dam_pendente' => Colors.blueGrey,
+      _ => Colors.blue,
+    };
+    return Chip(
+      label: Text(_formatStatus(status)),
+      side: BorderSide(color: color.withValues(alpha: 0.3)),
+      backgroundColor: color.withValues(alpha: 0.09),
+      labelStyle: TextStyle(color: color, fontWeight: FontWeight.w700),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final Future<void> Function() action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Icon(icon, size: 42, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 12),
+            Text(title, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: action,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Atualizar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _formatSecretaria(String? slug) {
+  switch (slug) {
+    case 'meio_ambiente':
+      return 'Meio Ambiente';
+    case 'infraestrutura':
+      return 'Infraestrutura';
+    case 'desenvolvimento_economico':
+      return 'Desenvolvimento Econômico';
+    case 'dmtran':
+      return 'DMTRAN';
+    case 'vigilancia_sanitaria':
+      return 'Vigilância Sanitária';
+    case 'guarda_civil':
+      return 'Guarda Civil Municipal';
+    case 'receita_municipal':
+      return 'Receita Municipal';
+    default:
+      return slug ?? 'Secretaria';
+  }
+}
+
+String _formatStatus(String status) {
+  switch (status) {
+    case 'aguardando_analise':
+      return 'Aguardando análise';
+    case 'aprovada':
+      return 'Aprovada';
+    case 'recusada':
+      return 'Recusada';
+    case 'pendente_documento':
+      return 'Pendente de documento';
+    case 'em_analise':
+      return 'Em análise';
+    case 'dam_pendente':
+      return 'DAM pendente';
+    case 'autorizada':
+      return 'Autorizada';
+    case 'isenta_dam':
+      return 'Isenta de DAM';
+    case 'indeferida':
+      return 'Indeferida';
+    case 'pendente_correcao':
+      return 'Pendente de correção';
+    default:
+      return status.isEmpty ? 'Status' : status;
+  }
+}
