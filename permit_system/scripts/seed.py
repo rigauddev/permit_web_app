@@ -34,6 +34,21 @@ SECRETARIAS = [
     ("receita_municipal", "Receita Municipal"),
 ]
 
+LEGACY_TEST_USERS = {
+    "meio_ambiente": [
+        ("meioambiente@prefeitura.local", "Operador Meio Ambiente", "operador_secretaria"),
+    ],
+    "dmtran": [
+        ("dmtran@prefeitura.local", "Operador DMTRAN", "operador_secretaria"),
+    ],
+    "receita_municipal": [
+        ("receita@prefeitura.local", "Operador Receita Municipal", "operador_secretaria"),
+    ],
+    "desenvolvimento_economico": [
+        ("gestor@prefeitura.local", "Gestor Desenvolvimento Econômico", "gestor_secretaria"),
+    ],
+}
+
 
 def get_or_create(db, model, defaults=None, **filters):
     instance = db.query(model).filter_by(**filters).first()
@@ -75,35 +90,42 @@ def seed_users(db, roles, secretarias):
             "cpf_cnpj": "11111111111",
             "role_id": roles["cidadao"].id,
         },
-        {
-            "email": "meioambiente@prefeitura.local",
-            "nome": "Operador Meio Ambiente",
-            "cpf_cnpj": "22222222222",
-            "role_id": roles["operador_secretaria"].id,
-            "secretaria_id": secretarias["meio_ambiente"].id,
-        },
-        {
-            "email": "dmtran@prefeitura.local",
-            "nome": "Operador DMTRAN",
-            "cpf_cnpj": "33333333333",
-            "role_id": roles["operador_secretaria"].id,
-            "secretaria_id": secretarias["dmtran"].id,
-        },
-        {
-            "email": "receita@prefeitura.local",
-            "nome": "Operador Receita Municipal",
-            "cpf_cnpj": "77777777777",
-            "role_id": roles["operador_secretaria"].id,
-            "secretaria_id": secretarias["receita_municipal"].id,
-        },
-        {
-            "email": "gestor@prefeitura.local",
-            "nome": "Gestor Desenvolvimento Econômico",
-            "cpf_cnpj": "44444444444",
-            "role_id": roles["gestor_secretaria"].id,
-            "secretaria_id": secretarias["desenvolvimento_economico"].id,
-        },
     ]
+    cpf_seed = 20000000000
+    for index, (secretaria_slug, secretaria_nome) in enumerate(SECRETARIAS, start=1):
+        secretaria_id = secretarias[secretaria_slug].id
+        label = secretaria_nome.replace("Secretaria de ", "")
+        users.extend(
+            [
+                {
+                    "email": f"gestor_{secretaria_slug}@prefeitura.local",
+                    "nome": f"Gestor {label}",
+                    "cpf_cnpj": str(cpf_seed + index * 10 + 1),
+                    "role_id": roles["gestor_secretaria"].id,
+                    "secretaria_id": secretaria_id,
+                },
+                {
+                    "email": f"operador_{secretaria_slug}@prefeitura.local",
+                    "nome": f"Operador {label}",
+                    "cpf_cnpj": str(cpf_seed + index * 10 + 2),
+                    "role_id": roles["operador_secretaria"].id,
+                    "secretaria_id": secretaria_id,
+                },
+            ]
+        )
+
+    legacy_cpf_seed = 30000000000
+    for index, (secretaria_slug, legacy_users) in enumerate(LEGACY_TEST_USERS.items(), start=1):
+        for offset, (email, nome, role_slug) in enumerate(legacy_users, start=1):
+            users.append(
+                {
+                    "email": email,
+                    "nome": nome,
+                    "cpf_cnpj": str(legacy_cpf_seed + index * 10 + offset),
+                    "role_id": roles[role_slug].id,
+                    "secretaria_id": secretarias[secretaria_slug].id,
+                }
+            )
 
     created = {}
     for data in users:
@@ -285,7 +307,8 @@ def main():
         seed_home_content(db, users)
         db.commit()
         print("Seed executado com sucesso.")
-        print("Usuários de teste: admin@prefeitura.local, cidadao@teste.local, meioambiente@prefeitura.local")
+        print("Usuários de teste: admin@prefeitura.local, cidadao@teste.local")
+        print("Cada secretaria possui gestor_<secretaria>@prefeitura.local e operador_<secretaria>@prefeitura.local")
         print("Senha padrão: 123456")
     finally:
         db.close()

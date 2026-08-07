@@ -24,25 +24,19 @@ class AppScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useFixedMenu = constraints.maxWidth >= 900;
+        final compactMenu = constraints.maxWidth < 900;
         final menu = CustomDrawer(
           userType: userType,
           userProfile: userProfile,
           asDrawer: false,
+          compactMode: compactMenu,
         );
 
         return Scaffold(
           appBar: appBar,
-          drawer:
-              useFixedMenu
-                  ? null
-                  : CustomDrawer(userType: userType, userProfile: userProfile),
           floatingActionButton: floatingActionButton,
           backgroundColor: backgroundColor,
-          body:
-              useFixedMenu
-                  ? Row(children: [menu, Expanded(child: body)])
-                  : body,
+          body: Row(children: [menu, Expanded(child: body)]),
         );
       },
     );

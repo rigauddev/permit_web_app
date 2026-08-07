@@ -21,12 +21,6 @@ class CustomAppBar extends ConsumerWidget implements PreferredSizeWidget {
             child: Center(child: Text(user.name)),
           ),
         ...actions,
-        IconButton(
-          icon: const Icon(Icons.account_circle),
-          onPressed: () {
-            Navigator.pushNamed(context, '/profile');
-          },
-        ),
       ],
     );
   }

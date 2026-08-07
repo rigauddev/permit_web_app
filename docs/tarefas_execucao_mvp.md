@@ -24,6 +24,8 @@
 - [x] Criar página inicial do cidadão com carrossel de informações da prefeitura/secretarias.
 - [x] Centralizar formulários de solicitação em largura adequada para desktop.
 - [x] Criar menu lateral recolhível, com modo apenas ícones e item ativo destacado.
+- [x] Manter menu fixo como parte do layout em páginas autenticadas, inclusive recolhido em telas menores.
+- [x] Mover acesso ao perfil para o avatar/botão do menu e remover atalho do appbar superior.
 - [x] Incluir botão de voltar nas subpáginas principais.
 - [x] Criar página `Minhas solicitações` separada por tipo de serviço.
 - [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
@@ -96,6 +98,7 @@
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
+- [x] Criar seed com gestor e operador para cada secretaria.
 - [x] Substituir lista mockada de usuários por endpoint real com secretaria e perfil.
 - [x] Restringir gestor a usuários da própria secretaria e impedir criação de admin por gestor.
 - [x] Criar gestão de conteúdo da página inicial com até 5 cards ativos por prefeitura/secretaria.
