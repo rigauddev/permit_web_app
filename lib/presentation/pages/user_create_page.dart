@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/session_expiration.dart';
 
 class UserCreatePage extends StatefulWidget {
   final String userType;
@@ -68,7 +69,8 @@ class _UserCreatePageState extends State<UserCreatePage> {
 
     final token = await _secureStorage.read(key: 'access_token');
     if (token == null) {
-      _showError('Sessão expirada. Entre novamente.');
+      if (!mounted) return;
+      await SessionExpiration.logout(context);
       return;
     }
 
@@ -93,6 +95,11 @@ class _UserCreatePageState extends State<UserCreatePage> {
       );
       Navigator.pop(context);
     } on AuthException catch (error) {
+      if (error.statusCode == 401) {
+        if (!mounted) return;
+        await SessionExpiration.logout(context);
+        return;
+      }
       _showError(error.message);
     } catch (_) {
       _showError('Não foi possível cadastrar o usuário interno');

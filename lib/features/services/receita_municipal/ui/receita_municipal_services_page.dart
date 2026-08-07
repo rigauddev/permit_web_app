@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../../core/permit_api_service.dart';
+import '../../../../core/session_expiration.dart';
 import '../../../../shared/widgets/custom_drawer.dart';
 
 class ReceitaMunicipalServicesPage extends StatefulWidget {
@@ -119,7 +120,9 @@ class _ReceitaMunicipalServicesPageState
       const storage = FlutterSecureStorage();
       final token = await storage.read(key: 'access_token');
       if (token == null || token.isEmpty) {
-        throw PermitApiException('Sessão expirada. Faça login novamente.');
+        if (!mounted) return;
+        await SessionExpiration.logout(context);
+        return;
       }
 
       final forms = await PermitApiService().listRequests(token);
@@ -136,6 +139,15 @@ class _ReceitaMunicipalServicesPageState
           'forms': forms,
         },
       );
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(

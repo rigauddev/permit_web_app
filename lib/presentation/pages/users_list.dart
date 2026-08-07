@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/session_expiration.dart';
 import '../../data/models/user_model.dart';
 import '../../shared/widgets/custom_appbar.dart';
 import '../../shared/widgets/custom_drawer.dart';
@@ -46,9 +47,18 @@ class _UsersListPageState extends State<UsersListPage> {
   Future<List<UserModel>> _loadUsers() async {
     final token = await _secureStorage.read(key: 'access_token');
     if (token == null) {
-      throw AuthException('Sessão expirada. Entre novamente.');
+      if (mounted) await SessionExpiration.logout(context);
+      return const [];
     }
-    return _authService.listUsers(accessToken: token);
+    try {
+      return await _authService.listUsers(accessToken: token);
+    } on AuthException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return const [];
+      }
+      rethrow;
+    }
   }
 
   void _refresh() {

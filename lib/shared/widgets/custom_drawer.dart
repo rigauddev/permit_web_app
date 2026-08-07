@@ -84,15 +84,19 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       icon: Icons.work,
                       title: 'Gestão',
                       routes: const [
-                        '/services',
+                        '/secretaria-requests',
+                        '/inspections',
                         '/permit-dashboard',
                         '/event-permit',
                         '/home-content',
                       ],
                       currentRoute: currentRoute,
                       children: [
-                        const _DrawerSectionItem('Solicitações', '/services'),
-                        const _DrawerSectionItem('Vistorias', '/services'),
+                        const _DrawerSectionItem(
+                          'Solicitações',
+                          '/secretaria-requests',
+                        ),
+                        const _DrawerSectionItem('Vistorias', '/inspections'),
                         if (widget.userType == 'gestor' || isAdmin)
                           const _DrawerSectionItem(
                             'Conteúdo da página inicial',

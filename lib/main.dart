@@ -9,7 +9,9 @@ import 'presentation/pages/login_page.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/home_content_page.dart';
 import 'presentation/pages/my_requests_page.dart';
+import 'presentation/pages/inspection_schedule_page.dart';
 import 'presentation/pages/recovery_password.dart';
+import 'presentation/pages/secretaria_requests_page.dart';
 import 'presentation/pages/user_profile.dart';
 import 'presentation/pages/users_list.dart';
 import 'presentation/pages/user_registration_page.dart';
@@ -55,6 +57,10 @@ class MyApp extends ConsumerWidget {
             ),
         AppRoutes.myRequests:
             (context) => MyRequestsPage(userType: user?.userType ?? ''),
+        AppRoutes.secretariaRequests:
+            (context) => SecretariaRequestsPage(userType: user?.userType ?? ''),
+        AppRoutes.inspections:
+            (context) => InspectionSchedulePage(userType: user?.userType ?? ''),
         AppRoutes.questions:
             (context) => PerguntasPage(userType: user?.userType ?? ''),
       },

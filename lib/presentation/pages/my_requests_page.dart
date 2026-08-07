@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
+import '../../core/session_expiration.dart';
 import '../../shared/widgets/custom_drawer.dart';
 import 'event_credential_page.dart';
 
@@ -28,9 +29,18 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
   Future<List<Map<String, dynamic>>> _loadRequests() async {
     final token = await _storage.read(key: 'access_token');
     if (token == null || token.isEmpty) {
-      throw PermitApiException('Sessão expirada. Faça login novamente.');
+      if (mounted) await SessionExpiration.logout(context);
+      return const [];
     }
-    return _api.listRequests(token);
+    try {
+      return await _api.listRequests(token);
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return const [];
+      }
+      rethrow;
+    }
   }
 
   void _refresh() {

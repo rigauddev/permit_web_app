@@ -63,11 +63,14 @@
 
 - [x] Criar fila por secretaria.
 - [x] Garantir que operador veja apenas demandas da sua secretaria.
+- [x] Garantir que gestor veja solicitações vinculadas à própria secretaria.
 - [x] Criar ações: aprovar, recusar, solicitar correção e comentar.
 - [x] Criar status por secretaria.
 - [x] Atualizar status geral a partir das anuências.
 - [x] Criar visão de gestor/admin para gestão interna com escopo por secretaria.
 - [x] Criar dashboard inicial para usuários internos com serviços pertinentes ao perfil/secretaria.
+- [x] Criar central interna de solicitações por tipo de serviço e secretaria responsável.
+- [x] Tornar as exigências da solicitação interativas para admin, gestor e operador autorizados.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [ ] Garantir que Receita/Fazenda só anexe DAM após todas as anuências aplicáveis.
@@ -85,6 +88,9 @@
 - [x] Substituir mock de login por chamadas HTTP com MFA.
 - [x] Identificar tipo de usuário pelo `role` retornado no login/JWT.
 - [x] Exibir escolha de acesso Cidadão ou Prefeitura antes do login.
+- [x] Validar tipo de acesso escolhido já na etapa e-mail/senha, antes do MFA.
+- [x] Padronizar falhas de autenticação como `Credenciais inválidas`.
+- [x] Deslogar automaticamente o usuário quando a sessão/token expirar.
 - [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
@@ -116,6 +122,9 @@
 
 ## Marco 8 - Vistoria e análise técnica
 
+- [x] Criar visão inicial de vistorias e pendências por secretaria.
+- [x] Separar exigências técnicas em realizadas, do dia e futuras.
+- [x] Exibir calendário mensal com marcação de dias com vistoria/exigência técnica.
 - [ ] Criar fluxo de vistoria quando exigência depender de inspeção técnica.
 - [ ] Permitir anexar imagens da vistoria.
 - [ ] Criar formulário de laudo técnico.
@@ -147,12 +156,15 @@
 - [ ] Testar evento beneficente.
 - [x] Testar operador de secretaria.
 - [x] Testar listagem de usuários: admin vê todos e gestor vê apenas sua secretaria.
+- [x] Testar validação de acesso cidadão/prefeitura antes do MFA.
 - [ ] Testar gestão de conteúdo por admin e gestor de secretaria.
 - [ ] Testar home do cidadão com carrossel em mobile e desktop.
 - [ ] Testar menu recolhível e destaque de rota ativa em mobile e desktop.
 - [ ] Testar acompanhamento de solicitações do cidadão separado por tipo.
 - [ ] Testar catálogo de serviços por categoria Prefeitura/Secretarias.
 - [x] Testar aprovação, recusa e pedido de correção.
+- [ ] Testar central interna de solicitações por secretaria em mobile e desktop.
+- [ ] Testar visão de vistorias e calendário em mobile e desktop.
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.
 - [x] Testar geração do documento final.
