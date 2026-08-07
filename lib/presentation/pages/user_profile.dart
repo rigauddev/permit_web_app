@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/custom_appbar.dart';
-import '../../shared/widgets/custom_drawer.dart';
 import '../../data/providers/user_provider.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -15,9 +15,9 @@ class ProfilePage extends StatelessWidget {
     return Consumer(
       builder: (context, ref, child) {
         final user = ref.watch(userProvider);
-        return Scaffold(
+        return AppScaffold(
+          userType: userType,
           appBar: CustomAppBar(title: 'Perfil', actions: []),
-          drawer: CustomDrawer(userType: userType),
           body: Center(
             child: Container(
               padding: const EdgeInsets.all(16.0),

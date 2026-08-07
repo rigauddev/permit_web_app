@@ -3,9 +3,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
 import '../../features/permit_request/pages/permit_request_page.dart';
+import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/back_to_services_button.dart';
 import '../../shared/widgets/chat_comentarios.dart';
-import '../../shared/widgets/custom_drawer.dart';
 import 'event_credential_page.dart';
 
 class PermitDashboardPage extends StatefulWidget {
@@ -64,10 +64,11 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
       // appBar: CustomAppBar(title: 'Alvará', actions: []),
       appBar: AppBar(title: Text('Alvará')),
-      drawer: CustomDrawer(userType: widget.userType),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
