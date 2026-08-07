@@ -71,6 +71,7 @@
 - [x] Criar dashboard inicial para usuários internos com serviços pertinentes ao perfil/secretaria.
 - [x] Criar central interna de solicitações por tipo de serviço e secretaria responsável.
 - [x] Tornar as exigências da solicitação interativas para admin, gestor e operador autorizados.
+- [x] Bloquear rotas internas no frontend quando o perfil logado não possuir permissão.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
@@ -130,6 +131,8 @@
 - [x] Criar visão inicial de vistorias e pendências por secretaria.
 - [x] Separar exigências técnicas em realizadas, do dia e futuras.
 - [x] Exibir calendário mensal com marcação de dias com vistoria/exigência técnica.
+- [x] Reduzir calendário para mês atual e abrir lista de vistorias ao clicar em data marcada.
+- [x] Exibir detalhes da solicitação ao clicar em uma vistoria.
 - [ ] Criar fluxo de vistoria quando exigência depender de inspeção técnica.
 - [ ] Permitir anexar imagens da vistoria.
 - [ ] Criar formulário de laudo técnico.
@@ -167,6 +170,7 @@
 - [ ] Testar gestão de conteúdo por admin e gestor de secretaria.
 - [ ] Testar home do cidadão com carrossel em mobile e desktop.
 - [ ] Testar menu recolhível e destaque de rota ativa em mobile e desktop.
+- [ ] Testar bloqueio de rotas por perfil digitando URLs internas como cidadão.
 - [ ] Testar acompanhamento de solicitações do cidadão separado por tipo.
 - [ ] Testar catálogo de serviços por categoria Prefeitura/Secretarias.
 - [x] Testar aprovação, recusa e pedido de correção.
