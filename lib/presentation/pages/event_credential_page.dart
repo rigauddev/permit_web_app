@@ -213,7 +213,16 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   Widget build(BuildContext context) {
     final form = widget.permitForm;
     return Scaffold(
-      appBar: AppBar(title: const Text('Credencial do Evento')),
+      appBar: AppBar(
+        title: const Text('Credencial do Evento'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -255,6 +264,14 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
         ),
       ),
     );
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   }
 
   Future<void> _copyValidationUrl() async {

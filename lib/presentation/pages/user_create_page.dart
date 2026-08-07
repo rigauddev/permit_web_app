@@ -128,7 +128,16 @@ class _UserCreatePageState extends State<UserCreatePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Cadastro de usuário interno')),
+      appBar: AppBar(
+        title: const Text('Cadastro de usuário interno'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -275,5 +284,13 @@ class _UserCreatePageState extends State<UserCreatePage> {
       return {_currentSecretaria!: _secretarias[_currentSecretaria]!};
     }
     return _secretarias;
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/users');
+    }
   }
 }

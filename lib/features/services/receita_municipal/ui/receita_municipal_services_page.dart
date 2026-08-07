@@ -28,7 +28,16 @@ class _ReceitaMunicipalServicesPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Serviços da Receita Municipal')),
+      appBar: AppBar(
+        title: const Text('Serviços da Receita Municipal'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       drawer: CustomDrawer(userType: widget.userType),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -113,6 +122,14 @@ class _ReceitaMunicipalServicesPageState
       ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
     }
   }
 }

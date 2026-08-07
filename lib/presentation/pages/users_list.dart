@@ -67,6 +67,11 @@ class _UsersListPageState extends State<UsersListPage> {
         title: 'Gestão de usuários',
         actions: [
           IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+          IconButton(
             tooltip: 'Atualizar',
             onPressed: _refresh,
             icon: const Icon(Icons.refresh),
@@ -181,6 +186,14 @@ class _UsersListPageState extends State<UsersListPage> {
     final secretaria = user.secretaria;
     if (secretaria == null || secretaria.isEmpty) return 'Sem secretaria';
     return _secretariaLabels[secretaria] ?? secretaria;
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   }
 }
 

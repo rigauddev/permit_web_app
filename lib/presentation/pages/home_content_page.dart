@@ -185,7 +185,16 @@ class _HomeContentPageState extends State<HomeContentPage> {
             .length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Conteúdo da página inicial')),
+      appBar: AppBar(
+        title: const Text('Conteúdo da página inicial'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => _goBack(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
       drawer: CustomDrawer(userType: widget.userType),
       body:
           _loading
@@ -365,5 +374,13 @@ class _HomeContentPageState extends State<HomeContentPage> {
                 ),
               ),
     );
+  }
+
+  static void _goBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   }
 }

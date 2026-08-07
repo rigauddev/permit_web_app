@@ -23,6 +23,8 @@
 - [x] Corrigir menu do cidadão para ocultar áreas internas de gestão, secretaria e configurações.
 - [x] Criar página inicial do cidadão com carrossel de informações da prefeitura/secretarias.
 - [x] Centralizar formulários de solicitação em largura adequada para desktop.
+- [x] Criar menu lateral recolhível, com modo apenas ícones e item ativo destacado.
+- [x] Incluir botão de voltar nas subpáginas principais.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -145,6 +147,7 @@
 - [x] Testar listagem de usuários: admin vê todos e gestor vê apenas sua secretaria.
 - [ ] Testar gestão de conteúdo por admin e gestor de secretaria.
 - [ ] Testar home do cidadão com carrossel em mobile e desktop.
+- [ ] Testar menu recolhível e destaque de rota ativa em mobile e desktop.
 - [x] Testar aprovação, recusa e pedido de correção.
 - [ ] Testar regra de 15 dias úteis.
 - [ ] Testar prazo interno de 2 dias úteis por secretaria.
