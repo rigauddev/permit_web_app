@@ -123,7 +123,7 @@ class MyApp extends ConsumerWidget {
         AppRoutes.questions:
             (context) => _GuardedRoute(
               user: user,
-              allowedRoles: const {'admin'},
+              allowedRoles: const {'admin', 'gestor_secretaria'},
               child: PerguntasPage(userType: user?.userType ?? ''),
             ),
       },

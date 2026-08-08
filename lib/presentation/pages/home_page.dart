@@ -263,7 +263,7 @@ class _InternalHome extends StatelessWidget {
                           title: 'Perguntas e permissões',
                           description:
                               'Configure perguntas condicionais e regras por secretaria.',
-                          route: '/questtions',
+                          route: '/questions',
                         ),
                     ],
                   );

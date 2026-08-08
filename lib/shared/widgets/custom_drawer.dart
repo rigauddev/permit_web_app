@@ -128,17 +128,17 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       _DrawerSectionItem('Gestão de gestores', '/users'),
                     ],
                   ),
-                if (isAdmin)
+                if (isAdmin || widget.userType == 'gestor')
                   _DrawerSection(
                     collapsed: collapsed,
                     icon: Icons.settings,
                     title: 'Configurações',
-                    routes: const ['/users', '/questtions'],
+                    routes: const ['/users', '/questions'],
                     currentRoute: currentRoute,
                     children: const [
                       _DrawerSectionItem('Permissões', '/users'),
                       _DrawerSectionItem('Tipo de usuários', '/users'),
-                      _DrawerSectionItem('Criar perguntas', '/questtions'),
+                      _DrawerSectionItem('Criar perguntas', '/questions'),
                     ],
                   ),
               ],
@@ -202,25 +202,24 @@ class _DrawerHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       child: Column(
         children: [
-          if (!compactMode)
-            Row(
-              mainAxisAlignment:
-                  collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
-              children: [
-                Tooltip(
-                  message: collapsed ? 'Expandir menu' : 'Ocultar menu',
-                  child: IconButton(
-                    color: Colors.white,
-                    icon: Icon(
-                      collapsed
-                          ? Icons.keyboard_double_arrow_right
-                          : Icons.keyboard_double_arrow_left,
-                    ),
-                    onPressed: onToggle,
+          Row(
+            mainAxisAlignment:
+                collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
+            children: [
+              Tooltip(
+                message: collapsed ? 'Expandir menu' : 'Ocultar menu',
+                child: IconButton(
+                  color: Colors.white,
+                  icon: Icon(
+                    collapsed
+                        ? Icons.keyboard_double_arrow_right
+                        : Icons.keyboard_double_arrow_left,
                   ),
+                  onPressed: onToggle,
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
           Tooltip(
             message: 'Meu perfil',
             child: InkWell(
