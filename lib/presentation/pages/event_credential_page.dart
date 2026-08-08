@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 const _defaultHeaderText =
     'A Prefeitura Municipal de Valença, por meio da Central de Eventos, autoriza a realização do evento abaixo após as anuências dos órgãos competentes e a regularização do DAM ou isenção aplicável.';
@@ -16,6 +17,7 @@ const _defaultFooterText =
 
 class EventCredentialPage extends StatefulWidget {
   final Map<String, dynamic>? permitForm;
+  final String userType;
   final String userProfile;
   final String? publicCode;
   final String? token;
@@ -23,6 +25,7 @@ class EventCredentialPage extends StatefulWidget {
   const EventCredentialPage({
     super.key,
     this.permitForm,
+    this.userType = '',
     this.userProfile = '',
     this.publicCode,
     this.token,
@@ -224,57 +227,64 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   @override
   Widget build(BuildContext context) {
     final form = widget.permitForm;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Credencial do Evento'),
-        actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => _goBack(context),
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 920),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_message != null) _StatusBanner(message: _message!),
-                if (form != null) ...[
-                  _AuthorizationDocument(
-                    form: form,
-                    authorization: _authorization,
-                    validationUrl: _validationUrl,
-                    loading: _loadingAuthorization,
-                    canIssue: _canIssueAuthorization,
-                    issuing: _issuingAuthorization,
-                    printingPdf: _printingPdf,
-                    canEditTemplate: _canEditTemplate,
-                    savingTemplate: _savingTemplate,
-                    template: _currentTemplate,
-                    onIssue: _issueAuthorization,
-                    onCopyUrl: _copyValidationUrl,
-                    onPrintPdf: _printAuthorizationPdf,
-                    onEditTemplate: _openTemplateEditor,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                _ValidationPanel(
-                  publicCodeController: _publicCodeController,
-                  tokenController: _tokenController,
-                  loading: _validatingCredential,
-                  validation: _validation,
-                  onValidate: _validateCredential,
+    final appBar = AppBar(
+      title: const Text('Credencial do Evento'),
+      actions: [
+        IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => _goBack(context),
+          icon: const Icon(Icons.arrow_back),
+        ),
+      ],
+    );
+    final content = SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_message != null) _StatusBanner(message: _message!),
+              if (form != null) ...[
+                _AuthorizationDocument(
+                  form: form,
+                  authorization: _authorization,
+                  validationUrl: _validationUrl,
+                  loading: _loadingAuthorization,
+                  canIssue: _canIssueAuthorization,
+                  issuing: _issuingAuthorization,
+                  printingPdf: _printingPdf,
+                  canEditTemplate: _canEditTemplate,
+                  savingTemplate: _savingTemplate,
+                  template: _currentTemplate,
+                  onIssue: _issueAuthorization,
+                  onCopyUrl: _copyValidationUrl,
+                  onPrintPdf: _printAuthorizationPdf,
+                  onEditTemplate: _openTemplateEditor,
                 ),
+                const SizedBox(height: 16),
               ],
-            ),
+              _ValidationPanel(
+                publicCodeController: _publicCodeController,
+                tokenController: _tokenController,
+                loading: _validatingCredential,
+                validation: _validation,
+                onValidate: _validateCredential,
+              ),
+            ],
           ),
         ),
       ),
+    );
+    if (widget.userType.isEmpty) {
+      return Scaffold(appBar: appBar, body: content);
+    }
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
+      appBar: appBar,
+      body: content,
     );
   }
 

@@ -28,8 +28,6 @@ class _PerguntasPageState extends State<PerguntasPage> {
   final List<String> _secretarias = ['Meio Ambiente', 'Segurança', 'Eventos'];
   final List<String> _tiposFormulario = [
     'Alvará de Eventos',
-    'Táxi',
-    'Estabelecimento',
   ];
   final List<String> _tiposResposta = [
     'Anexar Documento',
@@ -91,7 +89,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                         (v) => _secretaria = v,
                       ),
                       _buildDropdown(
-                        'Tipo de Formulário',
+                        'Serviço',
                         _tipoFormulario,
                         _tiposFormulario,
                         (v) => _tipoFormulario = v,
@@ -176,6 +174,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
           border: const OutlineInputBorder(),
         ),
         onChanged: onChanged,
+        validator: (value) {
+          if (label == 'Pergunta' && (value == null || value.trim().isEmpty)) {
+            return 'A pergunta não pode ficar vazia.';
+          }
+          return null;
+        },
       ),
     );
   }
@@ -231,26 +235,38 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   void _adicionarOuAtualizarPergunta() {
-    if (_formKey.currentState!.validate() && _pergunta != null) {
-      final novaPergunta = {
-        'pergunta': _pergunta!,
-        'descricao': _descricao ?? '',
-        'secretaria': _secretaria ?? '',
-        'tipo': _tipoFormulario ?? '',
-        'resposta': _tiposSelecionados.join(', '),
-      };
-
-      setState(() {
-        if (_indiceEdicao != null) {
-          _perguntas[_indiceEdicao!] = novaPergunta;
-          _enviarParaAPIEditar(novaPergunta);
-        } else {
-          _perguntas.add(novaPergunta);
-          _enviarParaAPISalvar(novaPergunta);
-        }
-        _resetarFormulario();
-      });
+    if (!_formKey.currentState!.validate()) return;
+    if (_pergunta == null || _pergunta!.trim().isEmpty) {
+      _showError('Informe uma pergunta válida.');
+      return;
     }
+    if (_secretaria == null || _secretaria!.isEmpty) {
+      _showError('Selecione a secretaria responsável.');
+      return;
+    }
+    if (_tipoFormulario == null || _tipoFormulario!.isEmpty) {
+      _showError('Selecione o serviço associado à pergunta.');
+      return;
+    }
+
+    final novaPergunta = {
+      'pergunta': _pergunta!.trim(),
+      'descricao': _descricao ?? '',
+      'secretaria': _secretaria ?? '',
+      'tipo': _tipoFormulario ?? '',
+      'resposta': _tiposSelecionados.join(', '),
+    };
+
+    setState(() {
+      if (_indiceEdicao != null) {
+        _perguntas[_indiceEdicao!] = novaPergunta;
+        _enviarParaAPIEditar(novaPergunta);
+      } else {
+        _perguntas.add(novaPergunta);
+        _enviarParaAPISalvar(novaPergunta);
+      }
+      _resetarFormulario();
+    });
   }
 
   void _editarPergunta(int index) {
@@ -282,6 +298,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _indiceEdicao = null;
     _pergunta = _descricao = _secretaria = _tipoFormulario = null;
     _tiposSelecionados = [];
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   // Simulações de API

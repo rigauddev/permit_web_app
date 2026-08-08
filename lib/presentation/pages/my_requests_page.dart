@@ -148,7 +148,11 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EventCredentialPage(permitForm: request),
+        builder:
+            (_) => EventCredentialPage(
+              permitForm: request,
+              userType: widget.userType,
+            ),
       ),
     );
     if (mounted) _refresh();

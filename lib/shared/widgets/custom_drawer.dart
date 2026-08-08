@@ -128,17 +128,17 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       _DrawerSectionItem('Gestão de gestores', '/users'),
                     ],
                   ),
-                if (isAdmin)
+                if (isAdmin || widget.userType == 'gestor')
                   _DrawerSection(
                     collapsed: collapsed,
                     icon: Icons.settings,
                     title: 'Configurações',
-                    routes: const ['/users', '/questtions'],
+                    routes: const ['/users', '/questions'],
                     currentRoute: currentRoute,
                     children: const [
                       _DrawerSectionItem('Permissões', '/users'),
                       _DrawerSectionItem('Tipo de usuários', '/users'),
-                      _DrawerSectionItem('Criar perguntas', '/questtions'),
+                      _DrawerSectionItem('Criar perguntas', '/questions'),
                     ],
                   ),
               ],
@@ -202,25 +202,24 @@ class _DrawerHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       child: Column(
         children: [
-          if (!compactMode)
-            Row(
-              mainAxisAlignment:
-                  collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
-              children: [
-                Tooltip(
-                  message: collapsed ? 'Expandir menu' : 'Ocultar menu',
-                  child: IconButton(
-                    color: Colors.white,
-                    icon: Icon(
-                      collapsed
-                          ? Icons.keyboard_double_arrow_right
-                          : Icons.keyboard_double_arrow_left,
-                    ),
-                    onPressed: onToggle,
+          Row(
+            mainAxisAlignment:
+                collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
+            children: [
+              Tooltip(
+                message: collapsed ? 'Expandir menu' : 'Ocultar menu',
+                child: IconButton(
+                  color: Colors.white,
+                  icon: Icon(
+                    collapsed
+                        ? Icons.keyboard_double_arrow_right
+                        : Icons.keyboard_double_arrow_left,
                   ),
+                  onPressed: onToggle,
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
           Tooltip(
             message: 'Meu perfil',
             child: InkWell(
@@ -280,16 +279,27 @@ class _DrawerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = currentRoute == route;
+    final colorScheme = Theme.of(context).colorScheme;
     final color =
         iconColor ??
-        (selected
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).iconTheme.color);
+        (selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface);
     final tile = ListTile(
       selected: selected,
-      selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+      selectedColor: colorScheme.onPrimaryContainer,
+      textColor: colorScheme.onSurface,
+      iconColor: colorScheme.onSurface,
+      selectedTileColor: colorScheme.primaryContainer,
       leading: Icon(icon, color: color),
-      title: collapsed ? null : Text(title),
+      title:
+          collapsed
+              ? null
+              : Text(
+                title,
+                style: TextStyle(
+                  color: selected ? colorScheme.onPrimaryContainer : null,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
       horizontalTitleGap: collapsed ? 0 : 16,
       minLeadingWidth: collapsed ? 0 : null,
       contentPadding:
@@ -336,19 +346,22 @@ class _DrawerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = routes.contains(currentRoute);
+    final colorScheme = Theme.of(context).colorScheme;
     if (collapsed) {
       final targetRoute = children.first.route;
       return Tooltip(
         message: title,
         child: ListTile(
           selected: selected,
-          selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+          selectedColor: colorScheme.onPrimaryContainer,
+          iconColor: colorScheme.onSurface,
+          selectedTileColor: colorScheme.primaryContainer,
           leading: Icon(
             icon,
             color:
                 selected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).iconTheme.color,
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurface,
           ),
           horizontalTitleGap: 0,
           minLeadingWidth: 0,
@@ -371,18 +384,27 @@ class _DrawerSection extends StatelessWidget {
       leading: Icon(
         icon,
         color:
-            selected
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).iconTheme.color,
+            selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
       ),
-      title: Text(title),
-      collapsedBackgroundColor:
-          selected ? Theme.of(context).colorScheme.primaryContainer : null,
+      title: Text(
+        title,
+        style: TextStyle(
+          color:
+              selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+      iconColor:
+          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+      collapsedIconColor:
+          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+      textColor: colorScheme.onPrimaryContainer,
+      collapsedTextColor:
+          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+      collapsedBackgroundColor: selected ? colorScheme.primaryContainer : null,
       backgroundColor:
           selected
-              ? Theme.of(
-                context,
-              ).colorScheme.primaryContainer.withValues(alpha: 0.45)
+              ? colorScheme.primaryContainer.withValues(alpha: 0.62)
               : null,
       children:
           children
@@ -404,11 +426,20 @@ class _DrawerSubTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = currentRoute == item.route;
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       selected: selected,
-      selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+      selectedColor: colorScheme.onPrimaryContainer,
+      textColor: colorScheme.onSurface,
+      selectedTileColor: colorScheme.primaryContainer,
       contentPadding: const EdgeInsets.only(left: 72, right: 16),
-      title: Text(item.title),
+      title: Text(
+        item.title,
+        style: TextStyle(
+          color: selected ? colorScheme.onPrimaryContainer : null,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
       onTap: () {
         if (currentRoute == item.route) {
           if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {

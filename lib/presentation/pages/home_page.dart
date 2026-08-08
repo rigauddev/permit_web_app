@@ -22,9 +22,6 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
   final _api = PermitApiService();
   late Future<List<Map<String, dynamic>>> _contentFuture;
 
-  bool get _isCitizen =>
-      widget.userType == 'user' || widget.userType == 'cidadao';
-
   @override
   void initState() {
     super.initState();
@@ -51,14 +48,19 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
+    final effectiveUserType = user?.userType ?? widget.userType;
+    final isCitizen =
+        user?.role == 'cidadao' ||
+        effectiveUserType == 'user' ||
+        effectiveUserType == 'cidadao';
     return AppScaffold(
-      userType: widget.userType,
+      userType: effectiveUserType,
       userProfile: widget.userProfile,
       appBar: AppBar(
-        title: Text(_isCitizen ? 'Página inicial' : 'Painel da secretaria'),
+        title: Text(isCitizen ? 'Página inicial' : 'Painel da secretaria'),
       ),
       body:
-          _isCitizen
+          isCitizen
               ? _CitizenHome(contentFuture: _contentFuture)
               : _InternalHome(user: user),
     );
@@ -261,7 +263,7 @@ class _InternalHome extends StatelessWidget {
                           title: 'Perguntas e permissões',
                           description:
                               'Configure perguntas condicionais e regras por secretaria.',
-                          route: '/questtions',
+                          route: '/questions',
                         ),
                     ],
                   );
