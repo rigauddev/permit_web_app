@@ -16,6 +16,14 @@ class PermitRequestFormBuilder extends ConsumerStatefulWidget {
 
 class _PermitRequestFormBuilderState
     extends ConsumerState<PermitRequestFormBuilder> {
+  static const _responsibilityTerm = '''
+Declaro, sob minha responsabilidade, que as informações prestadas e os documentos anexados nesta solicitação são verdadeiros, completos e correspondem ao evento informado.
+
+Declaro estar ciente de que a autorização municipal depende da análise das secretarias competentes, da regularidade dos documentos apresentados, do atendimento às exigências técnicas aplicáveis e, quando não houver isenção, da emissão e comprovação de pagamento do DAM.
+
+Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trânsito, segurança e ordem pública relacionadas à realização do evento, assumindo responsabilidade por informações incorretas, omissões ou alterações não comunicadas ao Município.
+''';
+
   late final TextEditingController nomeController;
   late final TextEditingController cpfCnpjController;
   late final TextEditingController addressController;
@@ -290,6 +298,11 @@ class _PermitRequestFormBuilderState
         questionId: question['id'] as int,
         questionText: question['pergunta'] as String,
         tiposResposta: List<String>.from(question['tipos_resposta'] ?? []),
+        camposObrigatorios:
+            (question['campos_obrigatorios'] as Map<String, dynamic>?) ??
+            const {},
+        modeloDocumentoNome: question['modelo_documento_nome'] as String?,
+        modeloDocumentoUrl: question['modelo_documento_url'] as String?,
         onChanged: (value) => controller.updateAnswer(questionKey, value),
         currentValue: state.answerDetails[questionKey],
       );
@@ -331,6 +344,39 @@ class _PermitRequestFormBuilderState
                 ? 'DAM: isento mediante conferência da declaração beneficente.'
                 : 'DAM: pendente de emissão/pagamento na Receita Municipal.',
             style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F8F5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFD8E0D8)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Termo de responsabilidade',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(_responsibilityTerm),
+                const Divider(height: 20),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: state.eventData['termo_aceite'] == 'true',
+                  onChanged:
+                      (value) => controller.updateEventInfo(
+                        termoAceite: value ?? false,
+                      ),
+                  title: const Text(
+                    'Li e aceito o termo de responsabilidade pelas informações prestadas.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ),
           ),
         ],
       );

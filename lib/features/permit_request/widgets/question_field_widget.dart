@@ -1,11 +1,16 @@
 // ignore_for_file: deprecated_member_use
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class QuestionFieldWidget extends StatefulWidget {
   final int questionId;
   final String questionText;
   final List<String> tiposResposta;
+  final Map<String, dynamic> camposObrigatorios;
+  final String? modeloDocumentoNome;
+  final String? modeloDocumentoUrl;
   final dynamic currentValue;
   final void Function(dynamic) onChanged;
 
@@ -14,6 +19,9 @@ class QuestionFieldWidget extends StatefulWidget {
     required this.questionId,
     required this.questionText,
     required this.tiposResposta,
+    this.camposObrigatorios = const {},
+    this.modeloDocumentoNome,
+    this.modeloDocumentoUrl,
     required this.onChanged,
     required this.currentValue,
   });
@@ -28,6 +36,7 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   DateTime? dataSelecionada;
   TimeOfDay? horaSelecionada;
   String? arquivoSelecionado;
+  String? assinaturaSelecionada;
 
   @override
   void initState() {
@@ -57,6 +66,7 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       dataSelecionada = widget.currentValue['data'];
       horaSelecionada = widget.currentValue['hora'];
       arquivoSelecionado = widget.currentValue['arquivo'];
+      assinaturaSelecionada = widget.currentValue['assinatura'];
     }
   }
 
@@ -73,6 +83,7 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       'data': dataSelecionada,
       'hora': horaSelecionada,
       'arquivo': arquivoSelecionado,
+      'assinatura': assinaturaSelecionada,
     });
   }
 
@@ -118,11 +129,48 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
         ),
         const SizedBox(height: 10),
         if (respostaSimNao == 'Sim') ...[
+          if ((widget.modeloDocumentoUrl ?? '').isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFD8E0D8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.modeloDocumentoNome ?? 'Modelo do documento',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: widget.modeloDocumentoUrl!),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Referência do modelo copiada.'),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.download_outlined),
+                    label: const Text('Baixar modelo'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           if (widget.tiposResposta.contains('Texto')) ...[
             TextFormField(
               controller: textoController,
               maxLength: 255,
-              decoration: const InputDecoration(labelText: 'Descreva...'),
+              decoration: InputDecoration(
+                labelText: _labelWithRequired('Descreva...', 'Texto'),
+              ),
               onChanged: (_) => salvarResposta(),
             ),
           ],
@@ -150,7 +198,9 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
                   });
                 }
               },
-              child: const Text('Selecionar Data e Hora'),
+              child: Text(
+                _labelWithRequired('Selecionar Data e Hora', 'Calendário'),
+              ),
             ),
             if (dataSelecionada != null)
               Text(
@@ -160,19 +210,72 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
           const SizedBox(height: 10),
           if (widget.tiposResposta.contains('Anexar Documento')) ...[
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                );
+                final file =
+                    result == null || result.files.isEmpty
+                        ? null
+                        : result.files.single;
+                if (file == null) return;
                 setState(() {
-                  arquivoSelecionado = 'documento.pdf';
+                  arquivoSelecionado = file.path ?? file.name;
                   salvarResposta();
                 });
               },
-              child: const Text('Anexar Documento'),
+              child: Text(
+                _labelWithRequired('Anexar Documento', 'Anexar Documento'),
+              ),
             ),
             if (arquivoSelecionado != null)
               Text('Arquivo: $arquivoSelecionado'),
           ],
+          if (widget.tiposResposta.contains('Assinatura impressa') ||
+              widget.tiposResposta.contains('Assinatura gov.br')) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Forma de assinatura',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            if (widget.tiposResposta.contains('Assinatura impressa'))
+              RadioListTile<String>(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Imprimir, assinar e anexar'),
+                value: 'impressa',
+                groupValue: assinaturaSelecionada,
+                onChanged: (value) {
+                  setState(() {
+                    assinaturaSelecionada = value;
+                    salvarResposta();
+                  });
+                },
+              ),
+            if (widget.tiposResposta.contains('Assinatura gov.br'))
+              Tooltip(
+                message:
+                    'Baixe o modelo, assine no aplicativo gov.br e anexe o arquivo assinado nesta pergunta.',
+                child: RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Assinar eletronicamente pelo gov.br'),
+                  value: 'gov_br',
+                  groupValue: assinaturaSelecionada,
+                  onChanged: (value) {
+                    setState(() {
+                      assinaturaSelecionada = value;
+                      salvarResposta();
+                    });
+                  },
+                ),
+              ),
+          ],
         ],
       ],
     );
+  }
+
+  String _labelWithRequired(String label, String field) {
+    return widget.camposObrigatorios[field] == true ? '$label *' : label;
   }
 }

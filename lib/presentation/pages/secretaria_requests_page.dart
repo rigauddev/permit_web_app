@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -8,6 +9,7 @@ import '../../core/session_expiration.dart';
 import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
 import '../../shared/widgets/app_scaffold.dart';
+import 'event_credential_page.dart';
 
 class SecretariaRequestsPage extends ConsumerStatefulWidget {
   const SecretariaRequestsPage({super.key, required this.userType});
@@ -192,6 +194,48 @@ class _SecretariaRequestsPageState
     }
   }
 
+  Future<void> _generateFinalPermit(Map<String, dynamic> request) async {
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      final requestId = request['formId'] as int? ?? request['id'] as int?;
+      if (requestId == null) return;
+      await _api.issueAuthorization(accessToken: token, requestId: requestId);
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Alvará gerado com QR Code.')),
+      );
+      await _openCredential(request);
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _openCredential(Map<String, dynamic> request) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => EventCredentialPage(
+              permitForm: request,
+              userType: widget.userType,
+            ),
+      ),
+    );
+    if (mounted) await _loadRequests();
+  }
+
   Future<_AttachmentInput?> _askAttachment(String title) async {
     final fileController = TextEditingController();
     final urlController = TextEditingController();
@@ -210,6 +254,31 @@ class _SecretariaRequestsPageState
                     labelText: 'Nome do arquivo',
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                    );
+                    final file =
+                        result == null || result.files.isEmpty
+                            ? null
+                            : result.files.single;
+                    if (file == null) return;
+                    fileController.text = file.name;
+                    urlController.text = file.path ?? file.name;
+                    final extension = file.name.split('.').last.toLowerCase();
+                    mimeController.text =
+                        extension == 'pdf'
+                            ? 'application/pdf'
+                            : extension == 'png'
+                            ? 'image/png'
+                            : 'image/jpeg';
+                  },
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text('Selecionar arquivo'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -234,7 +303,7 @@ class _SecretariaRequestsPageState
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancelar'),
               ),
-              ElevatedButton(
+              ElevatedButton.icon(
                 onPressed: () {
                   if (fileController.text.trim().length < 3 ||
                       urlController.text.trim().length < 3) {
@@ -252,7 +321,8 @@ class _SecretariaRequestsPageState
                     ),
                   );
                 },
-                child: const Text('Anexar'),
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Anexar arquivo'),
               ),
             ],
           ),
@@ -349,11 +419,7 @@ class _SecretariaRequestsPageState
                                 action: 'dam',
                               ),
                           onAttachFinalPermit:
-                              (request) => _attachWorkflowDocument(
-                                request: request,
-                                title: 'Anexar alvará final',
-                                action: 'alvara',
-                              ),
+                              (request) => _generateFinalPermit(request),
                         ),
                       ),
                   ],
@@ -650,7 +716,7 @@ class _WorkflowActions extends StatelessWidget {
         ElevatedButton.icon(
           onPressed: () => onAttachFinalPermit(request),
           icon: const Icon(Icons.verified_outlined),
-          label: const Text('Anexar alvará e gerar QR Code'),
+          label: const Text('Gerar alvará e QR Code'),
         ),
       );
     }

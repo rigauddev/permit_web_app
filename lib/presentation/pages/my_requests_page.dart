@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
@@ -182,11 +183,13 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
         mimeType: attachment.mimeType,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
           content: Text(
-              'Comprovante anexado. Solicitação em aguardando confirmação de pagamento.')));
+            'Comprovante anexado. Solicitação em aguardando confirmação de pagamento.',
+          ),
+        ),
+      );
       _refresh();
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -235,6 +238,31 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: allowedExtensions,
+                    );
+                    final file =
+                        result == null || result.files.isEmpty
+                            ? null
+                            : result.files.single;
+                    if (file == null) return;
+                    fileController.text = file.name;
+                    urlController.text = file.path ?? file.name;
+                    final extension = file.name.split('.').last.toLowerCase();
+                    mimeController.text =
+                        extension == 'pdf'
+                            ? 'application/pdf'
+                            : extension == 'png'
+                            ? 'image/png'
+                            : 'image/jpeg';
+                  },
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text('Selecionar arquivo'),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: mimeController,
                   decoration: const InputDecoration(
@@ -250,7 +278,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancelar'),
               ),
-              ElevatedButton(
+              ElevatedButton.icon(
                 onPressed: () {
                   final fileName = fileController.text.trim();
                   final fileUrl = urlController.text.trim();
@@ -270,7 +298,8 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                     ),
                   );
                 },
-                child: const Text('Anexar comprovante'),
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Enviar comprovante'),
               ),
             ],
           ),

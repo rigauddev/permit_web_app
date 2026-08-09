@@ -7,6 +7,7 @@ from .permit_model import (
     PermitCommentModel,
     PermitRequestModel,
     PermitRequirementModel,
+    QuestionDefinitionModel,
 )
 from .user_model import EmailVerificationModel, RoleModel, SecretariaModel, UserModel
 
@@ -19,6 +20,7 @@ __all__ = [
     "PermitRequestModel",
     "PermitCommentModel",
     "PermitRequirementModel",
+    "QuestionDefinitionModel",
     "EmailVerificationModel",
     "RoleModel",
     "SecretariaModel",

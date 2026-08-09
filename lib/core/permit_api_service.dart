@@ -223,6 +223,48 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<List<Map<String, dynamic>>> listSecretarias({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/secretarias'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createSecretaria({
+    required String accessToken,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/secretarias'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateSecretaria({
+    required String accessToken,
+    required int secretariaId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/secretarias/$secretariaId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getAuthorization({
     required String accessToken,
     required int requestId,
@@ -354,11 +396,67 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<List<Map<String, dynamic>>> listQuestionDefinitions({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/question-definitions'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createQuestionDefinition({
+    required String accessToken,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/question-definitions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateQuestionDefinition({
+    required String accessToken,
+    required int questionId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/permit-requests/question-definitions/$questionId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteQuestionDefinition({
+    required String accessToken,
+    required int questionId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/permit-requests/question-definitions/$questionId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
   Future<Map<String, dynamic>> createRequest({
     required String accessToken,
     required Map<String, String> responsibleData,
     required Map<String, String> eventData,
     required Map<String, bool> answers,
+    required Map<String, dynamic> answerDetails,
     required List<String> attachmentNames,
   }) async {
     final isBeneficente = eventData['is_beneficente'] == 'true';
@@ -373,29 +471,134 @@ class PermitApiService {
         'instituicao_beneficiada': eventData['instituicao_beneficiada'],
         'dados_responsavel': responsibleData,
         'dados_evento': {...eventData, 'anexos_informados': attachmentNames},
-        'respostas': answers,
+        'respostas': {
+          for (final entry in answers.entries)
+            entry.key:
+                answerDetails[entry.key] is Map
+                    ? {
+                      ...Map<String, dynamic>.from(answerDetails[entry.key]),
+                      'valor': entry.value,
+                    }
+                    : entry.value,
+        },
       }),
     );
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  static const Map<String, List<Map<String, String>>> requirementRules = {
+    'tem_som': [
+      {
+        'secretaria': 'Meio Ambiente',
+        'exigencia': 'Termo de Responsabilidade Ambiental',
+      },
+    ],
+    'local_fixo_sem_alvara': [
+      {
+        'secretaria': 'Desenvolvimento Econômico',
+        'exigencia': 'Regularização do alvará de funcionamento do local fixo',
+      },
+    ],
+    'precisa_avcb': [
+      {
+        'secretaria': 'Infraestrutura',
+        'exigencia': 'Auto de Vistoria do Corpo de Bombeiros (AVCB)',
+      },
+    ],
+    'tem_palco': [
+      {
+        'secretaria': 'Infraestrutura',
+        'exigencia': 'Vistoria de palco/estrutura',
+      },
+      {
+        'secretaria': 'Infraestrutura',
+        'exigencia': 'Anotação de Responsabilidade Técnica (ART) da estrutura',
+      },
+    ],
+    'tem_gerador': [
+      {'secretaria': 'Infraestrutura', 'exigencia': 'Vistoria de gerador'},
+      {
+        'secretaria': 'Infraestrutura',
+        'exigencia': 'Anotação de Responsabilidade Técnica (ART) do gerador',
+      },
+    ],
+    'precisa_planta_baixa': [
+      {
+        'secretaria': 'Infraestrutura',
+        'exigencia':
+            'Planta baixa para evento particular de médio ou grande porte em local fixo',
+      },
+    ],
+    'tem_trio_eletrico': [
+      {
+        'secretaria': 'DMTRAN',
+        'exigencia':
+            'Vistoria de trio elétrico, CNH do motorista e mapa do circuito',
+      },
+    ],
+    'bloqueia_via': [
+      {
+        'secretaria': 'DMTRAN',
+        'exigencia': 'Autorização para uso ou bloqueio de via pública',
+      },
+      {
+        'secretaria': 'DMTRAN',
+        'exigencia': 'Croqui/mapa do circuito ou desvio de trânsito',
+      },
+    ],
+    'tem_alimentacao': [
+      {
+        'secretaria': 'Vigilância Sanitária',
+        'exigencia': 'Vistoria de equipamentos e instalações de alimentação',
+      },
+    ],
+    'precisa_ambulancia': [
+      {
+        'secretaria': 'Vigilância Sanitária',
+        'exigencia': 'Ofício solicitando ambulância no local do evento',
+      },
+    ],
+    'precisa_guarda': [
+      {
+        'secretaria': 'Guarda Civil Municipal',
+        'exigencia': 'Ofício solicitando presença da Guarda Civil Municipal',
+      },
+    ],
+    'precisa_brigadista': [
+      {
+        'secretaria': 'Desenvolvimento Econômico',
+        'exigencia': 'Contratação de brigadista pelo responsável',
+      },
+    ],
+  };
+
   static List<Map<String, String>> previewRequirements(
     Map<String, bool> answers,
     Map<String, String> eventData,
+    List<Map<String, dynamic>> questions,
   ) {
     final requirements = <Map<String, String>>[];
-    for (final question in eventPermitQuestions) {
-      final key = question['key'] as String;
-      if (answers[key] == true) {
-        final exigencias = List<String>.from(
-          question['exigencias'] ?? [question['exigencia']],
-        );
-        for (final exigencia in exigencias) {
+    for (final question in questions) {
+      final key = question['key'] as String?;
+      if (key == null || answers[key] != true) continue;
+      final rules = requirementRules[key] ?? [];
+      if (rules.isNotEmpty) {
+        for (final rule in rules) {
           requirements.add({
-            'secretaria': question['secretaria'] as String,
-            'exigencia': exigencia,
+            'secretaria': rule['secretaria'] ?? question['secretaria'] ?? '',
+            'exigencia': rule['exigencia'] ?? '',
           });
         }
+        continue;
+      }
+      final exigencias = List<String>.from(
+        question['exigencias'] ?? [question['pergunta'] ?? 'Exigência'],
+      );
+      for (final exigencia in exigencias) {
+        requirements.add({
+          'secretaria': question['secretaria']?.toString() ?? '',
+          'exigencia': exigencia,
+        });
       }
     }
 
@@ -440,6 +643,7 @@ class PermitApiService {
       'permitType': 'Alvará de Evento',
       'local_evento': evento['endereco_evento'] ?? '',
       'data_do_evento': evento['data_evento'] ?? '',
+      'publico_estimado': evento['publico_estimado']?.toString() ?? '',
       'horario_inicio': evento['horario_inicio'] ?? '',
       'horario_termino': evento['horario_termino'] ?? '',
       'status': item['status'] ?? 'enviada',

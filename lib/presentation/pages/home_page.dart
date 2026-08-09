@@ -257,7 +257,16 @@ class _InternalHome extends StatelessWidget {
                               'Crie até 5 cards de carrossel para sua secretaria ou prefeitura.',
                           route: '/home-content',
                         ),
-                      if (user?.userType == 'admin')
+                      if (_canManageUsers)
+                        const _HomeActionCard(
+                          icon: Icons.account_balance_outlined,
+                          title: 'Secretarias',
+                          description:
+                              'Configure e-mail, logo e textos usados em notificações e documentos.',
+                          route: '/secretarias',
+                        ),
+                      if (user?.userType == 'admin' ||
+                          user?.userType == 'gestor')
                         const _HomeActionCard(
                           icon: Icons.tune_outlined,
                           title: 'Perguntas e permissões',

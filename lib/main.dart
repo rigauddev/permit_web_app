@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:permit_web_app/core/routes/app_routes.dart';
 import 'package:permit_web_app/core/themes/customer_theme.dart';
 import 'package:permit_web_app/data/models/user_model.dart';
@@ -18,6 +21,7 @@ import 'presentation/pages/users_list.dart';
 import 'presentation/pages/user_registration_page.dart';
 import 'presentation/pages/user_create_page.dart';
 import 'presentation/pages/question_page.dart';
+import 'presentation/pages/secretarias_page.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -30,6 +34,17 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(userProvider);
 
+    return _SessionBootstrap(user: user, child: _AppRouter(user: user));
+  }
+}
+
+class _AppRouter extends StatelessWidget {
+  const _AppRouter({required this.user});
+
+  final UserModel? user;
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Sistema de Serviços da Prefeitura',
@@ -85,6 +100,12 @@ class MyApp extends ConsumerWidget {
               allowedRoles: const {'admin', 'gestor_secretaria'},
               child: HomeContentPage(userType: user?.userType ?? ''),
             ),
+        AppRoutes.secretarias:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin', 'gestor_secretaria'},
+              child: SecretariasPage(userType: user?.userType ?? ''),
+            ),
         AppRoutes.services:
             (context) => _GuardedRoute(
               user: user,
@@ -129,6 +150,64 @@ class MyApp extends ConsumerWidget {
       },
       onGenerateRoute: (settings) => AppRoutes.generateRoute(settings, user),
     );
+  }
+}
+
+class _SessionBootstrap extends ConsumerStatefulWidget {
+  const _SessionBootstrap({required this.user, required this.child});
+
+  final UserModel? user;
+  final Widget child;
+
+  @override
+  ConsumerState<_SessionBootstrap> createState() => _SessionBootstrapState();
+}
+
+class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
+  static const _storage = FlutterSecureStorage();
+  bool _checked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final expiresAtText = await _storage.read(key: 'session_expires_at');
+    final token = await _storage.read(key: 'access_token');
+    final userJson = await _storage.read(key: 'user');
+    final expiresAt =
+        expiresAtText == null ? null : DateTime.tryParse(expiresAtText);
+    if (token == null ||
+        userJson == null ||
+        expiresAt == null ||
+        expiresAt.toUtc().isBefore(DateTime.now().toUtc())) {
+      await _storage.delete(key: 'access_token');
+      await _storage.delete(key: 'user');
+      await _storage.delete(key: 'session_expires_at');
+      if (mounted) setState(() => _checked = true);
+      return;
+    }
+    if (widget.user == null) {
+      ref
+          .read(userProvider.notifier)
+          .setUser(
+            UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>),
+          );
+    }
+    if (mounted) setState(() => _checked = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_checked) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
+    return widget.child;
   }
 }
 

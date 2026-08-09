@@ -12,6 +12,35 @@ class PermitCreateRequest(BaseModel):
     respostas: dict[str, Any] = Field(default_factory=dict)
 
 
+class QuestionCreateRequest(BaseModel):
+    key: str = Field(..., min_length=3, max_length=80, pattern="^[a-z0-9_]+$")
+    pergunta: str = Field(..., min_length=3, max_length=255)
+    descricao: str | None = None
+    secretaria: str = Field(..., min_length=3, max_length=150)
+    tipo: str = Field(..., min_length=3, max_length=80)
+    secretaria_dam: str | None = None
+    tipos_resposta: list[str] = Field(..., min_length=1)
+    campos_obrigatorios: dict[str, bool] = Field(default_factory=dict)
+    modelo_documento_nome: str | None = Field(default=None, max_length=255)
+    modelo_documento_url: str | None = Field(default=None, max_length=500)
+
+
+class QuestionResponse(BaseModel):
+    id: int
+    key: str
+    pergunta: str
+    descricao: str | None = None
+    secretaria: str
+    tipo: str
+    secretaria_dam: str | None = None
+    tipos_resposta: list[str]
+    campos_obrigatorios: dict[str, bool]
+    modelo_documento_nome: str | None = None
+    modelo_documento_url: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class RequirementResponse(BaseModel):
     id: int
     secretaria: str
