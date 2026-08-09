@@ -43,6 +43,8 @@ class QuestionDefinitionModel(Base):
     campos_obrigatorios = Column(JSON, nullable=False)
     modelo_documento_nome = Column(String(255), nullable=True)
     modelo_documento_url = Column(String(500), nullable=True)
+    requer_vistoria = Column(Boolean, default=False, nullable=False)
+    checklist_vistoria = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -57,6 +59,11 @@ class PermitRequirementModel(Base):
     status = Column(String(50), default="aguardando_analise", nullable=False)
     observacoes = Column(Text, nullable=True)
     due_date = Column(Date, nullable=True)
+    requires_inspection = Column(Boolean, default=False, nullable=False)
+    inspection_checklist = Column(JSON, nullable=True)
+    inspection_scheduled_for = Column(Date, nullable=True)
+    inspection_status = Column(String(50), default="nao_agendada", nullable=False)
+    inspection_result = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

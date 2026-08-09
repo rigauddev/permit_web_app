@@ -23,6 +23,8 @@ class QuestionCreateRequest(BaseModel):
     campos_obrigatorios: dict[str, bool] = Field(default_factory=dict)
     modelo_documento_nome: str | None = Field(default=None, max_length=255)
     modelo_documento_url: str | None = Field(default=None, max_length=500)
+    requer_vistoria: bool = False
+    checklist_vistoria: list[str] = Field(default_factory=list)
 
 
 class QuestionResponse(BaseModel):
@@ -37,6 +39,8 @@ class QuestionResponse(BaseModel):
     campos_obrigatorios: dict[str, bool]
     modelo_documento_nome: str | None = None
     modelo_documento_url: str | None = None
+    requer_vistoria: bool = False
+    checklist_vistoria: list[str] = Field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -47,6 +51,11 @@ class RequirementResponse(BaseModel):
     tipo_exigencia: str
     status: str
     observacoes: str | None = None
+    requires_inspection: bool = False
+    inspection_checklist: list[str] = Field(default_factory=list)
+    inspection_scheduled_for: date | None = None
+    inspection_status: str = "nao_agendada"
+    inspection_result: dict[str, Any] | None = None
 
 
 class AttachmentCreateRequest(BaseModel):
@@ -87,6 +96,18 @@ class CommentResponse(BaseModel):
 class RequirementStatusUpdateRequest(BaseModel):
     status: str = Field(..., min_length=3, max_length=50)
     observacoes: str | None = Field(default=None, max_length=2000)
+
+
+class InspectionScheduleRequest(BaseModel):
+    scheduled_for: date
+
+
+class InspectionCompleteRequest(BaseModel):
+    approved: bool
+    checklist: dict[str, bool] = Field(default_factory=dict)
+    observacoes: str | None = Field(default=None, max_length=2000)
+    fotos: list[str] = Field(default_factory=list)
+    nova_data: date | None = None
 
 
 class EventCredentialResponse(BaseModel):

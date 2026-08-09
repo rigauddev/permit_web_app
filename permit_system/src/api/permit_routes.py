@@ -15,6 +15,8 @@ from src.schemas.permit_schema import (
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
+    InspectionCompleteRequest,
+    InspectionScheduleRequest,
     PermitCreateRequest,
     PermitResponse,
     QuestionCreateRequest,
@@ -174,6 +176,26 @@ def update_requirement_status(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
 ):
     return PermitService(db).update_requirement_status(requirement_id, payload, current_user)
+
+
+@router.patch("/requirements/{requirement_id}/inspection-schedule", response_model=RequirementResponse)
+def schedule_requirement_inspection(
+    requirement_id: int,
+    payload: InspectionScheduleRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).schedule_inspection(requirement_id, payload, current_user)
+
+
+@router.patch("/requirements/{requirement_id}/inspection-complete", response_model=RequirementResponse)
+def complete_requirement_inspection(
+    requirement_id: int,
+    payload: InspectionCompleteRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).complete_inspection(requirement_id, payload, current_user)
 
 
 @credential_router.get("/{codigo_publico}/validate", response_model=EventCredentialValidationResponse)

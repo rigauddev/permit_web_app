@@ -159,6 +159,52 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> scheduleInspection({
+    required String accessToken,
+    required int requirementId,
+    required String scheduledFor,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse(
+        '$_baseUrl/permit-requests/requirements/$requirementId/inspection-schedule',
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'scheduled_for': scheduledFor}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> completeInspection({
+    required String accessToken,
+    required int requirementId,
+    required bool approved,
+    required Map<String, bool> checklist,
+    String? observacoes,
+    List<String> fotos = const [],
+    String? novaData,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse(
+        '$_baseUrl/permit-requests/requirements/$requirementId/inspection-complete',
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'approved': approved,
+        'checklist': checklist,
+        'observacoes': observacoes,
+        'fotos': fotos,
+        'nova_data': novaData,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<List<Map<String, dynamic>>> listHomeContent(String accessToken) async {
     final response = await _client.get(
       Uri.parse('$_baseUrl/home-content'),
@@ -663,6 +709,12 @@ class PermitApiService {
               'observacoes':
                   data['observacoes'] == null ? [] : [data['observacoes']],
               'anexos': const <String>[],
+              'requires_inspection': data['requires_inspection'] ?? false,
+              'inspection_checklist':
+                  data['inspection_checklist'] ?? const <dynamic>[],
+              'inspection_scheduled_for': data['inspection_scheduled_for'],
+              'inspection_status': data['inspection_status'] ?? 'nao_agendada',
+              'inspection_result': data['inspection_result'],
             };
           }).toList(),
     };

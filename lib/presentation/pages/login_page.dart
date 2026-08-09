@@ -103,10 +103,13 @@ class LoginPage extends HookConsumerWidget {
           mfaController.text,
           clientType: kIsWeb ? 'web' : 'app',
         );
-        final expiresAt = DateTime.now()
-            .add(kIsWeb ? const Duration(hours: 2) : const Duration(days: 2))
-            .toUtc()
-            .toIso8601String();
+        final expiresAt =
+            DateTime.now()
+                .add(
+                  kIsWeb ? const Duration(hours: 2) : const Duration(days: 2),
+                )
+                .toUtc()
+                .toIso8601String();
         await secureStorage.write(
           key: 'access_token',
           value: session.accessToken,
@@ -152,6 +155,28 @@ class LoginPage extends HookConsumerWidget {
       mfaResendSeconds.value = 0;
       mfaController.clear();
       errorMessage.value = null;
+    }
+
+    void clearCredentials() {
+      emailController.clear();
+      passwordController.clear();
+      mfaController.clear();
+      challenge.value = null;
+      mfaGeneration.value = null;
+      selectedMfaMethod.value = 'email';
+      mfaResendSeconds.value = 0;
+      obscurePassword.value = true;
+      errorMessage.value = null;
+    }
+
+    void selectAccessProfile(String profile) {
+      clearCredentials();
+      accessProfile.value = profile;
+    }
+
+    void backToAccessProfile() {
+      clearCredentials();
+      accessProfile.value = null;
     }
 
     final size = MediaQuery.of(context).size;
@@ -204,20 +229,20 @@ class LoginPage extends HookConsumerWidget {
                             title: 'Cidadão',
                             subtitle:
                                 'Solicitar e acompanhar alvarás de evento.',
-                            onTap: () => accessProfile.value = 'cidadao',
+                            onTap: () => selectAccessProfile('cidadao'),
                           ),
                           const SizedBox(height: 12),
                           _AccessProfileButton(
                             icon: Icons.badge_outlined,
                             title: 'Prefeitura',
                             subtitle: 'Operadores, gestores e administradores.',
-                            onTap: () => accessProfile.value = 'interno',
+                            onTap: () => selectAccessProfile('interno'),
                           ),
                         ] else if (!hasChallenge) ...[
                           Align(
                             alignment: Alignment.centerLeft,
                             child: TextButton.icon(
-                              onPressed: () => accessProfile.value = null,
+                              onPressed: backToAccessProfile,
                               icon: const Icon(Icons.arrow_back),
                               label: const Text('Trocar tipo de acesso'),
                             ),

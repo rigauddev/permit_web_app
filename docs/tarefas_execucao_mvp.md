@@ -98,6 +98,7 @@
 - [x] Exibir escolha de acesso Cidadão ou Prefeitura antes do login.
 - [x] Validar tipo de acesso escolhido já na etapa e-mail/senha, antes do MFA.
 - [x] Padronizar falhas de autenticação como `Credenciais inválidas`.
+- [x] Limpar campos de login/senha/MFA ao trocar o tipo de acesso.
 - [x] Deslogar automaticamente o usuário quando a sessão/token expirar.
 - [x] Restaurar sessão salva ao recarregar o app e evitar loop de login.
 - [x] Emitir sessão web com validade de 2 horas e sessão app com validade de 2 dias.
@@ -151,11 +152,11 @@
 - [x] Exibir calendário mensal com marcação de dias com vistoria/exigência técnica.
 - [x] Reduzir calendário para mês atual e abrir lista de vistorias ao clicar em data marcada.
 - [x] Exibir detalhes da solicitação ao clicar em uma vistoria.
-- [ ] Criar fluxo de vistoria quando exigência depender de inspeção técnica.
-- [ ] Permitir anexar imagens da vistoria.
-- [ ] Criar formulário de laudo técnico.
-- [ ] Vincular laudo à exigência da secretaria responsável.
-- [ ] Bloquear aprovação final da exigência enquanto laudo obrigatório estiver pendente.
+- [x] Criar fluxo de vistoria quando exigência depender de inspeção técnica.
+- [x] Permitir anexar imagens da vistoria.
+- [x] Criar formulário/checklist técnico de vistoria.
+- [x] Vincular resultado/checklist à exigência da secretaria responsável.
+- [x] Bloquear aprovação da vistoria quando checklist obrigatório estiver incompleto.
 - [ ] Registrar ART, AVCB, planta baixa, croqui/mapa e certificado sanitário como anexos específicos.
 
 ## Marco 9 - Pós-MVP / Integrações
@@ -166,6 +167,8 @@
 - [x] Preparar SMTP/Gmail para testes de envio de e-mail.
 - [x] Criar template HTML de MFA com cabeçalho da prefeitura e logo/texto da secretaria quando aplicável.
 - [x] Permitir modelo de documento por pergunta, com botão de baixar, assinatura impressa/gov.br e anexo obrigatório.
+- [x] Limpar formulário após cadastrar ou atualizar pergunta.
+- [x] Permitir configurar na pergunta se ela exige vistoria e quais itens compõem o checklist.
 - [ ] Enviar e-mail para todas as secretarias responsáveis com cópia/resumo da solicitação e link de acesso.
 - [ ] Configurar provedor SMTP de produção e validar entregabilidade.
 - [ ] Evoluir Gmail para OAuth/Gmail API ou SMTP relay Workspace em homologação/produção.
