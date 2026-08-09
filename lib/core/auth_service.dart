@@ -122,12 +122,14 @@ class AuthService {
   Future<AuthSession> verifyMfa(
     String challengeToken,
     String method,
-    String code,
-  ) async {
+    String code, {
+    required String clientType,
+  }) async {
     final response = await _post('/auth/mfa/verify', {
       'challenge_token': challengeToken,
       'method': method,
       'code': code.trim(),
+      'client_type': clientType,
     });
     return AuthSession.fromJson(response);
   }

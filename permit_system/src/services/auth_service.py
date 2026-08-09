@@ -22,6 +22,7 @@ from src.schemas.auth_schema import (
     UserSessionResponse,
 )
 from src.schemas.user_schema import UserCreateRequest, UserResponse
+from src.services.email_service import build_mfa_email_html, send_email
 
 
 class AuthService:
@@ -56,6 +57,14 @@ class AuthService:
         user.mfa_code_hash = hash_password(code)
         user.mfa_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         self.db.commit()
+        if method == "email":
+            status_message = send_email(
+                user.email,
+                "Código de acesso ao sistema da Prefeitura",
+                f"Seu código de acesso é {code}. Ele expira em 5 minutos.",
+                html=build_mfa_email_html(code, user.secretaria),
+            )
+            print(f"[MFA EMAIL] {user.email}: {status_message}")
 
         return MfaGenerateResponse(
             method=method,
@@ -63,7 +72,7 @@ class AuthService:
             dev_code=code,
         )
 
-    def verify_mfa_code(self, challenge_token: str, method: str, code: str) -> TokenResponse:
+    def verify_mfa_code(self, challenge_token: str, method: str, code: str, client_type: str = "web") -> TokenResponse:
         user = self._get_user_from_challenge(challenge_token)
         methods = self._available_mfa_methods(user)
         expires_at = user.mfa_code_expires_at
@@ -83,12 +92,15 @@ class AuthService:
         self.db.commit()
 
         session = self._to_session(user)
+        expires_delta = timedelta(days=2) if client_type == "app" else timedelta(hours=2)
         token = create_access_token(
             subject=str(user.id),
             claims={
                 "role": session.role,
                 "secretaria": session.secretaria,
+                "client_type": client_type,
             },
+            expires_delta=expires_delta,
         )
         return TokenResponse(access_token=token, user=session)
 
@@ -106,6 +118,13 @@ class AuthService:
         )
         self.db.add(verification)
         self.db.commit()
+        status_message = send_email(
+            email,
+            "Código de validação de e-mail",
+            f"Seu código de validação é {code}. Ele expira em 10 minutos.",
+            html=build_mfa_email_html(code),
+        )
+        print(f"[EMAIL VERIFICATION] {email}: {status_message}")
 
         return EmailVerificationStartResponse(
             email=email,

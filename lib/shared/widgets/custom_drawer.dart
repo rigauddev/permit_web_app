@@ -50,7 +50,9 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
             textColor: colorScheme.onPrimary,
             userName: user?.name ?? '',
             compactMode: widget.compactMode,
-            showToggle: !widget.asDrawer && !Theme.of(context).platform.toString().contains('iOS'),
+            showToggle:
+                !widget.asDrawer &&
+                !Theme.of(context).platform.toString().contains('iOS'),
             onToggle:
                 () => setState(() {
                   _collapsed = !_collapsed;
@@ -74,10 +76,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     collapsed: collapsed,
                     icon: Icons.event,
                     title: 'Serviços',
-                    routes: const [
-                      '/services',
-                      '/my-requests',
-                    ],
+                    routes: const ['/services', '/my-requests'],
                     currentRoute: currentRoute,
                     children: const [
                       _DrawerSectionItem('Serviços', '/services'),
@@ -87,45 +86,35 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                 if (isOperatorOrManager || isAdmin)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.apartment,
-                    title: 'Secretaria',
-                    routes: const [
-                      '/secretaria-requests',
-                      '/inspections',
-                      '/home-content',
-                      '/users',
-                    ],
-                    currentRoute: currentRoute,
-                    children: [
-                      const _DrawerSectionItem(
-                        'Solicitações',
-                        '/secretaria-requests',
-                      ),
-                      const _DrawerSectionItem('Vistorias', '/inspections'),
-                      if (widget.userType == 'gestor' || isAdmin)
-                        const _DrawerSectionItem(
-                          'Gestão de operadores',
-                          '/users',
-                        ),
-                      if (widget.userType == 'gestor' || isAdmin)
-                        const _DrawerSectionItem(
-                          'Conteúdo da página inicial',
-                          '/home-content',
-                        ),
-                    ],
-                  ),
-                if (isAdmin)
-                  _DrawerSection(
-                    collapsed: collapsed,
-                    icon: Icons.admin_panel_settings,
-                    title: 'Administração',
-                    routes: const ['/users', '/questions'],
+                    icon: Icons.assignment_outlined,
+                    title: 'Atendimento',
+                    routes: const ['/secretaria-requests', '/inspections'],
                     currentRoute: currentRoute,
                     children: const [
-                      _DrawerSectionItem('Gestão de usuários', '/users'),
-                      _DrawerSectionItem('Permissões', '/users'),
-                      _DrawerSectionItem('Tipos de usuários', '/users'),
-                      _DrawerSectionItem('Criar perguntas', '/questions'),
+                      _DrawerSectionItem(
+                        'Central de solicitações',
+                        '/secretaria-requests',
+                      ),
+                      _DrawerSectionItem('Vistorias', '/inspections'),
+                    ],
+                  ),
+                if (widget.userType == 'gestor' || isAdmin)
+                  _DrawerSection(
+                    collapsed: collapsed,
+                    icon: Icons.tune_outlined,
+                    title: 'Configuração',
+                    routes: const [
+                      '/users',
+                      '/questions',
+                      '/home-content',
+                      '/secretarias',
+                    ],
+                    currentRoute: currentRoute,
+                    children: const [
+                      _DrawerSectionItem('Usuários', '/users'),
+                      _DrawerSectionItem('Perguntas', '/questions'),
+                      _DrawerSectionItem('Secretarias', '/secretarias'),
+                      _DrawerSectionItem('Conteúdo da home', '/home-content'),
                     ],
                   ),
               ],
@@ -162,16 +151,11 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
           ),
         ],
       ),
-      child: Material(
-        color: drawerBackground,
-        child: content,
-      ),
+      child: Material(color: drawerBackground, child: content),
     );
 
     if (widget.asDrawer) {
-      return Drawer(
-        child: menu,
-      );
+      return Drawer(child: menu);
     }
 
     return menu;
@@ -206,9 +190,7 @@ class _DrawerHeader extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: const BorderRadius.only(
-          bottomRight: Radius.circular(24),
-        ),
+        borderRadius: const BorderRadius.only(bottomRight: Radius.circular(24)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(

@@ -127,6 +127,17 @@ class _ReceitaMunicipalServicesPageState
       }
 
       final forms = await PermitApiService().listRequests(token);
+      final definitions = await PermitApiService().listQuestionDefinitions(
+        accessToken: token,
+      );
+      final eventQuestions =
+          definitions
+              .where((question) => question['tipo'] == 'Alvará de Eventos')
+              .toList();
+      final questions =
+          eventQuestions.isEmpty
+              ? PermitApiService.eventPermitQuestions
+              : eventQuestions;
       if (!mounted) return;
       Navigator.pushNamed(
         context,
@@ -136,7 +147,7 @@ class _ReceitaMunicipalServicesPageState
           'userProfile': widget.userProfile ?? '',
           'permitType': 'Alvará de Evento',
           'userName': widget.userName ?? '',
-          'questions': PermitApiService.eventPermitQuestions,
+          'questions': questions,
           'forms': forms,
         },
       );
