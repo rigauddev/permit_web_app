@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -25,6 +25,11 @@ class SecretariaModel(Base):
     slug = Column(String(80), unique=True, nullable=False, index=True)
     nome = Column(String(150), nullable=False)
     descricao = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    logo_url = Column(String(500), nullable=True)
+    email_header_text = Column(Text, nullable=True)
+    document_header_text = Column(Text, nullable=True)
+    document_footer_text = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

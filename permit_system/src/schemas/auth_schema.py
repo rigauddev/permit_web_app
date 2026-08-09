@@ -30,6 +30,7 @@ class MfaVerifyRequest(BaseModel):
     challenge_token: str
     method: str = "email"
     code: str = Field(..., min_length=6, max_length=6)
+    client_type: str = Field("web", pattern="^(web|app)$")
 
 
 class EmailVerificationStartRequest(BaseModel):

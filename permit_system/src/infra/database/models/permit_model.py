@@ -29,6 +29,24 @@ class PermitRequestModel(Base):
     credentials = relationship("EventCredentialModel", back_populates="permit_request")
 
 
+class QuestionDefinitionModel(Base):
+    __tablename__ = "question_definitions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(80), unique=True, nullable=False, index=True)
+    pergunta = Column(String(255), nullable=False)
+    descricao = Column(Text, nullable=True)
+    secretaria = Column(String(150), nullable=False)
+    tipo = Column(String(80), nullable=False)
+    secretaria_dam = Column(String(150), nullable=True)
+    tipos_resposta = Column(JSON, nullable=False)
+    campos_obrigatorios = Column(JSON, nullable=False)
+    modelo_documento_nome = Column(String(255), nullable=True)
+    modelo_documento_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class PermitRequirementModel(Base):
     __tablename__ = "exigencias_alvara"
 

@@ -31,9 +31,13 @@ def verify_token_hash(token: str, token_hash: str) -> bool:
     return hmac.compare_digest(hash_token(token), token_hash)
 
 
-def create_access_token(subject: str, claims: dict[str, Any] | None = None) -> str:
+def create_access_token(
+    subject: str,
+    claims: dict[str, Any] | None = None,
+    expires_delta: timedelta | None = None,
+) -> str:
     now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expires_at = now + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     payload = {
         "sub": subject,
         "iat": int(now.timestamp()),

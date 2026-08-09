@@ -17,6 +17,8 @@ from src.schemas.permit_schema import (
     EventCredentialValidationResponse,
     PermitCreateRequest,
     PermitResponse,
+    QuestionCreateRequest,
+    QuestionResponse,
     RequirementResponse,
     RequirementStatusUpdateRequest,
 )
@@ -59,6 +61,42 @@ def update_authorization_template(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
 ):
     return PermitService(db).update_authorization_template(payload, current_user)
+
+
+@router.get("/question-definitions", response_model=list[QuestionResponse])
+def list_question_definitions(
+    db: Session = Depends(get_db),
+    _: UserModel = Depends(get_current_user),
+):
+    return PermitService(db).list_question_definitions()
+
+
+@router.post("/question-definitions", response_model=QuestionResponse)
+def create_question_definition(
+    payload: QuestionCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).create_question_definition(payload, current_user)
+
+
+@router.put("/question-definitions/{question_id}", response_model=QuestionResponse)
+def update_question_definition(
+    question_id: int,
+    payload: QuestionCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).update_question_definition(question_id, payload, current_user)
+
+
+@router.delete("/question-definitions/{question_id}", status_code=204)
+def delete_question_definition(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    PermitService(db).delete_question_definition(question_id, current_user)
 
 
 @router.get("/{request_id}", response_model=PermitResponse)

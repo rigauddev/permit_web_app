@@ -56,6 +56,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? endTime,
     bool? isBeneficente,
     String? instituicaoBeneficiada,
+    bool? termoAceite,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -69,6 +70,9 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     }
     if (instituicaoBeneficiada != null) {
       updated['instituicao_beneficiada'] = instituicaoBeneficiada;
+    }
+    if (termoAceite != null) {
+      updated['termo_aceite'] = termoAceite.toString();
     }
     state = state.copyWith(eventData: updated);
   }
@@ -167,13 +171,26 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       if (!state.answers.containsKey(key)) {
         return 'Responda a pergunta antes de avançar.';
       }
+      final requiredError = _validateRequiredQuestionFields(question, key);
+      if (requiredError != null) {
+        return requiredError;
+      }
+    }
+
+    if (state.currentStep == state.totalSteps - 1 &&
+        state.eventData['termo_aceite'] != 'true') {
+      return 'Aceite o termo de responsabilidade para enviar a solicitação.';
     }
 
     return null;
   }
 
   List<Map<String, String>> previewRequirements() {
-    return PermitApiService.previewRequirements(state.answers, state.eventData);
+    return PermitApiService.previewRequirements(
+      state.answers,
+      state.eventData,
+      state.questions,
+    );
   }
 
   DateTime _addBusinessDays(DateTime startDate, int businessDays) {
@@ -202,6 +219,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         responsibleData: state.responsibleData,
         eventData: state.eventData,
         answers: state.answers,
+        answerDetails: state.answerDetails,
         attachmentNames: state.attachments.map((file) => file.name).toList(),
       );
       final protocolo = response['protocolo'] as String? ?? '';
@@ -220,6 +238,44 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
       return null;
+    }
+  }
+
+  String? _validateRequiredQuestionFields(
+    Map<String, dynamic> question,
+    String questionKey,
+  ) {
+    if (state.answers[questionKey] != true) return null;
+    final requiredFields =
+        (question['campos_obrigatorios'] as Map<String, dynamic>?) ?? {};
+    if (requiredFields.isEmpty) return null;
+    final answer = state.answerDetails[questionKey];
+    if (answer is! Map) {
+      return 'Preencha os campos obrigatórios desta pergunta.';
+    }
+    for (final entry in requiredFields.entries) {
+      if (entry.value != true) continue;
+      final fieldValue = answer[_fieldKey(entry.key)];
+      if (fieldValue == null || fieldValue.toString().trim().isEmpty) {
+        return 'Preencha o campo obrigatório: ${entry.key}.';
+      }
+    }
+    return null;
+  }
+
+  String _fieldKey(String label) {
+    switch (label) {
+      case 'Texto':
+        return 'texto';
+      case 'Calendário':
+        return 'data';
+      case 'Anexar Documento':
+        return 'arquivo';
+      case 'Assinatura impressa':
+      case 'Assinatura gov.br':
+        return 'assinatura';
+      default:
+        return label;
     }
   }
 }

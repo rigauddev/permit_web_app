@@ -313,7 +313,7 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
     setState(() => _printingPdf = true);
     try {
       await Printing.layoutPdf(
-        name: 'autorizacao_evento_${form['protocolo'] ?? 'alvara'}.pdf',
+        name: 'alvara_evento_${form['protocolo'] ?? 'alvara'}.pdf',
         onLayout:
             (format) => _buildAuthorizationPdf(
               format: format,
@@ -1106,7 +1106,7 @@ Future<Uint8List> _buildAuthorizationPdf({
                           ),
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            'Central de Eventos - Autorização de Evento',
+                            'Central de Eventos - Alvará de Autorização de Evento',
                             style: const pw.TextStyle(fontSize: 12),
                           ),
                         ],
@@ -1135,6 +1135,16 @@ Future<Uint8List> _buildAuthorizationPdf({
               ],
             ),
             pw.Divider(height: 28),
+            pw.Center(
+              child: pw.Text(
+                'ALVARÁ DE AUTORIZAÇÃO DE EVENTO',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 12),
             pw.Text(
               template['header_text']?.toString() ?? _defaultHeaderText,
               style: const pw.TextStyle(fontSize: 11),
@@ -1158,6 +1168,7 @@ Future<Uint8List> _buildAuthorizationPdf({
                         ),
                       ),
                       _pdfRow('Local', form['local_evento']),
+                      _pdfRow('Público estimado', form['publico_estimado']),
                       _pdfRow('DAM', _damLabel(form['dam_status'])),
                     ],
                   ),

@@ -10,6 +10,7 @@ import 'package:permit_web_app/data/models/user_model.dart';
 // import 'package:permit_web_app/presentation/pages/services.dart';
 // import 'package:permit_web_app/presentation/pages/question_page.dart';
 // import 'package:permit_web_app/presentation/pages/permit_request_page.dart';
+import 'package:permit_web_app/presentation/pages/question_page.dart';
 import 'package:permit_web_app/presentation/pages/user_alvara_dashboard.dart';
 import 'package:permit_web_app/presentation/pages/event_credential_page.dart';
 
@@ -30,6 +31,7 @@ class AppRoutes {
   static const String questions = '/questions';
   static const String userCreate = '/user-create';
   static const String homeContent = '/home-content';
+  static const String secretarias = '/secretarias';
 
   static const String permitDashboard = '/permit-dashboard';
   static const String eventPermit = '/event-permit';
@@ -89,6 +91,18 @@ class AppRoutes {
                 userProfile: args['userProfile'],
                 permitType: args['permitType'],
                 questions: args['questions'],
+              ),
+        );
+      case questions:
+        if (!_canAccess(user, const {'admin', 'gestor_secretaria'})) {
+          return _blockedRoute(user);
+        }
+        return MaterialPageRoute(
+          settings: settings,
+          builder:
+              (_) => PerguntasPage(
+                userType: user?.userType ?? 'admin',
+                userProfile: user?.profile ?? 'admin',
               ),
         );
       case validateEvent:

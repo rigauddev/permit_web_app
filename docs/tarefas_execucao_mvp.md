@@ -17,6 +17,8 @@
 - [x] Validar campos obrigatórios do evento: nome, data, local, público esperado, início e término.
 - [x] Validar anexos obrigatórios: RG/CPF, comprovante de residência e alvará do local.
 - [x] Criar tela de revisão antes do envio.
+- [x] Exibir termo de responsabilidade e veracidade das informações antes do envio.
+- [x] Exigir aceite do termo de responsabilidade no frontend e backend.
 - [x] Gerar protocolo após envio.
 - [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.
 - [x] Corrigir seleção de respostas para não carregar resposta da pergunta anterior no wizard.
@@ -74,6 +76,7 @@
 - [x] Criar central interna de solicitações por tipo de serviço e secretaria responsável.
 - [x] Tornar as exigências da solicitação interativas para admin, gestor e operador autorizados.
 - [x] Bloquear rotas internas no frontend quando o perfil logado não possuir permissão.
+- [x] Reorganizar menu lateral por Atendimento e Configuração, reduzindo itens duplicados.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
@@ -94,13 +97,18 @@
 - [x] Validar tipo de acesso escolhido já na etapa e-mail/senha, antes do MFA.
 - [x] Padronizar falhas de autenticação como `Credenciais inválidas`.
 - [x] Deslogar automaticamente o usuário quando a sessão/token expirar.
+- [x] Restaurar sessão salva ao recarregar o app e evitar loop de login.
+- [x] Emitir sessão web com validade de 2 horas e sessão app com validade de 2 dias.
 - [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 - [x] Criar seed com gestor e operador para cada secretaria.
+- [x] Criar seed com reset do banco e cenários de teste do fluxo de alvará.
+- [x] Criar numeração de protocolo por serviço no formato `AL-EV0001`.
 - [x] Substituir lista mockada de usuários por endpoint real com secretaria e perfil.
 - [x] Restringir gestor a usuários da própria secretaria e impedir criação de admin por gestor.
+- [x] Criar gestão de secretarias com e-mail, logo e textos de cabeçalho/rodapé.
 - [x] Criar gestão de conteúdo da página inicial com até 5 cards ativos por prefeitura/secretaria.
 - [x] Persistir cards de carrossel com título, texto, imagem e ordem de exibição.
 
@@ -120,6 +128,8 @@
 - [x] Permitir que o cidadão anexe o comprovante de pagamento do DAM.
 - [x] Após comprovante, marcar `Aguardando geração do alvará` e notificar a Secretaria de Desenvolvimento Econômico.
 - [x] Permitir que a Secretaria de Desenvolvimento Econômico anexe o alvará final.
+- [x] Permitir gerar alvará pelo sistema após pagamento do DAM, com PDF disponível para visualizar/baixar/imprimir.
+- [x] Transformar anexos de DAM e comprovante em ação de upload/seleção de arquivo.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
 - [x] Emitir autorização final após alvará anexado ou isenção validada.
 - [x] Gerar credencial/link de validação do evento autorizado no backend.
@@ -128,6 +138,7 @@
 - [x] Validar automaticamente a credencial quando a autorização é aberta no app.
 - [x] Exibir referência do DAM armazenado na validação quando autorizado.
 - [x] Exibir autorização final em nome do responsável pelo evento.
+- [x] Atualizar template padrão do documento para `Alvará de Autorização de Evento`.
 
 ## Marco 8 - Vistoria e análise técnica
 
@@ -148,8 +159,12 @@
 - [ ] Integrar geração automática de DAM com sistema da Receita.
 - [ ] Integrar assinatura eletrônica quando exigida.
 - [x] Enviar e-mail para a Secretaria de Desenvolvimento Econômico nas etapas de geração do DAM e geração do alvará, com link filtrado da central.
+- [x] Preparar SMTP/Gmail para testes de envio de e-mail.
+- [x] Criar template HTML de MFA com cabeçalho da prefeitura e logo/texto da secretaria quando aplicável.
+- [x] Permitir modelo de documento por pergunta, com botão de baixar, assinatura impressa/gov.br e anexo obrigatório.
 - [ ] Enviar e-mail para todas as secretarias responsáveis com cópia/resumo da solicitação e link de acesso.
 - [ ] Configurar provedor SMTP de produção e validar entregabilidade.
+- [ ] Evoluir Gmail para OAuth/Gmail API ou SMTP relay Workspace em homologação/produção.
 - [ ] Enviar notificações push para pendências, correções e autorizações.
 
 ## Marco 10 - Testes
@@ -159,6 +174,8 @@
 - [x] Testar cadastro PJ.
 - [x] Testar login.
 - [x] Testar login backend com MFA por e-mail em ambiente local.
+- [x] Testar seed resetado com cenários `AL-EV0001` a `AL-EV0006`.
+- [x] Testar geração do próximo protocolo `AL-EV0007`.
 - [x] Testar contador/reenvio de MFA em desenvolvimento.
 - [x] Testar solicitação completa.
 - [x] Testar evento com som.

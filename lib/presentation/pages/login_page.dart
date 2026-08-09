@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -100,11 +101,17 @@ class LoginPage extends HookConsumerWidget {
           loginChallenge.challengeToken,
           selectedMfaMethod.value,
           mfaController.text,
+          clientType: kIsWeb ? 'web' : 'app',
         );
+        final expiresAt = DateTime.now()
+            .add(kIsWeb ? const Duration(hours: 2) : const Duration(days: 2))
+            .toUtc()
+            .toIso8601String();
         await secureStorage.write(
           key: 'access_token',
           value: session.accessToken,
         );
+        await secureStorage.write(key: 'session_expires_at', value: expiresAt);
         await secureStorage.write(
           key: 'user',
           value: jsonEncode(session.user.toJson()),

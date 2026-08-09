@@ -35,7 +35,7 @@ def generate_mfa(payload: MfaGenerateRequest, db: Session = Depends(get_db)):
 
 @router.post("/mfa/verify", response_model=TokenResponse)
 def verify_mfa(payload: MfaVerifyRequest, db: Session = Depends(get_db)):
-    return AuthService(db).verify_mfa_code(payload.challenge_token, payload.method, payload.code)
+    return AuthService(db).verify_mfa_code(payload.challenge_token, payload.method, payload.code, payload.client_type)
 
 
 @router.post("/email-verifications", response_model=EmailVerificationStartResponse)

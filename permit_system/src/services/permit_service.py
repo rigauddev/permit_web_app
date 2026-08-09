@@ -1,7 +1,6 @@
 import os
+import re
 import secrets
-import smtplib
-from email.message import EmailMessage
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -16,6 +15,7 @@ from src.infra.database.models import (
     PermitCommentModel,
     PermitRequestModel,
     PermitRequirementModel,
+    QuestionDefinitionModel,
     SecretariaModel,
     UserModel,
 )
@@ -32,9 +32,12 @@ from src.schemas.permit_schema import (
     EventCredentialValidationResponse,
     PermitCreateRequest,
     PermitResponse,
+    QuestionCreateRequest,
+    QuestionResponse,
     RequirementResponse,
     RequirementStatusUpdateRequest,
 )
+from src.services.email_service import send_email
 
 
 QUESTION_RULES = {
@@ -80,11 +83,13 @@ ATTACHMENT_DAM_PAYMENT = "comprovante_pagamento_dam"
 ATTACHMENT_FINAL_PERMIT = "alvara_evento"
 AUTHORIZATION_TEMPLATE_SLUG = "alvara_evento"
 DEFAULT_AUTHORIZATION_HEADER = (
-    "A Prefeitura Municipal de Valença, por meio da Central de Eventos, autoriza a realização do evento abaixo "
-    "após as anuências dos órgãos competentes e a regularização do DAM ou isenção aplicável."
+    "A Prefeitura Municipal de Valença, por meio da Central de Eventos, expede o presente Alvará de Autorização "
+    "para realização do evento identificado abaixo, após análise das secretarias competentes, regularidade das "
+    "exigências aplicáveis e confirmação do DAM ou isenção."
 )
 DEFAULT_AUTHORIZATION_FOOTER = (
-    "Documento mantido no sistema municipal. A validade deve ser confirmada pela leitura do QR Code. "
+    "Este alvará deve permanecer disponível no local do evento e ser apresentado às autoridades fiscais quando solicitado. "
+    "A validade deve ser confirmada pela leitura do QR Code. "
     "Quando houver exigência de assinatura, o responsável pode imprimir, assinar e anexar, ou assinar "
     "eletronicamente pelo aplicativo gov.br e anexar o arquivo assinado."
 )
@@ -96,6 +101,7 @@ class PermitService:
 
     def create_request(self, payload: PermitCreateRequest, solicitante: UserModel) -> PermitResponse:
         self._validate_payload(payload)
+        self._validate_question_answers(payload.respostas)
         protocolo = self._generate_protocol()
         dam_status = DAM_STATUS_ISENTO if payload.is_beneficente else "nao_gerado"
         request = PermitRequestModel(
@@ -326,6 +332,21 @@ class PermitService:
         if not request:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
         self._recalculate_request_status(request)
+        if request.status == STATUS_AGUARDANDO_GERACAO_ALVARA:
+            request.status = STATUS_AUTORIZADA
+            self.db.add(
+                AttachmentModel(
+                    permit_request_id=request.id,
+                    tipo_documento=ATTACHMENT_FINAL_PERMIT,
+                    nome_arquivo=f"alvara_{request.protocolo}.pdf",
+                    arquivo_url=f"{PUBLIC_BASE_URL}/validar-evento/{request.protocolo}",
+                    mime_type="application/pdf",
+                    tamanho_bytes=None,
+                )
+            )
+            self._notify_citizen_final_permit_ready(request, current_user)
+            self.db.commit()
+            self.db.refresh(request)
         if request.status != "autorizada" and request.status != "isenta_dam":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -456,6 +477,164 @@ class PermitService:
         self.db.refresh(credential)
         return self._credential_to_response(credential)
 
+    def list_question_definitions(self) -> list[QuestionResponse]:
+        definitions = self.db.query(QuestionDefinitionModel).order_by(QuestionDefinitionModel.id.asc()).all()
+        return [self._question_to_response(item) for item in definitions]
+
+    def create_question_definition(self, payload: QuestionCreateRequest, current_user: UserModel) -> QuestionResponse:
+        self._validate_question_definition(payload)
+        self._ensure_can_manage_question_definition(payload.secretaria, current_user)
+        existing = self.db.query(QuestionDefinitionModel).filter(QuestionDefinitionModel.key == payload.key).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Já existe uma pergunta com esta chave de identificação.",
+            )
+        question = QuestionDefinitionModel(
+            key=payload.key,
+            pergunta=payload.pergunta,
+            descricao=payload.descricao,
+            secretaria=payload.secretaria,
+            tipo=payload.tipo,
+            secretaria_dam=payload.secretaria_dam,
+            tipos_resposta=payload.tipos_resposta,
+            campos_obrigatorios=payload.campos_obrigatorios,
+            modelo_documento_nome=payload.modelo_documento_nome,
+            modelo_documento_url=payload.modelo_documento_url,
+        )
+        self.db.add(question)
+        self.db.commit()
+        self.db.refresh(question)
+        return self._question_to_response(question)
+
+    def update_question_definition(self, question_id: int, payload: QuestionCreateRequest, current_user: UserModel) -> QuestionResponse:
+        question = self.db.query(QuestionDefinitionModel).filter(QuestionDefinitionModel.id == question_id).first()
+        if not question:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pergunta não encontrada")
+        self._validate_question_definition(payload)
+        self._ensure_can_manage_question_definition(question.secretaria, current_user)
+        self._ensure_can_manage_question_definition(payload.secretaria, current_user)
+        existing = (
+            self.db.query(QuestionDefinitionModel)
+            .filter(QuestionDefinitionModel.key == payload.key, QuestionDefinitionModel.id != question_id)
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Já existe uma pergunta com esta chave de identificação.",
+            )
+        question.key = payload.key
+        question.pergunta = payload.pergunta
+        question.descricao = payload.descricao
+        question.secretaria = payload.secretaria
+        question.tipo = payload.tipo
+        question.secretaria_dam = payload.secretaria_dam
+        question.tipos_resposta = payload.tipos_resposta
+        question.campos_obrigatorios = payload.campos_obrigatorios
+        question.modelo_documento_nome = payload.modelo_documento_nome
+        question.modelo_documento_url = payload.modelo_documento_url
+        self.db.commit()
+        self.db.refresh(question)
+        return self._question_to_response(question)
+
+    def delete_question_definition(self, question_id: int, current_user: UserModel) -> None:
+        question = self.db.query(QuestionDefinitionModel).filter(QuestionDefinitionModel.id == question_id).first()
+        if not question:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pergunta não encontrada")
+        self._ensure_can_manage_question_definition(question.secretaria, current_user)
+        self.db.delete(question)
+        self.db.commit()
+
+    @staticmethod
+    def _question_to_response(question: QuestionDefinitionModel) -> QuestionResponse:
+        return QuestionResponse(
+            id=question.id,
+            key=question.key,
+            pergunta=question.pergunta,
+            descricao=question.descricao,
+            secretaria=question.secretaria,
+            tipo=question.tipo,
+            secretaria_dam=question.secretaria_dam,
+            tipos_resposta=question.tipos_resposta,
+            campos_obrigatorios=question.campos_obrigatorios,
+            modelo_documento_nome=question.modelo_documento_nome,
+            modelo_documento_url=question.modelo_documento_url,
+            created_at=question.created_at,
+            updated_at=question.updated_at,
+        )
+
+    @staticmethod
+    def _validate_question_definition(payload: QuestionCreateRequest) -> None:
+        if not re.fullmatch(r"[a-z0-9_]+", payload.key):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A chave deve conter apenas letras minúsculas, números e sublinhado.",
+            )
+        if "Sim/Não" not in payload.tipos_resposta:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="O tipo de resposta Sim/Não deve estar presente.",
+            )
+        if (
+            {"Botão de Baixar", "Assinatura impressa", "Assinatura gov.br"} & set(payload.tipos_resposta)
+            and not (payload.modelo_documento_url or "").strip()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe o modelo do documento para download quando houver assinatura ou botão de baixar.",
+            )
+        unknown_required_fields = set(payload.campos_obrigatorios) - set(payload.tipos_resposta)
+        if unknown_required_fields:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Campos obrigatórios devem fazer parte dos tipos de resposta selecionados.",
+            )
+
+    def _ensure_can_manage_question_definition(self, secretaria_name: str, current_user: UserModel) -> None:
+        if current_user.role.slug == "admin":
+            return
+        if current_user.role.slug != "gestor_secretaria" or not current_user.secretaria:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        if self._normalize_secretaria_name(secretaria_name) != current_user.secretaria.slug:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Gestor só pode gerir perguntas da própria secretaria.",
+            )
+
+    @staticmethod
+    def _normalize_secretaria_name(secretaria_name: str) -> str:
+        normalized = (
+            secretaria_name.strip()
+            .lower()
+            .replace("á", "a")
+            .replace("à", "a")
+            .replace("â", "a")
+            .replace("ã", "a")
+            .replace("é", "e")
+            .replace("ê", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ô", "o")
+            .replace("õ", "o")
+            .replace("ú", "u")
+            .replace("ç", "c")
+        )
+        aliases = {
+            "secretaria de desenvolvimento economico": "desenvolvimento_economico",
+            "desenvolvimento economico": "desenvolvimento_economico",
+            "secretaria de meio ambiente": "meio_ambiente",
+            "meio ambiente": "meio_ambiente",
+            "secretaria de infraestrutura": "infraestrutura",
+            "infraestrutura": "infraestrutura",
+            "dmtran": "dmtran",
+            "vigilancia sanitaria": "vigilancia_sanitaria",
+            "guarda civil municipal": "guarda_civil",
+            "receita municipal": "receita_municipal",
+            "secretaria de saude": "vigilancia_sanitaria",
+        }
+        return aliases.get(normalized, normalized.replace(" ", "_"))
+
     def get_authorization_template(self) -> AuthorizationTemplateResponse:
         template = self._get_or_create_authorization_template()
         return self._template_to_response(template)
@@ -475,17 +654,72 @@ class PermitService:
         self.db.refresh(template)
         return self._template_to_response(template)
 
-    @staticmethod
-    def _build_requirements(respostas: dict[str, Any]) -> list[tuple[str, str]]:
+    def _build_requirements(self, respostas: dict[str, Any]) -> list[tuple[str, str]]:
         requirements: list[tuple[str, str]] = []
         seen = set()
         for answer_key, rules in QUESTION_RULES.items():
-            if respostas.get(answer_key) is True:
+            if PermitService._answer_is_yes(respostas.get(answer_key)):
                 for secretaria_slug, tipo_exigencia in rules:
                     if (secretaria_slug, tipo_exigencia) not in seen:
                         requirements.append((secretaria_slug, tipo_exigencia))
                         seen.add((secretaria_slug, tipo_exigencia))
+        definitions = self.db.query(QuestionDefinitionModel).all()
+        for question in definitions:
+            if question.key in QUESTION_RULES:
+                continue
+            if not self._answer_is_yes(respostas.get(question.key)):
+                continue
+            secretaria_slug = self._normalize_secretaria_name(question.secretaria)
+            tipo_exigencia = question.pergunta
+            if (secretaria_slug, tipo_exigencia) not in seen:
+                requirements.append((secretaria_slug, tipo_exigencia))
+                seen.add((secretaria_slug, tipo_exigencia))
         return requirements
+
+    def _validate_question_answers(self, respostas: dict[str, Any]) -> None:
+        definitions = self.db.query(QuestionDefinitionModel).all()
+        for question in definitions:
+            answer = respostas.get(question.key)
+            if answer is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Responda a pergunta: {question.pergunta}",
+                )
+            if not self._answer_is_yes(answer):
+                continue
+            required_fields = question.campos_obrigatorios or {}
+            for field_name, required in required_fields.items():
+                if required is not True:
+                    continue
+                value = self._answer_field_value(answer, field_name)
+                if value is None or not str(value).strip():
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"Preencha o campo obrigatório '{field_name}' da pergunta: {question.pergunta}",
+                    )
+
+    @staticmethod
+    def _answer_is_yes(answer: Any) -> bool:
+        if answer is True:
+            return True
+        if isinstance(answer, dict):
+            if answer.get("valor") is True:
+                return True
+            return str(answer.get("resposta", "")).strip().lower() == "sim"
+        return False
+
+    @staticmethod
+    def _answer_field_value(answer: Any, field_name: str) -> Any:
+        if not isinstance(answer, dict):
+            return None
+        field_map = {
+            "Texto": "texto",
+            "Calendário": "data",
+            "Anexar Documento": "arquivo",
+            "Assinatura impressa": "assinatura",
+            "Assinatura gov.br": "assinatura",
+        }
+        return answer.get(field_map.get(field_name, field_name))
 
     @staticmethod
     def _validate_payload(payload: PermitCreateRequest) -> None:
@@ -536,6 +770,12 @@ class PermitService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Informe a instituição beneficiada pelo evento beneficente.",
+            )
+
+        if str(payload.dados_evento.get("termo_aceite", "")).lower() != "true":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Aceite o termo de responsabilidade para enviar a solicitação.",
             )
 
     @staticmethod
@@ -740,42 +980,16 @@ class PermitService:
             f"Link: {link}\n"
             f"Mensagem: {mensagem}"
         )
-        email_status = self._send_email(destinatario, assunto, f"{mensagem}\n\nAcesse: {link}")
+        email_status = send_email(destinatario, assunto, f"{mensagem}\n\nAcesse: {link}")
         if email_status:
             body = f"{body}\nStatus do envio: {email_status}"
         print(body)
         self._add_comment(request.id, actor, body)
 
-    @staticmethod
-    def _send_email(destinatario: str, assunto: str, mensagem: str) -> str:
-        host = os.getenv("SMTP_HOST")
-        if not host:
-            return "SMTP não configurado; notificação registrada no processo."
-
-        port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_from = os.getenv("SMTP_FROM") or os.getenv("SMTP_USER") or "no-reply@valenca.ba.gov.br"
-        msg = EmailMessage()
-        msg["From"] = smtp_from
-        msg["To"] = destinatario
-        msg["Subject"] = assunto
-        msg.set_content(mensagem)
-
-        try:
-            with smtplib.SMTP(host, port, timeout=10) as smtp:
-                if os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}:
-                    smtp.starttls()
-                user = os.getenv("SMTP_USER")
-                password = os.getenv("SMTP_PASSWORD")
-                if user and password:
-                    smtp.login(user, password)
-                smtp.send_message(msg)
-            return "E-mail enviado via SMTP."
-        except Exception as exc:  # pragma: no cover - depende do provedor SMTP externo.
-            return f"Falha no SMTP; notificação registrada no processo. Erro: {exc}"
-
-    @staticmethod
-    def _generate_protocol() -> str:
-        return f"ALV-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+    def _generate_protocol(self) -> str:
+        last_id = self.db.query(PermitRequestModel.id).order_by(PermitRequestModel.id.desc()).first()
+        next_number = (last_id[0] + 1) if last_id else 1
+        return f"AL-EV{next_number:04d}"
 
     def _get_or_create_authorization_template(self) -> AuthorizationTemplateModel:
         template = (
