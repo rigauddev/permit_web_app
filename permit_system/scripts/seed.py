@@ -130,6 +130,21 @@ def ensure_question_definition_columns():
                 connection.execute(text(statement))
 
 
+def ensure_event_credential_columns():
+    inspector = inspect(engine)
+    if "credenciais_evento" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("credenciais_evento")}
+    migrations = {
+        "verified_at": "ALTER TABLE credenciais_evento ADD COLUMN verified_at DATETIME NULL",
+        "verification_count": "ALTER TABLE credenciais_evento ADD COLUMN verification_count INTEGER NOT NULL DEFAULT 0",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
 QUESTION_DEFINITIONS = [
     {
         "key": "tem_som",
@@ -628,6 +643,7 @@ def main():
     create_tables()
     ensure_secretaria_columns()
     ensure_question_definition_columns()
+    ensure_event_credential_columns()
     db = SessionLocal()
     try:
         roles = seed_roles(db)

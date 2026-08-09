@@ -902,6 +902,11 @@ class _ValidationResult extends StatelessWidget {
           _DetailRow(label: 'Local', value: validation['local_evento']),
           _DetailRow(label: 'Responsável', value: validation['responsavel']),
           _DetailRow(label: 'DAM', value: _damLabel(validation['dam_status'])),
+          if (valid)
+            _DetailRow(
+              label: 'Verificação',
+              value: _verificationLabel(validation),
+            ),
           if (validation['dam_attachment'] != null)
             _DetailRow(
               label: 'Arquivo DAM',
@@ -930,6 +935,16 @@ class _ValidationResult extends StatelessWidget {
       ),
     );
   }
+}
+
+String _verificationLabel(Map<String, dynamic> validation) {
+  final count = validation['verification_count'];
+  final verifiedAt = validation['verified_at'];
+  final countText = count == null ? '1' : count.toString();
+  if (verifiedAt == null || verifiedAt.toString().isEmpty) {
+    return 'Evento verificado nesta consulta';
+  }
+  return 'Evento verificado em $verifiedAt. Consultas: $countText';
 }
 
 class _DetailRow extends StatelessWidget {

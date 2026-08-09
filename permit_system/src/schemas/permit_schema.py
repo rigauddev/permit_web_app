@@ -97,6 +97,8 @@ class EventCredentialResponse(BaseModel):
     valid_from: datetime
     valid_until: datetime
     issued_at: datetime | None = None
+    verified_at: datetime | None = None
+    verification_count: int = 0
     validation_url: str
 
 
@@ -114,6 +116,8 @@ class EventCredentialValidationResponse(BaseModel):
     publico_estimado: str | None = None
     status_solicitacao: str | None = None
     dam_status: str | None = None
+    verified_at: datetime | None = None
+    verification_count: int = 0
     requirements: list[RequirementResponse] = []
     dam_attachment: AttachmentResponse | None = None
 

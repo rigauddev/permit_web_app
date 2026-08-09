@@ -27,10 +27,12 @@
 - [x] Centralizar formulários de solicitação em largura adequada para desktop.
 - [x] Criar menu lateral recolhível, com modo apenas ícones e item ativo destacado.
 - [x] Manter menu fixo como parte do layout em páginas autenticadas, inclusive recolhido em telas menores.
+- [x] Ocultar botão de menu da app bar superior em mobile e manter acesso pelo menu inferior.
 - [x] Mover acesso ao perfil para o avatar/botão do menu e remover atalho do appbar superior.
 - [x] Incluir botão de voltar nas subpáginas principais.
 - [x] Criar página `Minhas solicitações` separada por tipo de serviço.
 - [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
+- [x] Permitir marcar serviços como favoritos e exibir lista de favoritos no mobile.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -136,6 +138,8 @@
 - [x] Gerar QR Code visual para impressão/exibição.
 - [x] Criar tela de validação de credencial do evento.
 - [x] Validar automaticamente a credencial quando a autorização é aberta no app.
+- [x] Marcar credencial/evento como verificado após leitura válida do QR Code.
+- [x] Exibir flag de evento verificado nos cards de solicitação do cidadão.
 - [x] Exibir referência do DAM armazenado na validação quando autorizado.
 - [x] Exibir autorização final em nome do responsável pelo evento.
 - [x] Atualizar template padrão do documento para `Alvará de Autorização de Evento`.

@@ -442,6 +442,11 @@ class PermitService:
         evento = request.dados_evento or {}
         responsavel = request.dados_responsavel or {}
         dam_attachment = next((item for item in request.attachments if item.tipo_documento == "dam"), None)
+        if credential.verified_at is None:
+            credential.verified_at = now
+        credential.verification_count = (credential.verification_count or 0) + 1
+        self.db.commit()
+        self.db.refresh(credential)
         return EventCredentialValidationResponse(
             valid=True,
             credential_status=credential.status,
@@ -455,6 +460,8 @@ class PermitService:
             publico_estimado=str(evento.get("publico_estimado", "")),
             status_solicitacao=request.status,
             dam_status=request.dam_status,
+            verified_at=credential.verified_at,
+            verification_count=credential.verification_count or 0,
             requirements=[self._requirement_to_response(item) for item in request.requirements],
             dam_attachment=self._attachment_to_response(dam_attachment) if dam_attachment else None,
         )
@@ -1136,6 +1143,8 @@ class PermitService:
             valid_from=credential.valid_from,
             valid_until=credential.valid_until,
             issued_at=credential.issued_at,
+            verified_at=credential.verified_at,
+            verification_count=credential.verification_count or 0,
             validation_url=validation_url,
         )
 
