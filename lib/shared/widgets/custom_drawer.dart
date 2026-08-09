@@ -37,17 +37,20 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
     final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
     final collapsed = widget.compactMode || _collapsed;
+    final drawerBackground = colorScheme.surfaceContainerHighest;
     final content = SafeArea(
       child: Column(
         children: [
           _DrawerHeader(
             collapsed: collapsed,
-            primaryColor: primaryColor,
+            primaryColor: colorScheme.primary,
+            textColor: colorScheme.onPrimary,
             userName: user?.name ?? '',
             compactMode: widget.compactMode,
+            showToggle: !widget.asDrawer && !Theme.of(context).platform.toString().contains('iOS'),
             onToggle:
                 () => setState(() {
                   _collapsed = !_collapsed;
@@ -56,7 +59,8 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
           ),
           Expanded(
             child: ListView(
-              padding: EdgeInsets.zero,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _DrawerTile(
                   collapsed: collapsed,
@@ -73,8 +77,6 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     routes: const [
                       '/services',
                       '/my-requests',
-                      '/permit-dashboard',
-                      '/event-permit',
                     ],
                     currentRoute: currentRoute,
                     children: const [
@@ -85,14 +87,13 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                 if (isOperatorOrManager || isAdmin)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.work,
-                    title: 'Gestão',
+                    icon: Icons.apartment,
+                    title: 'Secretaria',
                     routes: const [
                       '/secretaria-requests',
                       '/inspections',
-                      '/permit-dashboard',
-                      '/event-permit',
                       '/home-content',
+                      '/users',
                     ],
                     currentRoute: currentRoute,
                     children: [
@@ -103,41 +104,27 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       const _DrawerSectionItem('Vistorias', '/inspections'),
                       if (widget.userType == 'gestor' || isAdmin)
                         const _DrawerSectionItem(
+                          'Gestão de operadores',
+                          '/users',
+                        ),
+                      if (widget.userType == 'gestor' || isAdmin)
+                        const _DrawerSectionItem(
                           'Conteúdo da página inicial',
                           '/home-content',
                         ),
                     ],
                   ),
-                if (isAdmin || widget.userType == 'gestor')
-                  _DrawerTile(
-                    collapsed: collapsed,
-                    icon: Icons.people,
-                    title: 'Usuários',
-                    route: '/users',
-                    currentRoute: currentRoute,
-                  ),
-                if (isAdmin || widget.userType == 'gestor')
+                if (isAdmin)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.groups,
-                    title: 'Secretaria',
-                    routes: const ['/users'],
-                    currentRoute: currentRoute,
-                    children: const [
-                      _DrawerSectionItem('Gestão de operadores', '/users'),
-                      _DrawerSectionItem('Gestão de gestores', '/users'),
-                    ],
-                  ),
-                if (isAdmin || widget.userType == 'gestor')
-                  _DrawerSection(
-                    collapsed: collapsed,
-                    icon: Icons.settings,
-                    title: 'Configurações',
+                    icon: Icons.admin_panel_settings,
+                    title: 'Administração',
                     routes: const ['/users', '/questions'],
                     currentRoute: currentRoute,
                     children: const [
+                      _DrawerSectionItem('Gestão de usuários', '/users'),
                       _DrawerSectionItem('Permissões', '/users'),
-                      _DrawerSectionItem('Tipo de usuários', '/users'),
+                      _DrawerSectionItem('Tipos de usuários', '/users'),
                       _DrawerSectionItem('Criar perguntas', '/questions'),
                     ],
                   ),
@@ -159,24 +146,35 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
     );
 
     final menu = AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      width: collapsed ? 88 : 304,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeInOut,
+      width: collapsed ? 84 : 280,
       decoration: BoxDecoration(
-        color:
-            Theme.of(context).drawerTheme.backgroundColor ??
-            Theme.of(context).colorScheme.surface,
+        color: drawerBackground,
         border: Border(
-          right: BorderSide(color: Theme.of(context).dividerColor),
+          right: BorderSide(color: colorScheme.outline.withValues(alpha: 0.35)),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: content,
+      child: Material(
+        color: drawerBackground,
+        child: content,
+      ),
     );
 
-    if (!widget.asDrawer) {
-      return Material(elevation: 1, child: menu);
+    if (widget.asDrawer) {
+      return Drawer(
+        child: menu,
+      );
     }
-    return Drawer(width: collapsed ? 88 : 304, child: content);
+
+    return menu;
   }
 }
 
@@ -184,42 +182,56 @@ class _DrawerHeader extends StatelessWidget {
   const _DrawerHeader({
     required this.collapsed,
     required this.primaryColor,
+    required this.textColor,
     required this.userName,
     required this.compactMode,
+    required this.showToggle,
     required this.onToggle,
   });
 
   final bool collapsed;
   final Color primaryColor;
+  final Color textColor;
   final String userName;
   final bool compactMode;
+  final bool showToggle;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: primaryColor,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [primaryColor.withValues(alpha: 0.92), primaryColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomRight: Radius.circular(24),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment:
-                collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
-            children: [
-              Tooltip(
-                message: collapsed ? 'Expandir menu' : 'Ocultar menu',
-                child: IconButton(
-                  color: Colors.white,
-                  icon: Icon(
-                    collapsed
-                        ? Icons.keyboard_double_arrow_right
-                        : Icons.keyboard_double_arrow_left,
+          if (showToggle)
+            Row(
+              mainAxisAlignment:
+                  collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
+              children: [
+                Tooltip(
+                  message: collapsed ? 'Expandir menu' : 'Ocultar menu',
+                  child: IconButton(
+                    color: Colors.white,
+                    icon: Icon(
+                      collapsed
+                          ? Icons.keyboard_double_arrow_right
+                          : Icons.keyboard_double_arrow_left,
+                    ),
+                    onPressed: onToggle,
                   ),
-                  onPressed: onToggle,
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           Tooltip(
             message: 'Meu perfil',
             child: InkWell(
