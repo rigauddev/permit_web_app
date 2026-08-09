@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../presentation/pages/user_alvara_dashboard.dart';
+import '../../../shared/widgets/app_scaffold.dart';
 import '../controller/permit_request_controller.dart';
 import 'permit_request_form_builder.dart';
 
@@ -38,7 +39,9 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
     final controller = ref.read(permitRequestControllerProvider.notifier);
     final state = ref.watch(permitRequestControllerProvider);
 
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
+      userProfile: widget.userProfile,
       appBar: AppBar(title: Text('Solicitação de ${widget.permitType}')),
       body: Center(
         child: ConstrainedBox(

@@ -37,17 +37,20 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
     final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
     final collapsed = widget.compactMode || _collapsed;
+    final drawerBackground = colorScheme.surfaceContainerHighest;
     final content = SafeArea(
       child: Column(
         children: [
           _DrawerHeader(
             collapsed: collapsed,
-            primaryColor: primaryColor,
+            primaryColor: colorScheme.primary,
+            textColor: colorScheme.onPrimary,
             userName: user?.name ?? '',
             compactMode: widget.compactMode,
+            showToggle: !widget.asDrawer && !Theme.of(context).platform.toString().contains('iOS'),
             onToggle:
                 () => setState(() {
                   _collapsed = !_collapsed;
@@ -56,7 +59,8 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
           ),
           Expanded(
             child: ListView(
-              padding: EdgeInsets.zero,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _DrawerTile(
                   collapsed: collapsed,
@@ -73,8 +77,6 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     routes: const [
                       '/services',
                       '/my-requests',
-                      '/permit-dashboard',
-                      '/event-permit',
                     ],
                     currentRoute: currentRoute,
                     children: const [
@@ -85,14 +87,13 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                 if (isOperatorOrManager || isAdmin)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.work,
-                    title: 'Gestão',
+                    icon: Icons.apartment,
+                    title: 'Secretaria',
                     routes: const [
                       '/secretaria-requests',
                       '/inspections',
-                      '/permit-dashboard',
-                      '/event-permit',
                       '/home-content',
+                      '/users',
                     ],
                     currentRoute: currentRoute,
                     children: [
@@ -103,42 +104,28 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       const _DrawerSectionItem('Vistorias', '/inspections'),
                       if (widget.userType == 'gestor' || isAdmin)
                         const _DrawerSectionItem(
+                          'Gestão de operadores',
+                          '/users',
+                        ),
+                      if (widget.userType == 'gestor' || isAdmin)
+                        const _DrawerSectionItem(
                           'Conteúdo da página inicial',
                           '/home-content',
                         ),
                     ],
                   ),
-                if (isAdmin || widget.userType == 'gestor')
-                  _DrawerTile(
-                    collapsed: collapsed,
-                    icon: Icons.people,
-                    title: 'Usuários',
-                    route: '/users',
-                    currentRoute: currentRoute,
-                  ),
-                if (isAdmin || widget.userType == 'gestor')
-                  _DrawerSection(
-                    collapsed: collapsed,
-                    icon: Icons.groups,
-                    title: 'Secretaria',
-                    routes: const ['/users'],
-                    currentRoute: currentRoute,
-                    children: const [
-                      _DrawerSectionItem('Gestão de operadores', '/users'),
-                      _DrawerSectionItem('Gestão de gestores', '/users'),
-                    ],
-                  ),
                 if (isAdmin)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.settings,
-                    title: 'Configurações',
-                    routes: const ['/users', '/questtions'],
+                    icon: Icons.admin_panel_settings,
+                    title: 'Administração',
+                    routes: const ['/users', '/questions'],
                     currentRoute: currentRoute,
                     children: const [
+                      _DrawerSectionItem('Gestão de usuários', '/users'),
                       _DrawerSectionItem('Permissões', '/users'),
-                      _DrawerSectionItem('Tipo de usuários', '/users'),
-                      _DrawerSectionItem('Criar perguntas', '/questtions'),
+                      _DrawerSectionItem('Tipos de usuários', '/users'),
+                      _DrawerSectionItem('Criar perguntas', '/questions'),
                     ],
                   ),
               ],
@@ -159,24 +146,35 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
     );
 
     final menu = AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      width: collapsed ? 88 : 304,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeInOut,
+      width: collapsed ? 84 : 280,
       decoration: BoxDecoration(
-        color:
-            Theme.of(context).drawerTheme.backgroundColor ??
-            Theme.of(context).colorScheme.surface,
+        color: drawerBackground,
         border: Border(
-          right: BorderSide(color: Theme.of(context).dividerColor),
+          right: BorderSide(color: colorScheme.outline.withValues(alpha: 0.35)),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: content,
+      child: Material(
+        color: drawerBackground,
+        child: content,
+      ),
     );
 
-    if (!widget.asDrawer) {
-      return Material(elevation: 1, child: menu);
+    if (widget.asDrawer) {
+      return Drawer(
+        child: menu,
+      );
     }
-    return Drawer(width: collapsed ? 88 : 304, child: content);
+
+    return menu;
   }
 }
 
@@ -184,25 +182,38 @@ class _DrawerHeader extends StatelessWidget {
   const _DrawerHeader({
     required this.collapsed,
     required this.primaryColor,
+    required this.textColor,
     required this.userName,
     required this.compactMode,
+    required this.showToggle,
     required this.onToggle,
   });
 
   final bool collapsed;
   final Color primaryColor;
+  final Color textColor;
   final String userName;
   final bool compactMode;
+  final bool showToggle;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: primaryColor,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [primaryColor.withValues(alpha: 0.92), primaryColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomRight: Radius.circular(24),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         children: [
-          if (!compactMode)
+          if (showToggle)
             Row(
               mainAxisAlignment:
                   collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
@@ -280,16 +291,27 @@ class _DrawerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = currentRoute == route;
+    final colorScheme = Theme.of(context).colorScheme;
     final color =
         iconColor ??
-        (selected
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).iconTheme.color);
+        (selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface);
     final tile = ListTile(
       selected: selected,
-      selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+      selectedColor: colorScheme.onPrimaryContainer,
+      textColor: colorScheme.onSurface,
+      iconColor: colorScheme.onSurface,
+      selectedTileColor: colorScheme.primaryContainer,
       leading: Icon(icon, color: color),
-      title: collapsed ? null : Text(title),
+      title:
+          collapsed
+              ? null
+              : Text(
+                title,
+                style: TextStyle(
+                  color: selected ? colorScheme.onPrimaryContainer : null,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
       horizontalTitleGap: collapsed ? 0 : 16,
       minLeadingWidth: collapsed ? 0 : null,
       contentPadding:
@@ -336,19 +358,22 @@ class _DrawerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = routes.contains(currentRoute);
+    final colorScheme = Theme.of(context).colorScheme;
     if (collapsed) {
       final targetRoute = children.first.route;
       return Tooltip(
         message: title,
         child: ListTile(
           selected: selected,
-          selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+          selectedColor: colorScheme.onPrimaryContainer,
+          iconColor: colorScheme.onSurface,
+          selectedTileColor: colorScheme.primaryContainer,
           leading: Icon(
             icon,
             color:
                 selected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).iconTheme.color,
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurface,
           ),
           horizontalTitleGap: 0,
           minLeadingWidth: 0,
@@ -371,18 +396,27 @@ class _DrawerSection extends StatelessWidget {
       leading: Icon(
         icon,
         color:
-            selected
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).iconTheme.color,
+            selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
       ),
-      title: Text(title),
-      collapsedBackgroundColor:
-          selected ? Theme.of(context).colorScheme.primaryContainer : null,
+      title: Text(
+        title,
+        style: TextStyle(
+          color:
+              selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+      iconColor:
+          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+      collapsedIconColor:
+          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+      textColor: colorScheme.onPrimaryContainer,
+      collapsedTextColor:
+          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+      collapsedBackgroundColor: selected ? colorScheme.primaryContainer : null,
       backgroundColor:
           selected
-              ? Theme.of(
-                context,
-              ).colorScheme.primaryContainer.withValues(alpha: 0.45)
+              ? colorScheme.primaryContainer.withValues(alpha: 0.62)
               : null,
       children:
           children
@@ -404,11 +438,20 @@ class _DrawerSubTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = currentRoute == item.route;
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       selected: selected,
-      selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+      selectedColor: colorScheme.onPrimaryContainer,
+      textColor: colorScheme.onSurface,
+      selectedTileColor: colorScheme.primaryContainer,
       contentPadding: const EdgeInsets.only(left: 72, right: 16),
-      title: Text(item.title),
+      title: Text(
+        item.title,
+        style: TextStyle(
+          color: selected ? colorScheme.onPrimaryContainer : null,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
       onTap: () {
         if (currentRoute == item.route) {
           if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {

@@ -457,6 +457,7 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                 builder:
                     (_) => EventCredentialPage(
                       permitForm: form,
+                      userType: widget.userType,
                       userProfile: widget.userProfile,
                     ),
               ),

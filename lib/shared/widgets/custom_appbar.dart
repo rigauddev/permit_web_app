@@ -3,10 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/providers/user_provider.dart';
 
 class CustomAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  const CustomAppBar({super.key, required this.title, required this.actions});
+  const CustomAppBar({
+    super.key,
+    required this.title,
+    required this.actions,
+    this.hideDrawerButton = false,
+  });
 
   final String title;
   final List<Widget> actions;
+  final bool hideDrawerButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -14,6 +20,7 @@ class CustomAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
     return AppBar(
       title: Text(title),
+      automaticallyImplyLeading: !hideDrawerButton,
       actions: [
         if (user != null)
           Padding(

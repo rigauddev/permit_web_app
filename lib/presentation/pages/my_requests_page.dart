@@ -148,14 +148,23 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EventCredentialPage(permitForm: request),
+        builder:
+            (_) => EventCredentialPage(
+              permitForm: request,
+              userType: widget.userType,
+            ),
       ),
     );
     if (mounted) _refresh();
   }
 
   Future<void> _attachPaymentProof(Map<String, dynamic> request) async {
-    final attachment = await _askAttachment('Anexar comprovante do DAM');
+    final attachment = await _askAttachment(
+      title: 'Anexar comprovante',
+      description:
+          'Anexe o comprovante de pagamento do seu DAM. Pagamento em PIX até 24h para geração do alvará, ou boleto com prazo de 72h para confirmação e emissão.',
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+    );
     if (attachment == null) return;
     try {
       final token = await _storage.read(key: 'access_token');
@@ -175,7 +184,9 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Comprovante anexado.')));
+      ).showSnackBar(const SnackBar(
+          content: Text(
+              'Comprovante anexado. Solicitação em aguardando confirmação de pagamento.')));
       _refresh();
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -189,7 +200,11 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     }
   }
 
-  Future<_AttachmentInput?> _askAttachment(String title) {
+  Future<_AttachmentInput?> _askAttachment({
+    required String title,
+    required String description,
+    required List<String> allowedExtensions,
+  }) {
     final fileController = TextEditingController();
     final urlController = TextEditingController();
     final mimeController = TextEditingController(text: 'application/pdf');
@@ -200,7 +215,10 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
             title: Text(title),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(description),
+                const SizedBox(height: 12),
                 TextField(
                   controller: fileController,
                   decoration: const InputDecoration(
@@ -221,6 +239,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                   controller: mimeController,
                   decoration: const InputDecoration(
                     labelText: 'Tipo MIME',
+                    helperText: 'Use application/pdf, image/jpeg ou image/png',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -233,23 +252,25 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (fileController.text.trim().length < 3 ||
-                      urlController.text.trim().length < 3) {
-                    return;
-                  }
+                  final fileName = fileController.text.trim();
+                  final fileUrl = urlController.text.trim();
+                  final mimeType = mimeController.text.trim();
+                  final extension = fileName.split('.').last.toLowerCase();
+
+                  if (fileName.length < 3 || fileUrl.length < 3) return;
+                  if (!allowedExtensions.contains(extension)) return;
+                  if (mimeType.isEmpty) return;
+
                   Navigator.pop(
                     context,
                     _AttachmentInput(
-                      fileName: fileController.text.trim(),
-                      fileUrl: urlController.text.trim(),
-                      mimeType:
-                          mimeController.text.trim().isEmpty
-                              ? null
-                              : mimeController.text.trim(),
+                      fileName: fileName,
+                      fileUrl: fileUrl,
+                      mimeType: mimeType,
                     ),
                   );
                 },
-                child: const Text('Anexar'),
+                child: const Text('Anexar comprovante'),
               ),
             ],
           ),

@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
 import '../../core/session_expiration.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class UserCreatePage extends StatefulWidget {
   final String userType;
@@ -134,7 +135,8 @@ class _UserCreatePageState extends State<UserCreatePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
+      userType: widget.userType,
       appBar: AppBar(
         title: const Text('Cadastro de usuário interno'),
         actions: [
