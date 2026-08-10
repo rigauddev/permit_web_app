@@ -172,6 +172,13 @@ class AuthService:
         if require_email_verification:
             self._validate_email_verification_token(payload.email, payload.email_verification_token)
 
+        role_slug = force_role or payload.role
+        if require_email_verification and role_slug == "cidadao" and not payload.termo_responsabilidade_aceito:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Aceite o termo de responsabilidade para criar a conta",
+            )
+
         existing = (
             self.db.query(UserModel)
             .filter((UserModel.email == payload.email) | (UserModel.cpf_cnpj == payload.cpf_cnpj))
@@ -180,7 +187,6 @@ class AuthService:
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Usuário já cadastrado")
 
-        role_slug = force_role or payload.role
         secretaria_slug = force_secretaria if force_secretaria is not None else payload.secretaria
 
         role = self.db.query(RoleModel).filter(RoleModel.slug == role_slug).first()
@@ -218,6 +224,9 @@ class AuthService:
             id=user.id,
             nome=user.nome,
             email=user.email,
+            cpf_cnpj=user.cpf_cnpj,
+            telefone=user.telefone,
+            endereco=user.endereco,
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
             permissions=AuthService._permission_slugs(user),

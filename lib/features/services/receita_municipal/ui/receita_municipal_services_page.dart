@@ -276,13 +276,25 @@ class _ServiceCategorySection extends StatelessWidget {
         const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
-            final crossAxisCount = constraints.maxWidth < 760 ? 1 : 2;
+            if (constraints.maxWidth < 760) {
+              return Column(
+                children:
+                    children
+                        .map(
+                          (child) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: child,
+                          ),
+                        )
+                        .toList(),
+              );
+            }
             return GridView.count(
-              crossAxisCount: crossAxisCount,
+              crossAxisCount: 2,
               shrinkWrap: true,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: constraints.maxWidth < 760 ? 2.9 : 2.2,
+              childAspectRatio: 2.2,
               physics: const NeverScrollableScrollPhysics(),
               children: children,
             );
@@ -331,34 +343,68 @@ class _ServiceCard extends StatelessWidget {
               final content = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                  if (isNarrow)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip:
+                                  isFavorite
+                                      ? 'Remover dos favoritos'
+                                      : 'Adicionar aos favoritos',
+                              onPressed:
+                                  favoriteLoading ? null : onToggleFavorite,
+                              icon: Icon(
+                                isFavorite
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                              ),
+                            ),
+                          ],
+                        ),
+                        chip,
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip:
-                            isFavorite
-                                ? 'Remover dos favoritos'
-                                : 'Adicionar aos favoritos',
-                        onPressed: favoriteLoading ? null : onToggleFavorite,
-                        icon: Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
+                        IconButton(
+                          tooltip:
+                              isFavorite
+                                  ? 'Remover dos favoritos'
+                                  : 'Adicionar aos favoritos',
+                          onPressed: favoriteLoading ? null : onToggleFavorite,
+                          icon: Icon(
+                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                          ),
                         ),
-                      ),
-                      chip,
-                    ],
-                  ),
+                        chip,
+                      ],
+                    ),
                   const SizedBox(height: 6),
                   Text(
                     description,
-                    maxLines: 4,
+                    maxLines: isNarrow ? 3 : 4,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (loading) ...[

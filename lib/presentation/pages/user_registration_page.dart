@@ -10,6 +10,14 @@ class UserRegistrationPage extends StatefulWidget {
 }
 
 class _UserRegistrationPageState extends State<UserRegistrationPage> {
+  static const _responsibilityTerm = '''
+Declaro que os dados pessoais, documentos e informações cadastrados são verdadeiros, completos e pertencem a mim ou à pessoa jurídica que represento.
+
+Estou ciente de que sou responsável pela exatidão e atualização das informações, pelo sigilo da minha senha e pelas consequências administrativas, civis e penais decorrentes de informações falsas, incompletas ou uso indevido da conta.
+
+Autorizo o tratamento dos dados informados para fins de cadastro, identificação, solicitação e acompanhamento de serviços municipais, observadas as regras da Lei Geral de Proteção de Dados.
+''';
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _surnameController = TextEditingController();
@@ -26,6 +34,7 @@ class _UserRegistrationPageState extends State<UserRegistrationPage> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  bool _acceptedResponsibilityTerm = false;
   String _personType = 'PF';
   String? _emailDelivery;
   String? _emailDevCode;
@@ -52,6 +61,10 @@ class _UserRegistrationPageState extends State<UserRegistrationPage> {
       _showError('Valide seu e-mail antes de concluir o cadastro');
       return;
     }
+    if (!_acceptedResponsibilityTerm) {
+      _showError('Aceite o termo de responsabilidade para criar a conta');
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -66,6 +79,7 @@ class _UserRegistrationPageState extends State<UserRegistrationPage> {
         telefone: _phoneController.text,
         endereco: _addressController.text,
         emailVerificationToken: _emailVerificationToken!,
+        responsibilityTermAccepted: _acceptedResponsibilityTerm,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -386,6 +400,44 @@ class _UserRegistrationPageState extends State<UserRegistrationPage> {
                                     value != _passwordController.text
                                         ? 'As senhas devem ser iguais'
                                         : null,
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF6F8F5),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFD8E0D8),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Termo de responsabilidade do cadastro',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(_responsibilityTerm),
+                                const Divider(height: 20),
+                                CheckboxListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
+                                  value: _acceptedResponsibilityTerm,
+                                  onChanged:
+                                      (value) => setState(
+                                        () =>
+                                            _acceptedResponsibilityTerm =
+                                                value ?? false,
+                                      ),
+                                  title: const Text(
+                                    'Li e aceito o termo de responsabilidade pelas informações cadastradas.',
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton(

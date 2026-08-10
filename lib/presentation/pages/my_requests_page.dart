@@ -128,6 +128,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                       description:
                           'Autorizações municipais para festas e eventos, com análise das secretarias responsáveis.',
                       requests: grouped['Alvará de Evento'] ?? const [],
+                      onOpenDetails: _openRequestDetails,
                       onAttachPaymentProof: _attachPaymentProof,
                       onOpenCredential: _openCredential,
                       onOpenAttachment: _openAttachment,
@@ -157,6 +158,24 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
             (_) => EventCredentialPage(
               permitForm: request,
               userType: widget.userType,
+            ),
+      ),
+    );
+    if (mounted) _refresh();
+  }
+
+  Future<void> _openRequestDetails(Map<String, dynamic> request) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => _RequestDetailsPage(
+              request: request,
+              userType: widget.userType,
+              onAttachPaymentProof: _attachPaymentProof,
+              onOpenCredential: _openCredential,
+              onOpenAttachment: _openAttachment,
+              onShareAttachment: _shareAttachment,
             ),
       ),
     );
@@ -362,6 +381,7 @@ class _RequestTypeSection extends StatelessWidget {
     required this.serviceName,
     required this.description,
     required this.requests,
+    required this.onOpenDetails,
     required this.onAttachPaymentProof,
     required this.onOpenCredential,
     required this.onOpenAttachment,
@@ -372,6 +392,7 @@ class _RequestTypeSection extends StatelessWidget {
   final String serviceName;
   final String description;
   final List<Map<String, dynamic>> requests;
+  final ValueChanged<Map<String, dynamic>> onOpenDetails;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
@@ -417,6 +438,7 @@ class _RequestTypeSection extends StatelessWidget {
               ...requests.map(
                 (request) => _RequestListTile(
                   request: request,
+                  onOpenDetails: onOpenDetails,
                   onAttachPaymentProof: onAttachPaymentProof,
                   onOpenCredential: onOpenCredential,
                   onOpenAttachment: onOpenAttachment,
@@ -433,6 +455,7 @@ class _RequestTypeSection extends StatelessWidget {
 class _RequestListTile extends StatelessWidget {
   const _RequestListTile({
     required this.request,
+    required this.onOpenDetails,
     required this.onAttachPaymentProof,
     required this.onOpenCredential,
     required this.onOpenAttachment,
@@ -440,6 +463,7 @@ class _RequestListTile extends StatelessWidget {
   });
 
   final Map<String, dynamic> request;
+  final ValueChanged<Map<String, dynamic>> onOpenDetails;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
@@ -456,58 +480,94 @@ class _RequestListTile extends StatelessWidget {
     final verified = _isCredentialVerified(request);
     final finalPermit = _finalPermitAttachment(request);
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        tileColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        leading: const Icon(Icons.event_note_outlined),
-        title: Text(request['nome_do_evento']?.toString() ?? 'Evento'),
-        subtitle: Text(
-          [
-            'Protocolo: ${request['protocolo'] ?? '-'}',
-            'Data: ${request['data_do_evento'] ?? '-'}',
-            'Tipo: ${request['permitType'] ?? 'Alvará de Evento'}',
-            if (finalPermit != null)
-              'Alvará: ${finalPermit['nome_arquivo'] ?? 'PDF disponível'}',
-          ].join('\n'),
-        ),
-        isThreeLine: true,
-        trailing: Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          children: [
-            Chip(label: Text(_formatStatus(status))),
-            if (verified)
-              const Chip(
-                avatar: Icon(Icons.verified, size: 16),
-                label: Text('Verificado'),
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => onOpenDetails(request),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.event_note_outlined, color: colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          request['nome_do_evento']?.toString() ?? 'Evento',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Protocolo: ${request['protocolo'] ?? '-'}'),
+                        Text('Data: ${request['data_do_evento'] ?? '-'}'),
+                        Text(
+                          'Tipo: ${request['permitType'] ?? 'Alvará de Evento'}',
+                        ),
+                        if (finalPermit != null)
+                          Text(
+                            'Alvará: ${finalPermit['nome_arquivo'] ?? 'PDF disponível'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            if (canAttachPayment)
-              IconButton(
-                tooltip: 'Anexar comprovante do DAM',
-                onPressed: () => onAttachPaymentProof(request),
-                icon: const Icon(Icons.upload_file),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Chip(label: Text(_formatStatus(status))),
+                  if (verified)
+                    const Chip(
+                      avatar: Icon(Icons.verified, size: 16),
+                      label: Text('Verificado'),
+                    ),
+                  OutlinedButton.icon(
+                    onPressed: () => onOpenDetails(request),
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('Detalhes'),
+                  ),
+                  if (canAttachPayment)
+                    OutlinedButton.icon(
+                      onPressed: () => onAttachPaymentProof(request),
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Comprovante'),
+                    ),
+                  if (finalPermit != null)
+                    IconButton(
+                      tooltip: 'Visualizar ou baixar alvará',
+                      onPressed: () => onOpenAttachment(finalPermit),
+                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                    ),
+                  if (finalPermit != null)
+                    IconButton(
+                      tooltip: 'Compartilhar alvará',
+                      onPressed: () => onShareAttachment(finalPermit),
+                      icon: const Icon(Icons.share_outlined),
+                    ),
+                  if (canOpenCredential)
+                    IconButton(
+                      tooltip:
+                          verified ? 'Evento verificado' : 'Validar evento',
+                      onPressed: () => onOpenCredential(request),
+                      icon: const Icon(Icons.qr_code_2),
+                    ),
+                ],
               ),
-            if (finalPermit != null)
-              IconButton(
-                tooltip: 'Visualizar ou baixar alvará',
-                onPressed: () => onOpenAttachment(finalPermit),
-                icon: const Icon(Icons.picture_as_pdf_outlined),
-              ),
-            if (finalPermit != null)
-              IconButton(
-                tooltip: 'Compartilhar alvará',
-                onPressed: () => onShareAttachment(finalPermit),
-                icon: const Icon(Icons.share_outlined),
-              ),
-            if (canOpenCredential)
-              IconButton(
-                tooltip: verified ? 'Evento verificado' : 'Validar evento',
-                onPressed: () => onOpenCredential(request),
-                icon: const Icon(Icons.qr_code_2),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -562,6 +622,333 @@ class _RequestListTile extends StatelessWidget {
               int.tryParse(count) != null &&
               int.parse(count) > 0);
     });
+  }
+}
+
+class _RequestDetailsPage extends StatelessWidget {
+  const _RequestDetailsPage({
+    required this.request,
+    required this.userType,
+    required this.onAttachPaymentProof,
+    required this.onOpenCredential,
+    required this.onOpenAttachment,
+    required this.onShareAttachment,
+  });
+
+  final Map<String, dynamic> request;
+  final String userType;
+  final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
+  final ValueChanged<Map<String, dynamic>> onOpenCredential;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
+  final ValueChanged<Map<String, dynamic>> onShareAttachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = request['status']?.toString() ?? 'enviada';
+    final finalPermit = _RequestListTile._finalPermitAttachment(request);
+    final verified = _RequestListTile._isCredentialVerified(request);
+    final canAttachPayment = status == 'aguardando_pagamento_dam';
+    final canOpenCredential =
+        status == 'autorizada' ||
+        status == 'isenta_dam' ||
+        (request['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
+
+    return AppScaffold(
+      userType: userType,
+      appBar: AppBar(
+        title: const Text('Detalhes da solicitação'),
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 860),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Chip(
+                              label: Text(
+                                _RequestListTile._formatStatus(status),
+                              ),
+                            ),
+                            if (verified)
+                              const Chip(
+                                avatar: Icon(Icons.verified, size: 16),
+                                label: Text('Evento verificado'),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          request['nome_do_evento']?.toString() ?? 'Evento',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 12),
+                        _DetailRow(
+                          label: 'Protocolo',
+                          value: request['protocolo']?.toString() ?? '-',
+                        ),
+                        _DetailRow(
+                          label: 'Serviço',
+                          value:
+                              request['permitType']?.toString() ??
+                              'Alvará de Evento',
+                        ),
+                        _DetailRow(
+                          label: 'Data do evento',
+                          value: request['data_do_evento']?.toString() ?? '-',
+                        ),
+                        _DetailRow(
+                          label: 'Local',
+                          value:
+                              request['endereco_do_evento']?.toString() ??
+                              request['local_evento']?.toString() ??
+                              '-',
+                        ),
+                        _DetailRow(
+                          label: 'Público esperado',
+                          value:
+                              request['publico_estimado']?.toString() ??
+                              request['expectativa_publico']?.toString() ??
+                              '-',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _DetailsSection(
+                  title: 'Ações disponíveis',
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (canAttachPayment)
+                        ElevatedButton.icon(
+                          onPressed: () => onAttachPaymentProof(request),
+                          icon: const Icon(Icons.upload_file),
+                          label: const Text('Anexar comprovante'),
+                        ),
+                      if (finalPermit != null)
+                        OutlinedButton.icon(
+                          onPressed: () => onOpenAttachment(finalPermit),
+                          icon: const Icon(Icons.picture_as_pdf_outlined),
+                          label: const Text('Visualizar alvará'),
+                        ),
+                      if (finalPermit != null)
+                        OutlinedButton.icon(
+                          onPressed: () => onShareAttachment(finalPermit),
+                          icon: const Icon(Icons.share_outlined),
+                          label: const Text('Compartilhar'),
+                        ),
+                      if (canOpenCredential)
+                        OutlinedButton.icon(
+                          onPressed: () => onOpenCredential(request),
+                          icon: const Icon(Icons.qr_code_2),
+                          label: Text(
+                            verified ? 'Ver credencial' : 'Validar evento',
+                          ),
+                        ),
+                      if (!canAttachPayment &&
+                          finalPermit == null &&
+                          !canOpenCredential)
+                        const Text(
+                          'Nenhuma ação disponível neste status. Acompanhe as próximas etapas por aqui.',
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _DetailsSection(
+                  title: 'Exigências e validações',
+                  child: _RequirementList(request: request),
+                ),
+                const SizedBox(height: 12),
+                _DetailsSection(
+                  title: 'Anexos',
+                  child: _AttachmentList(
+                    request: request,
+                    onOpenAttachment: onOpenAttachment,
+                    onShareAttachment: onShareAttachment,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailsSection extends StatelessWidget {
+  const _DetailsSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Expanded(child: Text(value.isEmpty ? '-' : value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequirementList extends StatelessWidget {
+  const _RequirementList({required this.request});
+
+  final Map<String, dynamic> request;
+
+  @override
+  Widget build(BuildContext context) {
+    final requirements =
+        (request['requirements'] as List<dynamic>? ??
+                request['exigencias'] as List<dynamic>? ??
+                const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    if (requirements.isEmpty) {
+      return const Text('Nenhuma exigência registrada para esta solicitação.');
+    }
+    return Column(
+      children:
+          requirements.map((requirement) {
+            final status =
+                requirement['status']?.toString() ??
+                requirement['status_secretaria']?.toString() ??
+                'pendente';
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.fact_check_outlined),
+              title: Text(
+                requirement['exigencia']?.toString() ??
+                    requirement['pergunta']?.toString() ??
+                    'Exigência',
+              ),
+              subtitle: Text(
+                [
+                      requirement['secretaria']?.toString(),
+                      _RequestListTile._formatStatus(status),
+                    ]
+                    .where((value) => value != null && value.isNotEmpty)
+                    .join(' | '),
+              ),
+            );
+          }).toList(),
+    );
+  }
+}
+
+class _AttachmentList extends StatelessWidget {
+  const _AttachmentList({
+    required this.request,
+    required this.onOpenAttachment,
+    required this.onShareAttachment,
+  });
+
+  final Map<String, dynamic> request;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
+  final ValueChanged<Map<String, dynamic>> onShareAttachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final attachments =
+        (request['attachments'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    if (attachments.isEmpty) {
+      return const Text('Nenhum anexo disponível.');
+    }
+    return Column(
+      children:
+          attachments.map((attachment) {
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.attach_file),
+              title: Text(
+                attachment['nome_arquivo']?.toString() ?? 'Arquivo',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(attachment['tipo_documento']?.toString() ?? ''),
+              trailing: Wrap(
+                spacing: 4,
+                children: [
+                  IconButton(
+                    tooltip: 'Abrir',
+                    onPressed: () => onOpenAttachment(attachment),
+                    icon: const Icon(Icons.open_in_new),
+                  ),
+                  IconButton(
+                    tooltip: 'Compartilhar',
+                    onPressed: () => onShareAttachment(attachment),
+                    icon: const Icon(Icons.share_outlined),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+    );
   }
 }
 
