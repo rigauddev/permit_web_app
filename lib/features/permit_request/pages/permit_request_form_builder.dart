@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/providers/user_provider.dart';
 import '../controller/permit_request_controller.dart';
+import '../models/permit_request_state.dart';
 import '../widgets/question_field_widget.dart';
 
 class PermitRequestFormBuilder extends ConsumerStatefulWidget {
@@ -297,6 +298,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
         key: ValueKey(questionKey),
         questionId: question['id'] as int,
         questionText: question['pergunta'] as String,
+        descricao: question['descricao'] as String?,
         tiposResposta: List<String>.from(question['tipos_resposta'] ?? []),
         camposObrigatorios:
             (question['campos_obrigatorios'] as Map<String, dynamic>?) ??
@@ -310,6 +312,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
 
     if (state.currentStep == state.totalSteps - 1) {
       final requirements = controller.previewRequirements();
+      final pendingFiles = _pendingQuestionFiles(state);
       return ListView(
         children: [
           const _StepTitle('Revise antes de enviar'),
@@ -339,6 +342,47 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
               ),
             ),
           const SizedBox(height: 8),
+          if (pendingFiles.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBF0),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE8D9A8)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Arquivos pendentes por pergunta',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Estas respostas possuem modelo ou anexo previsto e ainda não receberam arquivo. Você poderá anexar na solicitação após a criação, quando aplicável.',
+                  ),
+                  const SizedBox(height: 8),
+                  ...pendingFiles.map(
+                    (item) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.attach_file),
+                      title: Text(item['pergunta'] ?? ''),
+                      subtitle: Text(
+                        [
+                          if ((item['secretaria'] ?? '').isNotEmpty)
+                            item['secretaria'],
+                          if ((item['modelo'] ?? '').isNotEmpty)
+                            'Modelo: ${item['modelo']}',
+                        ].whereType<String>().join(' | '),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             state.eventData['is_beneficente'] == 'true'
                 ? 'DAM: isento mediante conferência da declaração beneficente.'
@@ -383,6 +427,35 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     }
 
     return const SizedBox();
+  }
+
+  List<Map<String, String>> _pendingQuestionFiles(PermitRequestState state) {
+    final pending = <Map<String, String>>[];
+    for (final question in state.questions) {
+      final key = question['key'] as String?;
+      if (key == null || state.answers[key] != true) continue;
+
+      final tiposResposta = List<String>.from(
+        question['tipos_resposta'] ?? const [],
+      );
+      final hasDocumentFlow =
+          tiposResposta.contains('Anexar Documento') ||
+          (question['modelo_documento_url'] as String?)?.trim().isNotEmpty ==
+              true;
+      if (!hasDocumentFlow) continue;
+
+      final answer = state.answerDetails[key];
+      final arquivo =
+          answer is Map ? (answer['arquivo']?.toString().trim() ?? '') : '';
+      if (arquivo.isNotEmpty) continue;
+
+      pending.add({
+        'pergunta': question['pergunta']?.toString() ?? key,
+        'secretaria': question['secretaria']?.toString() ?? '',
+        'modelo': question['modelo_documento_nome']?.toString() ?? '',
+      });
+    }
+    return pending;
   }
 
   Future<void> _pickDate() async {

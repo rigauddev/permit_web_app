@@ -9,7 +9,14 @@ from .permit_model import (
     PermitRequirementModel,
     QuestionDefinitionModel,
 )
-from .user_model import EmailVerificationModel, RoleModel, SecretariaModel, UserModel
+from .user_model import (
+    EmailVerificationModel,
+    PermissionModel,
+    RoleModel,
+    RolePermissionModel,
+    SecretariaModel,
+    UserModel,
+)
 
 __all__ = [
     "AttachmentModel",
@@ -22,7 +29,9 @@ __all__ = [
     "PermitRequirementModel",
     "QuestionDefinitionModel",
     "EmailVerificationModel",
+    "PermissionModel",
     "RoleModel",
+    "RolePermissionModel",
     "SecretariaModel",
     "UserModel",
 ]

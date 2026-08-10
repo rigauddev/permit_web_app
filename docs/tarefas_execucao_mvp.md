@@ -50,6 +50,8 @@
 - [x] Perguntar se exigirá brigadista.
 - [x] Perguntar se é evento beneficente.
 - [x] Exibir exigências geradas antes do envio.
+- [x] Exibir descrição/orientação de preenchimento definida pelo gestor em cada pergunta.
+- [x] Mostrar no resumo da solicitação perguntas respondidas com arquivo pendente de envio.
 
 ## Marco 4 - Regras por secretaria
 
@@ -79,6 +81,7 @@
 - [x] Tornar as exigências da solicitação interativas para admin, gestor e operador autorizados.
 - [x] Bloquear rotas internas no frontend quando o perfil logado não possuir permissão.
 - [x] Reorganizar menu lateral por Atendimento e Configuração, reduzindo itens duplicados.
+- [x] Mover criação de perguntas para a área de Gestão de Serviços no menu.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
@@ -114,6 +117,9 @@
 - [x] Criar gestão de secretarias com e-mail, logo e textos de cabeçalho/rodapé.
 - [x] Criar gestão de conteúdo da página inicial com até 5 cards ativos por prefeitura/secretaria.
 - [x] Persistir cards de carrossel com título, texto, imagem e ordem de exibição.
+- [x] Criar seed de permissões por categoria e vínculo inicial por perfil de usuário.
+- [ ] Criar tela de gestão de perfis/permissões para admin.
+- [ ] Migrar guards do frontend/backend para validação granular por permissão além do perfil base.
 
 ## Marco 7 - Documento final e DAM
 
@@ -131,7 +137,8 @@
 - [x] Permitir que o cidadão anexe o comprovante de pagamento do DAM.
 - [x] Após comprovante, marcar `Aguardando geração do alvará` e notificar a Secretaria de Desenvolvimento Econômico.
 - [x] Permitir que a Secretaria de Desenvolvimento Econômico anexe o alvará final.
-- [x] Permitir gerar alvará pelo sistema após pagamento do DAM, com PDF disponível para visualizar/baixar/imprimir.
+- [x] Exigir que o alvará final anexado pela SDE seja PDF e fique disponível ao cidadão.
+- [x] Permitir anexar o alvará final em PDF após pagamento do DAM, deixando o arquivo disponível para visualizar/baixar/imprimir.
 - [x] Transformar anexos de DAM e comprovante em ação de upload/seleção de arquivo.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
 - [x] Emitir autorização final após alvará anexado ou isenção validada.
@@ -162,11 +169,14 @@
 ## Marco 9 - Pós-MVP / Integrações
 
 - [ ] Integrar geração automática de DAM com sistema da Receita.
+- [ ] V2: integrar verificação automática de pagamento do DAM com o sistema da Receita.
 - [ ] Integrar assinatura eletrônica quando exigida.
 - [x] Enviar e-mail para a Secretaria de Desenvolvimento Econômico nas etapas de geração do DAM e geração do alvará, com link filtrado da central.
 - [x] Preparar SMTP/Gmail para testes de envio de e-mail.
 - [x] Criar template HTML de MFA com cabeçalho da prefeitura e logo/texto da secretaria quando aplicável.
 - [x] Permitir modelo de documento por pergunta, com botão de baixar, assinatura impressa/gov.br e anexo obrigatório.
+- [x] Permitir selecionar/referenciar arquivo-modelo na criação da pergunta.
+- [x] Atualizar seed de bloqueio de via com modelo em `docs/arquivos` para download no teste.
 - [x] Limpar formulário após cadastrar ou atualizar pergunta.
 - [x] Permitir configurar na pergunta se ela exige vistoria e quais itens compõem o checklist.
 - [ ] Enviar e-mail para todas as secretarias responsáveis com cópia/resumo da solicitação e link de acesso.

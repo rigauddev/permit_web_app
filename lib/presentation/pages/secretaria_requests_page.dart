@@ -148,7 +148,15 @@ class _SecretariaRequestsPageState
     required String title,
     required String action,
   }) async {
-    final attachment = await _askAttachment(title);
+    final attachment = await _askAttachment(
+      title: title,
+      description:
+          action == 'dam'
+              ? 'Selecione o DAM gerado pela Receita Municipal.'
+              : 'Selecione o alvará final em PDF. Esse arquivo ficará disponível para o cidadão visualizar, baixar ou compartilhar.',
+      allowedExtensions: const ['pdf'],
+      submitLabel: action == 'dam' ? 'Anexar DAM' : 'Anexar alvará final',
+    );
     if (attachment == null) return;
     try {
       final token = await _storage.read(key: 'access_token');
@@ -182,34 +190,15 @@ class _SecretariaRequestsPageState
           content: Text(action == 'dam' ? 'DAM anexado.' : 'Alvará anexado.'),
         ),
       );
-    } on PermitApiException catch (error) {
-      if (error.statusCode == 401 && mounted) {
-        await SessionExpiration.logout(context);
-        return;
+      if (action != 'dam') {
+        final updatedRequest = _requests.firstWhere(
+          (item) =>
+              (item['formId'] ?? item['id']) ==
+              (request['formId'] ?? request['id']),
+          orElse: () => request,
+        );
+        await _openCredential(updatedRequest);
       }
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    }
-  }
-
-  Future<void> _generateFinalPermit(Map<String, dynamic> request) async {
-    try {
-      final token = await _storage.read(key: 'access_token');
-      if (token == null || token.isEmpty) {
-        if (mounted) await SessionExpiration.logout(context);
-        return;
-      }
-      final requestId = request['formId'] as int? ?? request['id'] as int?;
-      if (requestId == null) return;
-      await _api.issueAuthorization(accessToken: token, requestId: requestId);
-      await _loadRequests();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Alvará gerado com QR Code.')),
-      );
-      await _openCredential(request);
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
         await SessionExpiration.logout(context);
@@ -236,7 +225,12 @@ class _SecretariaRequestsPageState
     if (mounted) await _loadRequests();
   }
 
-  Future<_AttachmentInput?> _askAttachment(String title) async {
+  Future<_AttachmentInput?> _askAttachment({
+    required String title,
+    required String description,
+    required List<String> allowedExtensions,
+    required String submitLabel,
+  }) async {
     final fileController = TextEditingController();
     final urlController = TextEditingController();
     final mimeController = TextEditingController(text: 'application/pdf');
@@ -247,7 +241,10 @@ class _SecretariaRequestsPageState
             title: Text(title),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(description),
+                const SizedBox(height: 12),
                 TextField(
                   controller: fileController,
                   decoration: const InputDecoration(
@@ -260,7 +257,7 @@ class _SecretariaRequestsPageState
                   onPressed: () async {
                     final result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
-                      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                      allowedExtensions: allowedExtensions,
                     );
                     final file =
                         result == null || result.files.isEmpty
@@ -271,11 +268,7 @@ class _SecretariaRequestsPageState
                     urlController.text = file.path ?? file.name;
                     final extension = file.name.split('.').last.toLowerCase();
                     mimeController.text =
-                        extension == 'pdf'
-                            ? 'application/pdf'
-                            : extension == 'png'
-                            ? 'image/png'
-                            : 'image/jpeg';
+                        extension == 'pdf' ? 'application/pdf' : '';
                   },
                   icon: const Icon(Icons.upload_file),
                   label: const Text('Selecionar arquivo'),
@@ -309,6 +302,10 @@ class _SecretariaRequestsPageState
                       urlController.text.trim().length < 3) {
                     return;
                   }
+                  final extension =
+                      fileController.text.trim().split('.').last.toLowerCase();
+                  if (!allowedExtensions.contains(extension)) return;
+                  if (mimeController.text.trim() != 'application/pdf') return;
                   Navigator.pop(
                     context,
                     _AttachmentInput(
@@ -322,7 +319,7 @@ class _SecretariaRequestsPageState
                   );
                 },
                 icon: const Icon(Icons.upload_file),
-                label: const Text('Anexar arquivo'),
+                label: Text(submitLabel),
               ),
             ],
           ),
@@ -419,7 +416,11 @@ class _SecretariaRequestsPageState
                                 action: 'dam',
                               ),
                           onAttachFinalPermit:
-                              (request) => _generateFinalPermit(request),
+                              (request) => _attachWorkflowDocument(
+                                request: request,
+                                title: 'Anexar alvará final',
+                                action: 'alvara',
+                              ),
                         ),
                       ),
                   ],
@@ -716,7 +717,7 @@ class _WorkflowActions extends StatelessWidget {
         ElevatedButton.icon(
           onPressed: () => onAttachFinalPermit(request),
           icon: const Icon(Icons.verified_outlined),
-          label: const Text('Gerar alvará e QR Code'),
+          label: const Text('Anexar alvará final'),
         ),
       );
     }
