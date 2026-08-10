@@ -31,8 +31,11 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
 
   bool get isAdmin => widget.userType == 'admin';
   bool get isUser => widget.userType == 'user';
-  bool get isOperatorOrManager =>
-      widget.userType == 'operador' || widget.userType == 'gestor';
+  bool get isManager => widget.userType == 'gestor';
+  bool get isOperator => widget.userType == 'operador';
+  bool get isOperatorOrManager => isOperator || isManager;
+  bool get canManageSystem => isAdmin || isManager;
+  bool get canManageServices => isAdmin || isManager;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +106,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       _DrawerSectionItem('Vistorias', '/inspections'),
                     ],
                   ),
-                if (widget.userType == 'gestor' || isAdmin)
+                if (canManageServices)
                   _DrawerSection(
                     collapsed: collapsed,
                     icon: Icons.design_services_outlined,
@@ -111,20 +114,33 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     routes: const ['/questions'],
                     currentRoute: currentRoute,
                     children: const [
-                      _DrawerSectionItem('Perguntas', '/questions'),
+                      _DrawerSectionItem('Perguntas e regras', '/questions'),
                     ],
                   ),
-                if (widget.userType == 'gestor' || isAdmin)
+                if (canManageSystem)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.tune_outlined,
-                    title: 'Configuração',
-                    routes: const ['/users', '/home-content', '/secretarias'],
+                    icon: Icons.admin_panel_settings_outlined,
+                    title: 'Gestão do Sistema',
+                    routes: const [
+                      '/users',
+                      '/permissions',
+                      '/secretarias',
+                      '/home-content',
+                    ],
                     currentRoute: currentRoute,
-                    children: const [
-                      _DrawerSectionItem('Usuários', '/users'),
-                      _DrawerSectionItem('Secretarias', '/secretarias'),
-                      _DrawerSectionItem('Conteúdo da home', '/home-content'),
+                    children: [
+                      const _DrawerSectionItem('Usuários', '/users'),
+                      if (isAdmin)
+                        const _DrawerSectionItem(
+                          'Tipos de usuário e permissões',
+                          '/permissions',
+                        ),
+                      const _DrawerSectionItem('Secretarias', '/secretarias'),
+                      const _DrawerSectionItem(
+                        'Conteúdo da página inicial',
+                        '/home-content',
+                      ),
                     ],
                   ),
               ],

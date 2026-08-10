@@ -35,6 +35,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   final Map<String, bool> _selectedResponseFields = {};
   final Map<String, bool> _requiredResponseFields = {};
   int _formVersion = 0;
+  bool _isSaving = false;
 
   int? _indiceEdicao;
 
@@ -178,9 +179,14 @@ class _PerguntasPageState extends State<PerguntasPage> {
                       SizedBox(
                         width: isMobile ? double.infinity : 200,
                         child: ElevatedButton(
-                          onPressed: _adicionarOuAtualizarPergunta,
+                          onPressed:
+                              _isSaving ? null : _adicionarOuAtualizarPergunta,
                           child: Text(
-                            _indiceEdicao != null ? 'Atualizar' : 'Salvar',
+                            _isSaving
+                                ? 'Salvando...'
+                                : _indiceEdicao != null
+                                ? 'Atualizar'
+                                : 'Salvar',
                           ),
                         ),
                       ),
@@ -368,12 +374,30 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   Widget _buildModelUploadButton() {
-    return SizedBox(
+    final hasModel = (_modeloDocumentoUrl ?? '').trim().isNotEmpty;
+    return Container(
       width: MediaQuery.of(context).size.width < 600 ? double.infinity : 400,
-      child: OutlinedButton.icon(
-        onPressed: _pickModelFile,
-        icon: const Icon(Icons.upload_file),
-        label: const Text('Selecionar modelo de documento'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _pickModelFile,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Upload do modelo da pergunta'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasModel
+                ? 'Modelo: ${_modeloDocumentoNome ?? _modeloDocumentoUrl}'
+                : 'Opcional. Use quando a pergunta precisar disponibilizar um documento para o cidadão baixar, preencher, assinar e anexar.',
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        ],
       ),
     );
   }
@@ -604,7 +628,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _enviarParaAPIDeletar(pergunta, index);
   }
 
-  void _resetarFormulario() {
+  void _resetFields() {
     _formKey.currentState?.reset();
     _indiceEdicao = null;
     _key =
@@ -633,6 +657,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   void _showError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showSuccess(String message) {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
@@ -677,22 +707,24 @@ class _PerguntasPageState extends State<PerguntasPage> {
       return;
     }
 
+    setState(() => _isSaving = true);
     try {
-      final created = await PermitApiService().createQuestionDefinition(
+      await PermitApiService().createQuestionDefinition(
         accessToken: token,
         payload: pergunta,
       );
       if (!mounted) return;
-      setState(() {
-        _perguntas.add(created);
-        _resetarFormulario();
-      });
+      setState(_resetFields);
+      await _fetchQuestionDefinitions();
+      if (mounted) _showSuccess('Pergunta salva no banco com sucesso.');
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
         await SessionExpiration.logout(context);
         return;
       }
       if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -707,24 +739,25 @@ class _PerguntasPageState extends State<PerguntasPage> {
       return;
     }
 
-    final currentIndex = _indiceEdicao;
+    setState(() => _isSaving = true);
     try {
-      final updated = await PermitApiService().updateQuestionDefinition(
+      await PermitApiService().updateQuestionDefinition(
         accessToken: token,
         questionId: questionId,
         payload: pergunta,
       );
-      if (!mounted || currentIndex == null) return;
-      setState(() {
-        _perguntas[currentIndex] = updated;
-        _resetarFormulario();
-      });
+      if (!mounted) return;
+      setState(_resetFields);
+      await _fetchQuestionDefinitions();
+      if (mounted) _showSuccess('Pergunta atualizada no banco com sucesso.');
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
         await SessionExpiration.logout(context);
         return;
       }
       if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 

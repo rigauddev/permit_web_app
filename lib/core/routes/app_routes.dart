@@ -33,6 +33,7 @@ class AppRoutes {
   static const String userCreate = '/user-create';
   static const String homeContent = '/home-content';
   static const String secretarias = '/secretarias';
+  static const String permissions = '/permissions';
 
   static const String permitDashboard = '/permit-dashboard';
   static const String eventPermit = '/event-permit';

@@ -744,7 +744,7 @@ class _RequirementRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final id = requirement['id'] as int?;
+    final id = _requirementId(requirement['id']);
     final status = requirement['status']?.toString() ?? '';
     final canAct = id != null;
     return Padding(
@@ -763,6 +763,11 @@ class _RequirementRow extends StatelessWidget {
             child: Text(requirement['secretaria']?.toString() ?? ''),
           ),
           _StatusChip(status: status),
+          if (!canAct)
+            const Tooltip(
+              message: 'A exigência veio sem identificador do backend.',
+              child: Icon(Icons.info_outline, size: 18),
+            ),
           OutlinedButton.icon(
             onPressed: canAct ? () => onPending(id) : null,
             icon: const Icon(Icons.assignment_late_outlined),
@@ -781,6 +786,11 @@ class _RequirementRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  int? _requirementId(Object? value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '');
   }
 }
 

@@ -13,6 +13,7 @@ import 'presentation/pages/login_page.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/home_content_page.dart';
 import 'presentation/pages/my_requests_page.dart';
+import 'presentation/pages/permissions_page.dart';
 import 'presentation/pages/inspection_schedule_page.dart';
 import 'presentation/pages/recovery_password.dart';
 import 'presentation/pages/secretaria_requests_page.dart';
@@ -105,6 +106,12 @@ class _AppRouter extends StatelessWidget {
               user: user,
               allowedRoles: const {'admin', 'gestor_secretaria'},
               child: SecretariasPage(userType: user?.userType ?? ''),
+            ),
+        AppRoutes.permissions:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin'},
+              child: PermissionsPage(userType: user?.userType ?? ''),
             ),
         AppRoutes.services:
             (context) => _GuardedRoute(
