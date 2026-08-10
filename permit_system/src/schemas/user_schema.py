@@ -14,6 +14,7 @@ class UserCreateRequest(BaseModel):
     role: str = "cidadao"
     secretaria: str | None = None
     email_verification_token: str | None = None
+    termo_responsabilidade_aceito: bool = False
 
 
 class UserResponse(BaseModel):

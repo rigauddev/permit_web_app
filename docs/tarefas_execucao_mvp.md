@@ -19,6 +19,7 @@
 - [x] Criar tela de revisão antes do envio.
 - [x] Exibir termo de responsabilidade e veracidade das informações antes do envio.
 - [x] Exigir aceite do termo de responsabilidade no frontend e backend.
+- [x] Exigir aceite do termo de responsabilidade também no auto cadastro do cidadão.
 - [x] Gerar protocolo após envio.
 - [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.
 - [x] Corrigir seleção de respostas para não carregar resposta da pergunta anterior no wizard.
@@ -31,6 +32,9 @@
 - [x] Mover acesso ao perfil para o avatar/botão do menu e remover atalho do appbar superior.
 - [x] Incluir botão de voltar nas subpáginas principais.
 - [x] Criar página `Minhas solicitações` separada por tipo de serviço.
+- [x] Ajustar `Minhas solicitações` para mobile com cards responsivos e tela de detalhes.
+- [x] Exibir ações da solicitação conforme status na tela de detalhes do cidadão.
+- [x] Fixar dados do responsável pelo evento a partir da conta logada.
 - [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
 - [x] Permitir marcar serviços como favoritos e exibir lista de favoritos no mobile.
 
