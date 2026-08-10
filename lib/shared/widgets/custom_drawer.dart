@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/providers/user_provider.dart';
+import '../../core/routes/app_routes.dart';
+import '../../data/providers/user_provider.dart';
 
 class CustomDrawer extends ConsumerStatefulWidget
     implements PreferredSizeWidget {
@@ -334,6 +335,10 @@ class _DrawerTile extends StatelessWidget {
           if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
             Navigator.pop(context);
           }
+          return;
+        }
+        if (route == AppRoutes.home) {
+          Navigator.pushNamedAndRemoveUntil(context, route, (route) => false);
           return;
         }
         Navigator.pushReplacementNamed(context, route);

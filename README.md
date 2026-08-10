@@ -71,6 +71,37 @@ flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 ```
 
+### Teste em device físico
+
+No celular, `localhost` aponta para o próprio aparelho. Para testar com a API rodando na sua máquina, use o IP local do computador na mesma rede Wi-Fi.
+
+1. Suba a API:
+
+```bash
+docker compose up -d api
+```
+
+2. Descubra o IP da máquina:
+
+```bash
+ipconfig getifaddr en0
+```
+
+3. Rode no device informando a URL da API:
+
+```bash
+flutter devices
+flutter run -d <DEVICE_ID> --dart-define=API_BASE_URL=http://SEU_IP:8000
+```
+
+Exemplo:
+
+```bash
+flutter run -d 00008110-001C195E0E91801E --dart-define=API_BASE_URL=http://192.168.0.10:8000
+```
+
+Para Android em modo debug, o app permite HTTP local. Para homologação/produção e publicação nas lojas, use domínio com HTTPS.
+
 ## 🧱 Estrutura do projeto
 
 core/: temas, rotas e utilitários globais

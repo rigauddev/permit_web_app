@@ -31,7 +31,7 @@ class AppScaffold extends StatelessWidget {
 
         if (isMobile) {
           return Scaffold(
-            appBar: _buildMobileAppBar(context, appBar),
+            appBar: _buildMobileAppBar(context, appBar, currentRoute),
             drawer: CustomDrawer(
               userType: userType,
               userProfile: userProfile,
@@ -81,11 +81,13 @@ class AppScaffold extends StatelessWidget {
   PreferredSizeWidget? _buildMobileAppBar(
     BuildContext context,
     PreferredSizeWidget? appBar,
+    String currentRoute,
   ) {
     if (appBar == null) return null;
 
     if (appBar is AppBar) {
-      final canNavigateBack = Navigator.canPop(context);
+      final canNavigateBack =
+          currentRoute != AppRoutes.home && Navigator.canPop(context);
       return AppBar(
         title: appBar.title,
         leading:
@@ -104,7 +106,8 @@ class AppScaffold extends StatelessWidget {
     }
 
     if (appBar is CustomAppBar) {
-      final canNavigateBack = Navigator.canPop(context);
+      final canNavigateBack =
+          currentRoute != AppRoutes.home && Navigator.canPop(context);
       return CustomAppBar(
         title: appBar.title,
         actions: appBar.actions,
@@ -156,6 +159,14 @@ class _MobileBottomNavigationBar extends StatelessWidget {
           _ => _homeRoute,
         };
         if (currentRoute == targetRoute) return;
+        if (targetRoute == _homeRoute) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            targetRoute,
+            (route) => false,
+          );
+          return;
+        }
         Navigator.pushReplacementNamed(context, targetRoute);
       },
       destinations: const [

@@ -60,9 +60,6 @@ class UserSessionResponse(BaseModel):
     id: int
     nome: str
     email: str
-    cpf_cnpj: str | None = None
-    telefone: str | None = None
-    endereco: str | None = None
     role: str
     secretaria: str | None = None
     permissions: list[str] = Field(default_factory=list)
