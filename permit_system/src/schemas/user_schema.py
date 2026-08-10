@@ -28,4 +28,5 @@ class UserResponse(BaseModel):
     endereco: str | None = None
     role: str
     secretaria: str | None = None
+    permissions: list[str] = Field(default_factory=list)
     is_active: bool

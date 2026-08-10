@@ -62,6 +62,7 @@ class UserSessionResponse(BaseModel):
     email: str
     role: str
     secretaria: str | None = None
+    permissions: list[str] = Field(default_factory=list)
 
 
 class TokenResponse(BaseModel):

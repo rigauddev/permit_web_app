@@ -15,6 +15,7 @@ class UserModel {
   final String phone;
   final String cpfCnpj;
   final String? secretaria;
+  final List<String> permissions;
 
   UserModel({
     this.id,
@@ -33,6 +34,7 @@ class UserModel {
     required this.state,
     required this.zipCode,
     this.secretaria,
+    this.permissions = const [],
   });
 
   Map<String, dynamic> toJson() {
@@ -53,6 +55,7 @@ class UserModel {
       'state': state,
       'zipCode': zipCode,
       'secretaria': secretaria,
+      'permissions': permissions,
     };
   }
 
@@ -77,6 +80,7 @@ class UserModel {
       state: json['state'] as String? ?? '',
       zipCode: json['zipCode'] as String? ?? '',
       secretaria: json['secretaria'] as String?,
+      permissions: _permissionsFromJson(json['permissions']),
     );
   }
 
@@ -99,6 +103,7 @@ class UserModel {
       phone: '',
       cpfCnpj: '',
       secretaria: json['secretaria'] as String?,
+      permissions: _permissionsFromJson(json['permissions']),
     );
   }
 
@@ -121,7 +126,15 @@ class UserModel {
       phone: json['telefone'] as String? ?? '',
       cpfCnpj: json['cpf_cnpj'] as String? ?? '',
       secretaria: json['secretaria'] as String?,
+      permissions: _permissionsFromJson(json['permissions']),
     );
+  }
+
+  bool hasPermission(String permission) => permissions.contains(permission);
+
+  static List<String> _permissionsFromJson(dynamic value) {
+    if (value is! List) return const [];
+    return value.map((item) => item.toString()).toList(growable: false);
   }
 
   static String _mapRoleToUserType(String role) {

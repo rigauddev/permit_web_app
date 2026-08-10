@@ -16,6 +16,33 @@ class RoleModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     users = relationship("UserModel", back_populates="role")
+    permissions = relationship("RolePermissionModel", back_populates="role")
+
+
+class PermissionModel(Base):
+    __tablename__ = "permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    nome = Column(String(120), nullable=False)
+    categoria = Column(String(80), nullable=False, index=True)
+    descricao = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    roles = relationship("RolePermissionModel", back_populates="permission")
+
+
+class RolePermissionModel(Base):
+    __tablename__ = "role_permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False, index=True)
+    permission_id = Column(Integer, ForeignKey("permissions.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    role = relationship("RoleModel", back_populates="permissions")
+    permission = relationship("PermissionModel", back_populates="roles")
 
 
 class SecretariaModel(Base):

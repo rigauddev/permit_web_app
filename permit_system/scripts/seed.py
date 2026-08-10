@@ -13,9 +13,11 @@ from src.infra.database.models import (
     Base,
     EventCredentialModel,
     HomeContentCardModel,
+    PermissionModel,
     PermitRequestModel,
     PermitRequirementModel,
     RoleModel,
+    RolePermissionModel,
     SecretariaModel,
     UserModel,
 )
@@ -28,6 +30,61 @@ ROLES = [
     ("operador_secretaria", "Operador de Secretaria", "Analisa solicitações da secretaria"),
     ("cidadao", "Cidadão", "Solicita e acompanha alvarás"),
 ]
+
+PERMISSIONS = [
+    ("dashboard.view", "Visualizar dashboard", "Navegação", "Acessa a página inicial adequada ao perfil."),
+    ("services.catalog.view", "Visualizar catálogo de serviços", "Serviços", "Acessa os serviços disponíveis ao cidadão."),
+    ("services.favorite.manage", "Gerenciar favoritos", "Serviços", "Marca e consulta serviços favoritos."),
+    ("requests.own.create", "Criar solicitações próprias", "Solicitações", "Cria solicitação de alvará de eventos."),
+    ("requests.own.view", "Visualizar solicitações próprias", "Solicitações", "Consulta apenas solicitações criadas pelo próprio usuário."),
+    ("requests.secretaria.view", "Visualizar central da secretaria", "Atendimento", "Consulta solicitações vinculadas à secretaria do usuário."),
+    ("requests.secretaria.analyze", "Analisar solicitações da secretaria", "Atendimento", "Aprova, recusa, comenta ou pede correção em exigências da secretaria."),
+    ("inspections.view", "Visualizar vistorias", "Vistorias", "Consulta vistorias agendadas da secretaria."),
+    ("inspections.manage", "Gerenciar vistorias", "Vistorias", "Agenda, executa e registra checklist/laudo de vistoria."),
+    ("dam.attach", "Anexar DAM", "DAM e Alvará", "Anexa DAM quando todas as anuências aplicáveis estiverem concluídas."),
+    ("dam.payment_proof.attach", "Anexar comprovante de DAM", "DAM e Alvará", "Permite anexar comprovante de pagamento do DAM pelo cidadão."),
+    ("permit.final.attach", "Anexar alvará final", "DAM e Alvará", "Anexa PDF final do alvará após pagamento/isento."),
+    ("event_credential.validate", "Validar credencial de evento", "Credencial", "Lê e valida QR Code/credencial pública do evento."),
+    ("management.users.manage", "Gerenciar usuários", "Gestão", "Cria e lista usuários conforme escopo do perfil."),
+    ("management.secretarias.manage", "Gerenciar secretarias", "Gestão", "Configura secretarias, logo, textos e e-mail."),
+    ("management.home_content.manage", "Gerenciar conteúdo da home", "Gestão", "Cria cards de carrossel da prefeitura/secretarias."),
+    ("management.services.manage", "Gerenciar serviços", "Gestão de Serviços", "Configura serviços municipais disponíveis no sistema."),
+    ("management.questions.manage", "Gerenciar perguntas", "Gestão de Serviços", "Cria perguntas, tipos de resposta, modelos e checklist de vistoria."),
+    ("management.permissions.manage", "Gerenciar permissões", "Permissões", "Mantém matriz de permissões por perfil."),
+]
+
+ROLE_PERMISSIONS = {
+    "cidadao": {
+        "dashboard.view",
+        "services.catalog.view",
+        "services.favorite.manage",
+        "requests.own.create",
+        "requests.own.view",
+        "dam.payment_proof.attach",
+        "event_credential.validate",
+    },
+    "operador_secretaria": {
+        "dashboard.view",
+        "requests.secretaria.view",
+        "requests.secretaria.analyze",
+        "inspections.view",
+        "inspections.manage",
+        "event_credential.validate",
+    },
+    "gestor_secretaria": {
+        "dashboard.view",
+        "requests.secretaria.view",
+        "requests.secretaria.analyze",
+        "inspections.view",
+        "inspections.manage",
+        "management.users.manage",
+        "management.home_content.manage",
+        "management.services.manage",
+        "management.questions.manage",
+        "event_credential.validate",
+    },
+    "admin": "all",
+}
 
 SECRETARIAS = [
     ("desenvolvimento_economico", "Secretaria de Desenvolvimento Econômico", "sde@valenca.ba.gov.br", "Coordenação da Central de Eventos"),
@@ -71,6 +128,43 @@ def seed_roles(db):
     for slug, nome, descricao in ROLES:
         roles[slug] = get_or_create(db, RoleModel, slug=slug, defaults={"nome": nome, "descricao": descricao})
     return roles
+
+
+def seed_permissions(db, roles):
+    permissions = {}
+    for slug, nome, categoria, descricao in PERMISSIONS:
+        permission = get_or_create(
+            db,
+            PermissionModel,
+            slug=slug,
+            defaults={
+                "nome": nome,
+                "categoria": categoria,
+                "descricao": descricao,
+            },
+        )
+        permission.nome = nome
+        permission.categoria = categoria
+        permission.descricao = descricao
+        permissions[slug] = permission
+
+    for role_slug, assigned_permissions in ROLE_PERMISSIONS.items():
+        role = roles[role_slug]
+        slugs = set(permissions) if assigned_permissions == "all" else set(assigned_permissions)
+        for permission_slug in slugs:
+            existing = (
+                db.query(RolePermissionModel)
+                .filter_by(role_id=role.id, permission_id=permissions[permission_slug].id)
+                .first()
+            )
+            if not existing:
+                db.add(
+                    RolePermissionModel(
+                        role_id=role.id,
+                        permission_id=permissions[permission_slug].id,
+                    )
+                )
+    return permissions
 
 
 def seed_secretarias(db):
@@ -722,6 +816,7 @@ def main():
     db = SessionLocal()
     try:
         roles = seed_roles(db)
+        seed_permissions(db, roles)
         secretarias = seed_secretarias(db)
         users = seed_users(db, roles, secretarias)
         seed_question_definitions(db)
