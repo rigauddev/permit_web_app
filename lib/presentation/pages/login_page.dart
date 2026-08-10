@@ -120,6 +120,7 @@ class LoginPage extends HookConsumerWidget {
           value: jsonEncode(session.user.toJson()),
         );
         ref.read(userProvider.notifier).setUser(session.user);
+        await Future<void>.delayed(Duration.zero);
         if (context.mounted) {
           Navigator.pushReplacementNamed(context, '/home');
         }

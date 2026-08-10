@@ -10,7 +10,7 @@ class SecretariaService:
         self.db = db
 
     def list_secretarias(self, current_user: UserModel) -> list[SecretariaResponse]:
-        query = self.db.query(SecretariaModel)
+        query = self.db.query(SecretariaModel).filter(SecretariaModel.is_active.is_(True))
         if current_user.role.slug == "gestor_secretaria":
             query = query.filter(SecretariaModel.id == current_user.secretaria_id)
         return [self._to_response(item) for item in query.order_by(SecretariaModel.nome.asc()).all()]
@@ -57,6 +57,14 @@ class SecretariaService:
         self.db.commit()
         self.db.refresh(secretaria)
         return self._to_response(secretaria)
+
+    def delete_secretaria(self, secretaria_id: int, current_user: UserModel) -> None:
+        self._ensure_admin(current_user)
+        secretaria = self.db.query(SecretariaModel).filter(SecretariaModel.id == secretaria_id).first()
+        if not secretaria:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Secretaria não encontrada")
+        secretaria.is_active = False
+        self.db.commit()
 
     @staticmethod
     def _ensure_admin(current_user: UserModel) -> None:

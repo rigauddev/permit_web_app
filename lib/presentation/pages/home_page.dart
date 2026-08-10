@@ -244,15 +244,23 @@ class _InternalHome extends StatelessWidget {
                       if (_canManageUsers)
                         const _HomeActionCard(
                           icon: Icons.people_outline,
-                          title: 'Usuários internos',
+                          title: 'Usuários',
                           description:
-                              'Consulte e cadastre equipes conforme o escopo da secretaria.',
+                              'Consulte e cadastre usuários conforme o escopo da secretaria.',
                           route: '/users',
+                        ),
+                      if (user?.userType == 'admin')
+                        const _HomeActionCard(
+                          icon: Icons.security_outlined,
+                          title: 'Tipos de usuário e permissões',
+                          description:
+                              'Controle permissões por perfil e categoria do sistema.',
+                          route: '/permissions',
                         ),
                       if (_canManageUsers)
                         const _HomeActionCard(
                           icon: Icons.view_carousel_outlined,
-                          title: 'Conteúdo da home',
+                          title: 'Conteúdo da página inicial',
                           description:
                               'Crie até 5 cards de carrossel para sua secretaria ou prefeitura.',
                           route: '/home-content',
@@ -268,10 +276,10 @@ class _InternalHome extends StatelessWidget {
                       if (user?.userType == 'admin' ||
                           user?.userType == 'gestor')
                         const _HomeActionCard(
-                          icon: Icons.tune_outlined,
-                          title: 'Perguntas e permissões',
+                          icon: Icons.design_services_outlined,
+                          title: 'Gestão de Serviços',
                           description:
-                              'Configure perguntas condicionais e regras por secretaria.',
+                              'Configure perguntas, tipos de resposta, documentos modelo e regras por secretaria.',
                           route: '/questions',
                         ),
                     ],

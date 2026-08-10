@@ -321,6 +321,45 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<void> deleteSecretaria({
+    required String accessToken,
+    required int secretariaId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/secretarias/$secretariaId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
+  Future<Map<String, dynamic>> getPermissionMatrix({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permissions'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateRolePermissions({
+    required String accessToken,
+    required String roleSlug,
+    required List<String> permissions,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/permissions/roles/$roleSlug'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'permissions': permissions}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getAuthorization({
     required String accessToken,
     required int requestId,

@@ -60,15 +60,18 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       text: user?.email ?? state.responsibleData['email'] ?? '',
     );
 
-    ref
-        .read(permitRequestControllerProvider.notifier)
-        .updateBasicInfo(
-          name: nomeController.text,
-          cpfCnpj: cpfCnpjController.text,
-          address: addressController.text,
-          phone: phoneController.text,
-          email: emailController.text,
-        );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(permitRequestControllerProvider.notifier)
+          .updateBasicInfo(
+            name: nomeController.text,
+            cpfCnpj: cpfCnpjController.text,
+            address: addressController.text,
+            phone: phoneController.text,
+            email: emailController.text,
+          );
+    });
 
     eventNameController = TextEditingController(
       text: state.eventData['nome_evento'] ?? '',
