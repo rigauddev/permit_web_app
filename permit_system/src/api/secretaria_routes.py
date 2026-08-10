@@ -36,3 +36,12 @@ def update_secretaria(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
 ):
     return SecretariaService(db).update_secretaria(secretaria_id, payload, current_user)
+
+
+@router.delete("/{secretaria_id}", status_code=204)
+def delete_secretaria(
+    secretaria_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin")),
+):
+    SecretariaService(db).delete_secretaria(secretaria_id, current_user)

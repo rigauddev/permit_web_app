@@ -173,10 +173,11 @@ def seed_secretarias(db):
         defaults = {
             "nome": nome,
             "email": email,
-            "logo_url": "",
+            "logo_url": f"docs/imagens/logo/{slug}.png",
             "email_header_text": f"Prefeitura Municipal de Valença - {header}",
             "document_header_text": f"{nome}\nPrefeitura Municipal de Valença",
             "document_footer_text": "Documento gerado eletronicamente pelo Sistema Municipal de Serviços.",
+            "is_active": True,
         }
         secretaria = get_or_create(
             db,
@@ -187,6 +188,7 @@ def seed_secretarias(db):
         for key, value in defaults.items():
             if not getattr(secretaria, key, None):
                 setattr(secretaria, key, value)
+        secretaria.is_active = True
         secretarias[slug] = secretaria
     return secretarias
 

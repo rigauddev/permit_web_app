@@ -321,6 +321,19 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<void> deleteSecretaria({
+    required String accessToken,
+    required int secretariaId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/secretarias/$secretariaId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
   Future<Map<String, dynamic>> getAuthorization({
     required String accessToken,
     required int requestId,

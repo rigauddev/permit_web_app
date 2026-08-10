@@ -194,10 +194,22 @@ class _SecretariasPageState extends State<SecretariasPage> {
         leading: const Icon(Icons.account_balance_outlined),
         title: Text(secretaria['nome']?.toString() ?? ''),
         subtitle: Text(secretaria['email']?.toString() ?? 'Sem e-mail'),
-        trailing: IconButton(
-          tooltip: 'Editar',
-          icon: const Icon(Icons.edit_outlined),
-          onPressed: () => _edit(secretaria),
+        trailing: Wrap(
+          spacing: 4,
+          children: [
+            IconButton(
+              tooltip: 'Editar',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _edit(secretaria),
+            ),
+            if (_isAdmin)
+              IconButton(
+                tooltip: 'Excluir',
+                icon: const Icon(Icons.delete_outline),
+                color: Colors.red.shade700,
+                onPressed: () => _confirmDelete(secretaria),
+              ),
+          ],
         ),
       ),
     );
@@ -307,6 +319,52 @@ class _SecretariasPageState extends State<SecretariasPage> {
       _documentHeaderController.clear();
       _documentFooterController.clear();
     });
+  }
+
+  Future<void> _confirmDelete(Map<String, dynamic> secretaria) async {
+    final id = secretaria['id'] as int?;
+    if (id == null) return;
+    final name = secretaria['nome']?.toString() ?? 'secretaria';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Excluir secretaria'),
+            content: Text(
+              'Deseja excluir "$name"? Ela deixará de aparecer nas listas do sistema.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Excluir'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) return;
+    await _deleteSecretaria(id);
+  }
+
+  Future<void> _deleteSecretaria(int secretariaId) async {
+    final token = await _token();
+    if (token == null) return;
+    try {
+      await PermitApiService().deleteSecretaria(
+        accessToken: token,
+        secretariaId: secretariaId,
+      );
+      await _loadSecretarias();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    }
   }
 
   void _showError(String message) {
