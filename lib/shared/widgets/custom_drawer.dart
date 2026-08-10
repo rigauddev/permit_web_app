@@ -122,12 +122,22 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     collapsed: collapsed,
                     icon: Icons.admin_panel_settings_outlined,
                     title: 'Gestão do Sistema',
-                    routes: const ['/users', '/home-content', '/secretarias'],
+                    routes: const [
+                      '/users',
+                      '/permissions',
+                      '/secretarias',
+                      '/home-content',
+                    ],
                     currentRoute: currentRoute,
-                    children: const [
-                      _DrawerSectionItem('Usuários e perfis', '/users'),
-                      _DrawerSectionItem('Secretarias', '/secretarias'),
-                      _DrawerSectionItem(
+                    children: [
+                      const _DrawerSectionItem('Usuários', '/users'),
+                      if (isAdmin)
+                        const _DrawerSectionItem(
+                          'Tipos de usuário e permissões',
+                          '/permissions',
+                        ),
+                      const _DrawerSectionItem('Secretarias', '/secretarias'),
+                      const _DrawerSectionItem(
                         'Conteúdo da página inicial',
                         '/home-content',
                       ),

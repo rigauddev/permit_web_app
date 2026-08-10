@@ -83,6 +83,7 @@
 - [x] Reorganizar menu lateral por Atendimento e Configuração, reduzindo itens duplicados.
 - [x] Mover criação de perguntas para a área de Gestão de Serviços no menu.
 - [x] Reorganizar menu por contexto: Serviços do cidadão, Atendimento interno, Gestão de Serviços e Gestão do Sistema.
+- [x] Ajustar cards da home interna para refletir Gestão de Serviços, Gestão do Sistema e Permissões.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
@@ -121,7 +122,7 @@
 - [x] Criar gestão de conteúdo da página inicial com até 5 cards ativos por prefeitura/secretaria.
 - [x] Persistir cards de carrossel com título, texto, imagem e ordem de exibição.
 - [x] Criar seed de permissões por categoria e vínculo inicial por perfil de usuário.
-- [ ] Criar tela de gestão de perfis/permissões para admin.
+- [x] Criar tela de gestão de perfis/permissões para admin.
 - [ ] Migrar guards do frontend/backend para validação granular por permissão além do perfil base.
 
 ## Marco 7 - Documento final e DAM
@@ -179,6 +180,7 @@
 - [x] Criar template HTML de MFA com cabeçalho da prefeitura e logo/texto da secretaria quando aplicável.
 - [x] Permitir modelo de documento por pergunta, com botão de baixar, assinatura impressa/gov.br e anexo obrigatório.
 - [x] Permitir selecionar/referenciar arquivo-modelo na criação da pergunta.
+- [x] Destacar upload de modelo na criação da pergunta e recarregar lista a partir do banco após salvar.
 - [x] Atualizar seed de bloqueio de via com modelo em `docs/arquivos` para download no teste.
 - [x] Limpar formulário após cadastrar ou atualizar pergunta.
 - [x] Permitir configurar na pergunta se ela exige vistoria e quais itens compõem o checklist.
