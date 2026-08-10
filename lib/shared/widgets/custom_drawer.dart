@@ -76,10 +76,15 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     collapsed: collapsed,
                     icon: Icons.event,
                     title: 'Serviços',
-                    routes: const ['/services', '/my-requests'],
+                    routes: const [
+                      '/services',
+                      '/favorite-services',
+                      '/my-requests',
+                    ],
                     currentRoute: currentRoute,
                     children: const [
                       _DrawerSectionItem('Serviços', '/services'),
+                      _DrawerSectionItem('Favoritos', '/favorite-services'),
                       _DrawerSectionItem('Minhas solicitações', '/my-requests'),
                     ],
                   ),

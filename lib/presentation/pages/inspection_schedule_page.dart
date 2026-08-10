@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/routes/app_routes.dart';
@@ -166,18 +167,29 @@ class _InspectionSchedulePageState
               .whereType<Map<String, dynamic>>();
       for (final requirement in requirements) {
         if (!_isVisibleToUser(requirement, user)) continue;
-        if (!_requiresInspection(requirement['pergunta']?.toString() ?? '')) {
+        if (requirement['requires_inspection'] != true &&
+            !_requiresInspection(requirement['pergunta']?.toString() ?? '')) {
           continue;
         }
         items.add(
           _InspectionItem(
+            requirementId: requirement['id'] as int?,
             request: request,
             eventName: request['nome_do_evento']?.toString() ?? 'Evento',
             protocol: request['protocolo']?.toString() ?? '-',
             secretaria: requirement['secretaria']?.toString() ?? '',
             requirement: requirement['pergunta']?.toString() ?? '',
             status: requirement['status']?.toString() ?? 'aguardando_analise',
-            date: _parseDate(request['data_do_evento']?.toString()),
+            inspectionStatus:
+                requirement['inspection_status']?.toString() ?? 'nao_agendada',
+            checklist: List<String>.from(
+              requirement['inspection_checklist'] ?? const [],
+            ),
+            inspectionResult:
+                requirement['inspection_result'] as Map<String, dynamic>?,
+            date: _parseDate(
+              requirement['inspection_scheduled_for']?.toString(),
+            ),
           ),
         );
       }
@@ -288,6 +300,10 @@ class _InspectionSchedulePageState
                   _DetailLine(label: 'Secretaria', value: item.secretaria),
                   _DetailLine(label: 'Exigência', value: item.requirement),
                   _DetailLine(label: 'Status da exigência', value: item.status),
+                  _DetailLine(
+                    label: 'Status da vistoria',
+                    value: _formatInspectionStatus(item.inspectionStatus),
+                  ),
                   _DetailLine(label: 'Data da vistoria', value: item.dateLabel),
                   _DetailLine(
                     label: 'Local',
@@ -297,6 +313,42 @@ class _InspectionSchedulePageState
                     label: 'Responsável',
                     value: request['responsavel']?.toString() ?? '-',
                   ),
+                  if (item.checklist.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Checklist',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    ...item.checklist.map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_box_outline_blank, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(entry)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (item.inspectionResult != null) ...[
+                    const SizedBox(height: 8),
+                    _DetailLine(
+                      label: 'Resultado',
+                      value:
+                          item.inspectionResult?['approved'] == true
+                              ? 'Aprovada'
+                              : 'Negativa / correção solicitada',
+                    ),
+                    _DetailLine(
+                      label: 'Observações',
+                      value:
+                          item.inspectionResult?['observacoes']?.toString() ??
+                          '-',
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -304,6 +356,28 @@ class _InspectionSchedulePageState
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Fechar'),
+              ),
+              OutlinedButton.icon(
+                onPressed:
+                    item.requirementId == null
+                        ? null
+                        : () {
+                          Navigator.pop(context);
+                          _scheduleInspection(item);
+                        },
+                icon: const Icon(Icons.event_outlined),
+                label: const Text('Agendar'),
+              ),
+              ElevatedButton.icon(
+                onPressed:
+                    item.requirementId == null
+                        ? null
+                        : () {
+                          Navigator.pop(context);
+                          _performInspection(item);
+                        },
+                icon: const Icon(Icons.fact_check_outlined),
+                label: const Text('Realizar vistoria'),
               ),
               ElevatedButton.icon(
                 onPressed: () {
@@ -322,8 +396,105 @@ class _InspectionSchedulePageState
     );
   }
 
+  Future<void> _scheduleInspection(_InspectionItem item) async {
+    final initialDate = item.date ?? DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (selected == null || item.requirementId == null) return;
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      await _api.scheduleInspection(
+        accessToken: token,
+        requirementId: item.requirementId!,
+        scheduledFor: _dateToIso(selected),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Vistoria agendada.')));
+      _loadRequests();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
+  Future<void> _performInspection(_InspectionItem item) async {
+    final result = await showDialog<_InspectionResultInput>(
+      context: context,
+      builder: (context) => _InspectionFormDialog(item: item),
+    );
+    if (result == null || item.requirementId == null) return;
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      await _api.completeInspection(
+        accessToken: token,
+        requirementId: item.requirementId!,
+        approved: result.approved,
+        checklist: result.checklist,
+        observacoes: result.observacoes,
+        fotos: result.fotos,
+        novaData: result.novaData == null ? null : _dateToIso(result.novaData!),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.approved
+                ? 'Vistoria aprovada.'
+                : 'Vistoria registrada com correção pendente.',
+          ),
+        ),
+      );
+      _loadRequests();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
   static String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  static String _dateToIso(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static String _formatInspectionStatus(String status) {
+    return switch (status) {
+      'agendada' => 'Agendada',
+      'aprovada' => 'Aprovada',
+      'reprovada' => 'Reprovada',
+      'reagendada' => 'Reagendada',
+      _ => 'Não agendada',
+    };
   }
 }
 
@@ -638,23 +809,225 @@ class _MessageState extends StatelessWidget {
   }
 }
 
+class _InspectionFormDialog extends StatefulWidget {
+  const _InspectionFormDialog({required this.item});
+
+  final _InspectionItem item;
+
+  @override
+  State<_InspectionFormDialog> createState() => _InspectionFormDialogState();
+}
+
+class _InspectionFormDialogState extends State<_InspectionFormDialog> {
+  late final Map<String, bool> _checks = {
+    for (final item in widget.item.checklist) item: false,
+  };
+  final _observacoesController = TextEditingController();
+  final List<String> _fotos = [];
+  bool _approved = true;
+  DateTime? _novaData;
+
+  @override
+  void dispose() {
+    _observacoesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Realizar vistoria - ${widget.item.protocol}'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.item.eventName),
+              const SizedBox(height: 12),
+              if (_checks.isEmpty)
+                const Text('Nenhum item de checklist definido.')
+              else
+                ..._checks.entries.map(
+                  (entry) => CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(entry.key),
+                    value: entry.value,
+                    onChanged:
+                        (value) =>
+                            setState(() => _checks[entry.key] = value ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                ),
+              const Divider(height: 24),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Vistoria aprovada'),
+                subtitle: const Text(
+                  'Desative para registrar negativa e abrir prazo de correção.',
+                ),
+                value: _approved,
+                onChanged: (value) => setState(() => _approved = value),
+              ),
+              TextField(
+                controller: _observacoesController,
+                minLines: 3,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  labelText:
+                      _approved ? 'Observações técnicas' : 'Motivo da negativa',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _pickPhotos,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Anexar fotos'),
+                  ),
+                  if (!_approved)
+                    OutlinedButton.icon(
+                      onPressed: _pickNewDate,
+                      icon: const Icon(Icons.event_repeat_outlined),
+                      label: Text(
+                        _novaData == null
+                            ? 'Definir nova data'
+                            : 'Nova data: ${_formatDate(_novaData!)}',
+                      ),
+                    ),
+                ],
+              ),
+              if (_fotos.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ..._fotos.map(
+                  (foto) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.image_outlined),
+                    title: Text(foto, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.check_circle_outline),
+          label: const Text('Finalizar vistoria'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickPhotos() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.image,
+    );
+    if (result == null) return;
+    setState(() {
+      _fotos
+        ..clear()
+        ..addAll(result.files.map((file) => file.path ?? file.name));
+    });
+  }
+
+  Future<void> _pickNewDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 2)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (selected == null) return;
+    setState(() => _novaData = selected);
+  }
+
+  void _submit() {
+    if (_approved && _checks.values.any((checked) => !checked)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Marque todos os itens para aprovar a vistoria.'),
+        ),
+      );
+      return;
+    }
+    if (!_approved && _observacoesController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informe o motivo da negativa.')),
+      );
+      return;
+    }
+    Navigator.pop(
+      context,
+      _InspectionResultInput(
+        approved: _approved,
+        checklist: _checks,
+        observacoes: _observacoesController.text.trim(),
+        fotos: _fotos,
+        novaData: _novaData,
+      ),
+    );
+  }
+
+  static String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}
+
+class _InspectionResultInput {
+  const _InspectionResultInput({
+    required this.approved,
+    required this.checklist,
+    required this.observacoes,
+    required this.fotos,
+    required this.novaData,
+  });
+
+  final bool approved;
+  final Map<String, bool> checklist;
+  final String observacoes;
+  final List<String> fotos;
+  final DateTime? novaData;
+}
+
 class _InspectionItem {
   const _InspectionItem({
+    required this.requirementId,
     required this.request,
     required this.eventName,
     required this.protocol,
     required this.secretaria,
     required this.requirement,
     required this.status,
+    required this.inspectionStatus,
+    required this.checklist,
+    required this.inspectionResult,
     required this.date,
   });
 
+  final int? requirementId;
   final Map<String, dynamic> request;
   final String eventName;
   final String protocol;
   final String secretaria;
   final String requirement;
   final String status;
+  final String inspectionStatus;
+  final List<String> checklist;
+  final Map<String, dynamic>? inspectionResult;
   final DateTime? date;
 
   String get dateLabel {

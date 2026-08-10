@@ -413,6 +413,7 @@ class _RequestListTile extends StatelessWidget {
         status == 'isenta_dam' ||
         (request['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
     final canAttachPayment = status == 'aguardando_pagamento_dam';
+    final verified = _isCredentialVerified(request);
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -434,6 +435,11 @@ class _RequestListTile extends StatelessWidget {
           spacing: 8,
           children: [
             Chip(label: Text(_formatStatus(status))),
+            if (verified)
+              const Chip(
+                avatar: Icon(Icons.verified, size: 16),
+                label: Text('Verificado'),
+              ),
             if (canAttachPayment)
               IconButton(
                 tooltip: 'Anexar comprovante do DAM',
@@ -442,7 +448,7 @@ class _RequestListTile extends StatelessWidget {
               ),
             if (canOpenCredential)
               IconButton(
-                tooltip: 'Ver autorização',
+                tooltip: verified ? 'Evento verificado' : 'Validar evento',
                 onPressed: () => onOpenCredential(request),
                 icon: const Icon(Icons.qr_code_2),
               ),
@@ -473,6 +479,20 @@ class _RequestListTile extends StatelessWidget {
       default:
         return status;
     }
+  }
+
+  static bool _isCredentialVerified(Map<String, dynamic> request) {
+    final credentials = request['credentials'] as List<dynamic>? ?? const [];
+    return credentials.any((credential) {
+      if (credential is! Map<String, dynamic>) return false;
+      final count = credential['verification_count'];
+      final verifiedAt = credential['verified_at'];
+      return verifiedAt != null ||
+          (count is int && count > 0) ||
+          (count is String &&
+              int.tryParse(count) != null &&
+              int.parse(count) > 0);
+    });
   }
 }
 

@@ -262,16 +262,35 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                                     ),
                                     Expanded(
                                       flex: 2,
-                                      child: Text(
-                                        form['status'] ?? 'Status',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                          color: _getStatusColor(
-                                            form['status'],
+                                      child: Wrap(
+                                        alignment: WrapAlignment.end,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        spacing: 6,
+                                        runSpacing: 4,
+                                        children: [
+                                          Text(
+                                            form['status'] ?? 'Status',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: _getStatusColor(
+                                                form['status'],
+                                              ),
+                                            ),
+                                            textAlign: TextAlign.right,
                                           ),
-                                        ),
-                                        textAlign: TextAlign.right,
+                                          if (_isCredentialVerified(form))
+                                            const Chip(
+                                              label: Text('Verificado'),
+                                              avatar: Icon(
+                                                Icons.verified,
+                                                size: 16,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -465,10 +484,28 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
             if (mounted) _loadForms();
           },
           icon: const Icon(Icons.qr_code_2),
-          label: const Text('Ver autorização e QR Code'),
+          label: Text(
+            _isCredentialVerified(form)
+                ? 'Evento verificado'
+                : 'Validar evento / QR Code',
+          ),
         ),
       ),
     );
+  }
+
+  static bool _isCredentialVerified(Map<String, dynamic> form) {
+    final credentials = form['credentials'] as List<dynamic>? ?? const [];
+    return credentials.any((credential) {
+      if (credential is! Map<String, dynamic>) return false;
+      final count = credential['verification_count'];
+      final verifiedAt = credential['verified_at'];
+      return verifiedAt != null ||
+          (count is int && count > 0) ||
+          (count is String &&
+              int.tryParse(count) != null &&
+              int.parse(count) > 0);
+    });
   }
 
   void _openChatObservacoes(
