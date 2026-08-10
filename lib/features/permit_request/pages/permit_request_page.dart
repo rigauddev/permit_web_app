@@ -69,6 +69,9 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
   Widget build(BuildContext context) {
     final controller = ref.read(permitRequestControllerProvider.notifier);
     final state = ref.watch(permitRequestControllerProvider);
+    final isReviewStep = state.currentStep == state.totalSteps - 1;
+    final termAccepted = state.eventData['termo_aceite'] == 'true';
+    final submitBlockedByTerm = isReviewStep && !termAccepted;
 
     return AppScaffold(
       userType: widget.userType,
@@ -119,6 +122,14 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                       const SizedBox(height: 20),
                       Expanded(child: PermitRequestFormBuilder()),
                       const SizedBox(height: 8),
+                      if (submitBlockedByTerm) ...[
+                        const Text(
+                          'Leia e aceite o termo de responsabilidade para liberar o envio.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       Wrap(
                         alignment: WrapAlignment.spaceBetween,
                         spacing: 12,
@@ -148,7 +159,7 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                                     : null,
                             child: ElevatedButton(
                               onPressed:
-                                  state.isSubmitting
+                                  state.isSubmitting || submitBlockedByTerm
                                       ? null
                                       : () async {
                                         if (!controller.canGoNext(context)) {

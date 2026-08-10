@@ -19,6 +19,7 @@
 - [x] Criar tela de revisão antes do envio.
 - [x] Exibir termo de responsabilidade e veracidade das informações antes do envio.
 - [x] Exigir aceite do termo de responsabilidade no frontend e backend.
+- [x] Exigir leitura do termo até o final antes de liberar aceitar ou recusar.
 - [x] Exigir aceite do termo de responsabilidade também no auto cadastro do cidadão.
 - [x] Gerar protocolo após envio.
 - [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.

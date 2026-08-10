@@ -428,24 +428,31 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _TermStatus(
+                  accepted: state.eventData['termo_aceite'] == 'true',
+                  refused: state.eventData['termo_aceite'] == 'false',
+                ),
+                const SizedBox(height: 12),
                 const Text(
                   'Termo de responsabilidade',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                const Text(_responsibilityTerm),
-                const Divider(height: 20),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: state.eventData['termo_aceite'] == 'true',
-                  onChanged:
-                      (value) => controller.updateEventInfo(
-                        termoAceite: value ?? false,
+                const Text(
+                  'Para concluir, abra o termo, leia até o final e escolha aceitar ou recusar.',
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed:
+                      () => _openResponsibilityTerm(
+                        onAccepted:
+                            () => controller.updateEventInfo(termoAceite: true),
+                        onRefused:
+                            () =>
+                                controller.updateEventInfo(termoAceite: false),
                       ),
-                  title: const Text(
-                    'Li e aceito o termo de responsabilidade pelas informações prestadas.',
-                  ),
-                  controlAffinity: ListTileControlAffinity.leading,
+                  icon: const Icon(Icons.description_outlined),
+                  label: const Text('Ler termo de responsabilidade'),
                 ),
               ],
             ),
@@ -455,6 +462,88 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     }
 
     return const SizedBox();
+  }
+
+  Future<void> _openResponsibilityTerm({
+    required VoidCallback onAccepted,
+    required VoidCallback onRefused,
+  }) async {
+    var reachedEnd = false;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              void markReachedEnd() {
+                if (reachedEnd) return;
+                setDialogState(() => reachedEnd = true);
+              }
+
+              return AlertDialog(
+                title: const Text('Termo de responsabilidade'),
+                content: SizedBox(
+                  width: 620,
+                  height: MediaQuery.of(context).size.height * 0.62,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      final metrics = notification.metrics;
+                      if (metrics.maxScrollExtent <= 0 ||
+                          metrics.pixels >= metrics.maxScrollExtent - 16) {
+                        markReachedEnd();
+                      }
+                      return false;
+                    },
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(_responsibilityTerm),
+                          const SizedBox(height: 24),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF6F8F5),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFD8E0D8),
+                              ),
+                            ),
+                            child: const Text(
+                              'Ao aceitar, você confirma que leu o termo e assume responsabilidade pelas informações prestadas na solicitação.',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton.icon(
+                    onPressed:
+                        reachedEnd ? () => Navigator.pop(context, false) : null,
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: const Text('Recusar'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed:
+                        reachedEnd ? () => Navigator.pop(context, true) : null,
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Aceitar'),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (result == true) {
+      onAccepted();
+    } else if (result == false) {
+      onRefused();
+    }
   }
 
   List<Map<String, String>> _pendingQuestionFiles(PermitRequestState state) {
@@ -531,6 +620,63 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
         '${time.minute.toString().padLeft(2, '0')}';
     controller.text = value;
     onSelected(value);
+  }
+}
+
+class _TermStatus extends StatelessWidget {
+  const _TermStatus({required this.accepted, required this.refused});
+
+  final bool accepted;
+  final bool refused;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        accepted
+            ? const Color(0xFF0E5F2F)
+            : refused
+            ? Theme.of(context).colorScheme.error
+            : const Color(0xFF6F5A00);
+    final background =
+        accepted
+            ? const Color(0xFFE5F4EA)
+            : refused
+            ? const Color(0xFFFFECEC)
+            : const Color(0xFFFFF7D6);
+    final icon =
+        accepted
+            ? Icons.check_circle_outline
+            : refused
+            ? Icons.cancel_outlined
+            : Icons.info_outline;
+    final text =
+        accepted
+            ? 'Termo aceito'
+            : refused
+            ? 'Termo recusado. O envio ficará bloqueado.'
+            : 'Termo pendente de leitura e aceite.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
