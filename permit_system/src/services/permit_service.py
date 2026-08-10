@@ -417,6 +417,7 @@ class PermitService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Alvará só pode ser anexado após pagamento do DAM ou isenção validada.",
             )
+        self._ensure_pdf_attachment(payload, "O alvará final deve ser anexado em PDF.")
         attachment = self._create_attachment(request, payload, ATTACHMENT_FINAL_PERMIT)
         request.status = STATUS_AUTORIZADA if not request.is_beneficente else "isenta_dam"
         self.db.add(attachment)
@@ -432,20 +433,10 @@ class PermitService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
         self._recalculate_request_status(request)
         if request.status == STATUS_AGUARDANDO_GERACAO_ALVARA:
-            request.status = STATUS_AUTORIZADA
-            self.db.add(
-                AttachmentModel(
-                    permit_request_id=request.id,
-                    tipo_documento=ATTACHMENT_FINAL_PERMIT,
-                    nome_arquivo=f"alvara_{request.protocolo}.pdf",
-                    arquivo_url=f"{PUBLIC_BASE_URL}/validar-evento/{request.protocolo}",
-                    mime_type="application/pdf",
-                    tamanho_bytes=None,
-                )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Anexe o alvará final em PDF antes de emitir a credencial.",
             )
-            self._notify_citizen_final_permit_ready(request, current_user)
-            self.db.commit()
-            self.db.refresh(request)
         if request.status != "autorizada" and request.status != "isenta_dam":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1098,6 +1089,13 @@ class PermitService:
             mime_type=payload.mime_type,
             tamanho_bytes=payload.tamanho_bytes,
         )
+
+    @staticmethod
+    def _ensure_pdf_attachment(payload: AttachmentCreateRequest, message: str) -> None:
+        file_name = payload.nome_arquivo.lower()
+        mime_type = (payload.mime_type or "").lower()
+        if not file_name.endswith(".pdf") or (mime_type and mime_type != "application/pdf"):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=message)
 
     def _notify_development_economico_ready_for_dam(
         self,

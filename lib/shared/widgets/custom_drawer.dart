@@ -106,18 +106,23 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                 if (widget.userType == 'gestor' || isAdmin)
                   _DrawerSection(
                     collapsed: collapsed,
+                    icon: Icons.design_services_outlined,
+                    title: 'Gestão de Serviços',
+                    routes: const ['/questions'],
+                    currentRoute: currentRoute,
+                    children: const [
+                      _DrawerSectionItem('Perguntas', '/questions'),
+                    ],
+                  ),
+                if (widget.userType == 'gestor' || isAdmin)
+                  _DrawerSection(
+                    collapsed: collapsed,
                     icon: Icons.tune_outlined,
                     title: 'Configuração',
-                    routes: const [
-                      '/users',
-                      '/questions',
-                      '/home-content',
-                      '/secretarias',
-                    ],
+                    routes: const ['/users', '/home-content', '/secretarias'],
                     currentRoute: currentRoute,
                     children: const [
                       _DrawerSectionItem('Usuários', '/users'),
-                      _DrawerSectionItem('Perguntas', '/questions'),
                       _DrawerSectionItem('Secretarias', '/secretarias'),
                       _DrawerSectionItem('Conteúdo da home', '/home-content'),
                     ],

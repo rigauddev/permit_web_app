@@ -220,6 +220,7 @@ class AuthService:
             email=user.email,
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
+            permissions=AuthService._permission_slugs(user),
         )
 
     def _get_user_from_challenge(self, challenge_token: str) -> UserModel:
@@ -284,5 +285,16 @@ class AuthService:
             endereco=user.endereco,
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
+            permissions=AuthService._permission_slugs(user),
             is_active=user.is_active,
+        )
+
+    @staticmethod
+    def _permission_slugs(user: UserModel) -> list[str]:
+        if not user.role:
+            return []
+        return sorted(
+            role_permission.permission.slug
+            for role_permission in user.role.permissions
+            if role_permission.permission and role_permission.permission.is_active
         )
