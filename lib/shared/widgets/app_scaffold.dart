@@ -78,14 +78,18 @@ class AppScaffold extends StatelessWidget {
     );
   }
 
-  PreferredSizeWidget? _buildMobileAppBar(BuildContext context, PreferredSizeWidget? appBar) {
+  PreferredSizeWidget? _buildMobileAppBar(
+    BuildContext context,
+    PreferredSizeWidget? appBar,
+  ) {
     if (appBar == null) return null;
 
     if (appBar is AppBar) {
       final canNavigateBack = Navigator.canPop(context);
       return AppBar(
         title: appBar.title,
-        leading: appBar.leading,
+        leading:
+            appBar.leading ?? (canNavigateBack ? const BackButton() : null),
         actions: appBar.actions,
         centerTitle: appBar.centerTitle,
         elevation: appBar.elevation,
@@ -95,8 +99,7 @@ class AppScaffold extends StatelessWidget {
         titleTextStyle: appBar.titleTextStyle,
         toolbarHeight: appBar.toolbarHeight,
         bottom: appBar.bottom,
-        automaticallyImplyLeading:
-            appBar.leading != null ? appBar.automaticallyImplyLeading : canNavigateBack,
+        automaticallyImplyLeading: false,
       );
     }
 
@@ -126,7 +129,7 @@ class _MobileBottomNavigationBar extends StatelessWidget {
 
   String get _favoritesRoute {
     if (userType == 'cidadao' || userType == 'user') {
-      return AppRoutes.services;
+      return AppRoutes.favoriteServices;
     }
     return AppRoutes.secretariaRequests;
   }

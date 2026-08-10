@@ -123,6 +123,41 @@ def ensure_question_definition_columns():
     migrations = {
         "modelo_documento_nome": "ALTER TABLE question_definitions ADD COLUMN modelo_documento_nome VARCHAR(255) NULL",
         "modelo_documento_url": "ALTER TABLE question_definitions ADD COLUMN modelo_documento_url VARCHAR(500) NULL",
+        "requer_vistoria": "ALTER TABLE question_definitions ADD COLUMN requer_vistoria BOOLEAN NOT NULL DEFAULT 0",
+        "checklist_vistoria": "ALTER TABLE question_definitions ADD COLUMN checklist_vistoria JSON NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
+def ensure_event_credential_columns():
+    inspector = inspect(engine)
+    if "credenciais_evento" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("credenciais_evento")}
+    migrations = {
+        "verified_at": "ALTER TABLE credenciais_evento ADD COLUMN verified_at DATETIME NULL",
+        "verification_count": "ALTER TABLE credenciais_evento ADD COLUMN verification_count INTEGER NOT NULL DEFAULT 0",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
+def ensure_requirement_inspection_columns():
+    inspector = inspect(engine)
+    if "exigencias_alvara" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("exigencias_alvara")}
+    migrations = {
+        "requires_inspection": "ALTER TABLE exigencias_alvara ADD COLUMN requires_inspection BOOLEAN NOT NULL DEFAULT 0",
+        "inspection_checklist": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_checklist JSON NULL",
+        "inspection_scheduled_for": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_for DATE NULL",
+        "inspection_status": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_status VARCHAR(50) NOT NULL DEFAULT 'nao_agendada'",
+        "inspection_result": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_result JSON NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -160,6 +195,8 @@ QUESTION_DEFINITIONS = [
         "secretaria_dam": "Desenvolvimento Econômico",
         "tipos_resposta": ["Sim/Não", "Anexar Documento", "Texto"],
         "campos_obrigatorios": {"Anexar Documento": False, "Texto": False},
+        "requer_vistoria": True,
+        "checklist_vistoria": ["Conferir AVCB apresentado", "Conferir saídas de emergência", "Conferir extintores/sinalização"],
     },
     {
         "key": "tem_palco",
@@ -170,6 +207,8 @@ QUESTION_DEFINITIONS = [
         "secretaria_dam": "Desenvolvimento Econômico",
         "tipos_resposta": ["Sim/Não", "Texto"],
         "campos_obrigatorios": {"Texto": False},
+        "requer_vistoria": True,
+        "checklist_vistoria": ["Conferir estabilidade da estrutura", "Conferir ART", "Verificar isolamento da área"],
     },
     {
         "key": "tem_gerador",
@@ -180,6 +219,8 @@ QUESTION_DEFINITIONS = [
         "secretaria_dam": "Desenvolvimento Econômico",
         "tipos_resposta": ["Sim/Não", "Texto"],
         "campos_obrigatorios": {"Texto": False},
+        "requer_vistoria": True,
+        "checklist_vistoria": ["Conferir instalação elétrica", "Conferir aterramento", "Verificar isolamento do gerador"],
     },
     {
         "key": "precisa_planta_baixa",
@@ -200,6 +241,8 @@ QUESTION_DEFINITIONS = [
         "secretaria_dam": "Desenvolvimento Econômico",
         "tipos_resposta": ["Sim/Não", "Texto", "Anexar Documento"],
         "campos_obrigatorios": {"Texto": False, "Anexar Documento": False},
+        "requer_vistoria": True,
+        "checklist_vistoria": ["Conferir veículo", "Conferir CNH do condutor", "Conferir mapa do circuito"],
     },
     {
         "key": "bloqueia_via",
@@ -222,6 +265,8 @@ QUESTION_DEFINITIONS = [
         "secretaria_dam": "Desenvolvimento Econômico",
         "tipos_resposta": ["Sim/Não", "Texto"],
         "campos_obrigatorios": {"Texto": False},
+        "requer_vistoria": True,
+        "checklist_vistoria": ["Conferir higiene das instalações", "Conferir manipulação de alimentos", "Registrar fotos dos equipamentos"],
     },
     {
         "key": "precisa_ambulancia",
@@ -336,8 +381,32 @@ def seed_question_definitions(db):
     for data in QUESTION_DEFINITIONS:
         existing = db.query(QuestionDefinitionModel).filter_by(key=data["key"]).first()
         if existing:
+            for field in ["requer_vistoria", "checklist_vistoria"]:
+                if field in data and not getattr(existing, field, None):
+                    setattr(existing, field, data[field])
             continue
         db.add(QuestionDefinitionModel(**data))
+
+
+def inspection_fields(tipo_exigencia, scheduled_for=None):
+    value = tipo_exigencia.lower()
+    checklist = []
+    if "avcb" in value:
+        checklist = ["Conferir AVCB apresentado", "Conferir saídas de emergência", "Conferir extintores/sinalização"]
+    elif "palco" in value or "estrutura" in value:
+        checklist = ["Conferir estabilidade da estrutura", "Conferir ART", "Verificar isolamento da área"]
+    elif "trio" in value:
+        checklist = ["Conferir veículo", "Conferir CNH do condutor", "Conferir mapa do circuito"]
+    elif "aliment" in value:
+        checklist = ["Conferir higiene das instalações", "Conferir manipulação de alimentos", "Registrar fotos dos equipamentos"]
+    elif "vistoria" in value:
+        checklist = ["Conferir local da festa", "Conferir saídas de emergência", "Conferir alvará de funcionamento"]
+    return {
+        "requires_inspection": bool(checklist),
+        "inspection_checklist": checklist,
+        "inspection_scheduled_for": scheduled_for if checklist else None,
+        "inspection_status": "agendada" if checklist and scheduled_for else "nao_agendada",
+    }
 
 
 def seed_permit_request(db, users, secretarias):
@@ -402,11 +471,13 @@ def seed_permit_request(db, users, secretarias):
                 permit_request_id=request.id,
                 secretaria_id=secretarias["infraestrutura"].id,
                 tipo_exigencia="Auto de Vistoria do Corpo de Bombeiros (AVCB)",
+                **inspection_fields("Auto de Vistoria do Corpo de Bombeiros (AVCB)", date.today()),
             ),
             PermitRequirementModel(
                 permit_request_id=request.id,
                 secretaria_id=secretarias["dmtran"].id,
                 tipo_exigencia="Vistoria de trio elétrico, CNH do motorista e mapa do circuito",
+                **inspection_fields("Vistoria de trio elétrico, CNH do motorista e mapa do circuito", date.today()),
             ),
             PermitRequirementModel(
                 permit_request_id=request.id,
@@ -495,12 +566,19 @@ def seed_test_scenarios(db, users, secretarias):
         db.add(request)
         db.flush()
         for secretaria_slug, tipo_exigencia, requirement_status in requirements:
+            fields = inspection_fields(
+                tipo_exigencia,
+                date.today() if requirement_status != "aprovada" else add_business_days(date.today(), -1),
+            )
+            if requirement_status == "aprovada" and fields["requires_inspection"]:
+                fields["inspection_status"] = "aprovada"
             db.add(
                 PermitRequirementModel(
                     permit_request_id=request.id,
                     secretaria_id=secretarias[secretaria_slug].id,
                     tipo_exigencia=tipo_exigencia,
                     status=requirement_status,
+                    **fields,
                 )
             )
         if dam_status in {"gerado", "pago"}:
@@ -628,6 +706,8 @@ def main():
     create_tables()
     ensure_secretaria_columns()
     ensure_question_definition_columns()
+    ensure_event_credential_columns()
+    ensure_requirement_inspection_columns()
     db = SessionLocal()
     try:
         roles = seed_roles(db)

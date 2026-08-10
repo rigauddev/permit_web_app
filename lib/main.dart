@@ -115,6 +115,15 @@ class _AppRouter extends StatelessWidget {
                 userProfile: user?.profile ?? '',
               ),
             ),
+        AppRoutes.favoriteServices:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'cidadao'},
+              child: FavoriteServicesPage(
+                userType: user?.userType ?? '',
+                userProfile: user?.profile ?? '',
+              ),
+            ),
         AppRoutes.myRequests:
             (context) => _GuardedRoute(
               user: user,

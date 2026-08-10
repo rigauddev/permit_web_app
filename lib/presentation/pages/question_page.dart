@@ -28,8 +28,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
   String? _secretariaDam;
   String? _modeloDocumentoNome;
   String? _modeloDocumentoUrl;
+  bool _requerVistoria = false;
+  final List<String> _checklistVistoria = [];
+  final TextEditingController _checklistController = TextEditingController();
   final Map<String, bool> _selectedResponseFields = {};
   final Map<String, bool> _requiredResponseFields = {};
+  int _formVersion = 0;
 
   int? _indiceEdicao;
 
@@ -61,6 +65,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
   void initState() {
     super.initState();
     _fetchQuestionDefinitions();
+  }
+
+  @override
+  void dispose() {
+    _checklistController.dispose();
+    super.dispose();
   }
 
   @override
@@ -159,6 +169,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                         ),
                       ],
                       _buildResponseFieldSelection(),
+                      _buildInspectionChecklistSection(),
                       SizedBox(
                         width: isMobile ? double.infinity : 200,
                         child: ElevatedButton(
@@ -188,6 +199,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                           DataColumn(label: Text('Secretaria')),
                           DataColumn(label: Text('Secretaria DAM')),
                           DataColumn(label: Text('Respostas')),
+                          DataColumn(label: Text('Vistoria')),
                           DataColumn(label: Text('Tipo')),
                           DataColumn(label: Text('Ações')),
                         ],
@@ -200,6 +212,13 @@ class _PerguntasPageState extends State<PerguntasPage> {
                               DataCell(Text(p['secretaria']!)),
                               DataCell(Text(p['secretaria_dam'] ?? '')),
                               DataCell(Text(_formatResponseSummary(p))),
+                              DataCell(
+                                Text(
+                                  p['requer_vistoria'] == true
+                                      ? '${(p['checklist_vistoria'] as List<dynamic>? ?? []).length} item(ns)'
+                                      : 'Não',
+                                ),
+                              ),
                               DataCell(Text(p['tipo']!)),
                               DataCell(
                                 Row(
@@ -238,7 +257,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     return SizedBox(
       width: MediaQuery.of(context).size.width < 600 ? double.infinity : 400,
       child: TextFormField(
-        key: ValueKey('$label-${initialValue ?? ''}'),
+        key: ValueKey('$label-$_formVersion-${initialValue ?? ''}'),
         initialValue: initialValue,
         maxLines: maxLines,
         decoration: InputDecoration(
@@ -343,6 +362,86 @@ class _PerguntasPageState extends State<PerguntasPage> {
     );
   }
 
+  Widget _buildInspectionChecklistSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Esta pergunta exige vistoria?'),
+          subtitle: const Text(
+            'Quando o cidadão responder Sim, será criada uma vistoria para a secretaria responsável.',
+          ),
+          value: _requerVistoria,
+          onChanged:
+              (value) => setState(() => _requerVistoria = value ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+        if (_requerVistoria) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Itens do checklist da vistoria',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _checklistController,
+                  decoration: const InputDecoration(
+                    labelText: 'Item do checklist',
+                    hintText: 'Exemplo: Conferir saídas de emergência',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _addChecklistItem(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: 'Adicionar item',
+                onPressed: _addChecklistItem,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_checklistVistoria.isEmpty)
+            const Text(
+              'Inclua ao menos um item para orientar a equipe de vistoria.',
+              style: TextStyle(color: Colors.black54),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  _checklistVistoria
+                      .map(
+                        (item) => InputChip(
+                          label: Text(item),
+                          onDeleted:
+                              () => setState(
+                                () => _checklistVistoria.remove(item),
+                              ),
+                        ),
+                      )
+                      .toList(),
+            ),
+        ],
+      ],
+    );
+  }
+
+  void _addChecklistItem() {
+    final value = _checklistController.text.trim();
+    if (value.isEmpty || _checklistVistoria.contains(value)) return;
+    setState(() {
+      _checklistVistoria.add(value);
+      _checklistController.clear();
+    });
+  }
+
   void _adicionarOuAtualizarPergunta() {
     if (!_formKey.currentState!.validate()) return;
     if (_key == null || _key!.trim().isEmpty) {
@@ -367,6 +466,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _showError(
         'Selecione a secretaria responsável pela geração do DAM para alvará.',
       );
+      return;
+    }
+    if (_requerVistoria && _checklistVistoria.isEmpty) {
+      _showError('Informe ao menos um item de checklist para a vistoria.');
       return;
     }
 
@@ -405,6 +508,8 @@ class _PerguntasPageState extends State<PerguntasPage> {
       'campos_obrigatorios': obrigatorios,
       'modelo_documento_nome': _modeloDocumentoNome?.trim(),
       'modelo_documento_url': _modeloDocumentoUrl?.trim(),
+      'requer_vistoria': _requerVistoria,
+      'checklist_vistoria': _checklistVistoria,
     };
 
     final payload = Map<String, dynamic>.from(novaPergunta);
@@ -431,6 +536,11 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _secretariaDam = pergunta['secretaria_dam'];
       _modeloDocumentoNome = pergunta['modelo_documento_nome'];
       _modeloDocumentoUrl = pergunta['modelo_documento_url'];
+      _requerVistoria = pergunta['requer_vistoria'] == true;
+      _checklistVistoria
+        ..clear()
+        ..addAll(List<String>.from(pergunta['checklist_vistoria'] ?? []));
+      _checklistController.clear();
       _selectedResponseFields.clear();
       _requiredResponseFields.clear();
       final tiposResposta = List<String>.from(pergunta['tipos_resposta'] ?? []);
@@ -456,8 +566,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
         _pergunta =
             _descricao = _secretaria = _tipoFormulario = _secretariaDam = null;
     _modeloDocumentoNome = _modeloDocumentoUrl = null;
+    _requerVistoria = false;
+    _checklistVistoria.clear();
+    _checklistController.clear();
     _selectedResponseFields.clear();
     _requiredResponseFields.clear();
+    _formVersion++;
   }
 
   String _formatResponseSummary(Map<String, dynamic> p) {

@@ -30,6 +30,8 @@ from src.schemas.permit_schema import (
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
+    InspectionCompleteRequest,
+    InspectionScheduleRequest,
     PermitCreateRequest,
     PermitResponse,
     QuestionCreateRequest,
@@ -67,7 +69,13 @@ QUESTION_RULES = {
     "precisa_guarda": [("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal")],
 }
 
-REQUIREMENT_STATUSES = {"aguardando_analise", "aprovada", "recusada", "pendente_documento"}
+REQUIREMENT_STATUSES = {
+    "aguardando_analise",
+    "aguardando_vistoria",
+    "aprovada",
+    "recusada",
+    "pendente_documento",
+}
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8080")
 SDE_EMAIL = os.getenv("SDE_EMAIL", "sde@valenca.ba.gov.br")
 STATUS_AGUARDANDO_GERACAO_DAM = "aguardando_geracao_dam"
@@ -118,14 +126,17 @@ class PermitService:
         self.db.add(request)
         self.db.flush()
 
-        for secretaria_slug, tipo_exigencia in self._build_requirements(payload.respostas):
+        for requirement_data in self._build_requirements(payload.respostas):
+            secretaria_slug = requirement_data["secretaria_slug"]
             secretaria = self.db.query(SecretariaModel).filter(SecretariaModel.slug == secretaria_slug).first()
             if secretaria:
                 self.db.add(
                     PermitRequirementModel(
                         permit_request_id=request.id,
                         secretaria_id=secretaria.id,
-                        tipo_exigencia=tipo_exigencia,
+                        tipo_exigencia=requirement_data["tipo_exigencia"],
+                        requires_inspection=requirement_data["requires_inspection"],
+                        inspection_checklist=requirement_data["inspection_checklist"],
                     )
                 )
 
@@ -203,6 +214,94 @@ class PermitService:
             and permit_request.status == STATUS_AGUARDANDO_GERACAO_DAM
         ):
             self._notify_development_economico_ready_for_dam(permit_request, current_user)
+        self.db.commit()
+        self.db.refresh(requirement)
+        return self._requirement_to_response(requirement)
+
+    def schedule_inspection(
+        self,
+        requirement_id: int,
+        payload: InspectionScheduleRequest,
+        current_user: UserModel,
+    ) -> RequirementResponse:
+        requirement = (
+            self.db.query(PermitRequirementModel).filter(PermitRequirementModel.id == requirement_id).first()
+        )
+        if not requirement:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
+        self._ensure_can_manage_requirement(requirement, current_user)
+        if not requirement.requires_inspection:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta exigência não requer vistoria")
+        requirement.inspection_scheduled_for = payload.scheduled_for
+        requirement.inspection_status = "agendada"
+        requirement.status = "aguardando_vistoria"
+        self._add_comment(
+            requirement.permit_request_id,
+            current_user,
+            f"Vistoria agendada para {payload.scheduled_for.isoformat()}.",
+            requirement_id=requirement.id,
+        )
+        self._recalculate_request_status(requirement.permit_request)
+        self.db.commit()
+        self.db.refresh(requirement)
+        return self._requirement_to_response(requirement)
+
+    def complete_inspection(
+        self,
+        requirement_id: int,
+        payload: InspectionCompleteRequest,
+        current_user: UserModel,
+    ) -> RequirementResponse:
+        requirement = (
+            self.db.query(PermitRequirementModel).filter(PermitRequirementModel.id == requirement_id).first()
+        )
+        if not requirement:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
+        self._ensure_can_manage_requirement(requirement, current_user)
+        if not requirement.requires_inspection:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta exigência não requer vistoria")
+        if payload.approved:
+            missing_items = [
+                item
+                for item in (requirement.inspection_checklist or [])
+                if payload.checklist.get(item) is not True
+            ]
+            if missing_items:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Para aprovar a vistoria, todos os itens do checklist devem estar marcados.",
+                )
+
+        result_status = "aprovada" if payload.approved else "reprovada"
+        requirement.inspection_status = result_status
+        requirement.inspection_result = {
+            "approved": payload.approved,
+            "checklist": payload.checklist,
+            "observacoes": payload.observacoes,
+            "fotos": payload.fotos,
+            "nova_data": payload.nova_data.isoformat() if payload.nova_data else None,
+            "concluida_em": datetime.now(timezone.utc).isoformat(),
+            "responsavel_id": current_user.id,
+        }
+        requirement.status = "aprovada" if payload.approved else "pendente_documento"
+        if not payload.approved and payload.nova_data:
+            requirement.inspection_scheduled_for = payload.nova_data
+            requirement.inspection_status = "reagendada"
+        if payload.observacoes:
+            self._add_comment(
+                requirement.permit_request_id,
+                current_user,
+                payload.observacoes.strip(),
+                requirement_id=requirement.id,
+            )
+
+        previous_status = requirement.permit_request.status
+        self._recalculate_request_status(requirement.permit_request)
+        if (
+            previous_status != STATUS_AGUARDANDO_GERACAO_DAM
+            and requirement.permit_request.status == STATUS_AGUARDANDO_GERACAO_DAM
+        ):
+            self._notify_development_economico_ready_for_dam(requirement.permit_request, current_user)
         self.db.commit()
         self.db.refresh(requirement)
         return self._requirement_to_response(requirement)
@@ -442,6 +541,11 @@ class PermitService:
         evento = request.dados_evento or {}
         responsavel = request.dados_responsavel or {}
         dam_attachment = next((item for item in request.attachments if item.tipo_documento == "dam"), None)
+        if credential.verified_at is None:
+            credential.verified_at = now
+        credential.verification_count = (credential.verification_count or 0) + 1
+        self.db.commit()
+        self.db.refresh(credential)
         return EventCredentialValidationResponse(
             valid=True,
             credential_status=credential.status,
@@ -455,6 +559,8 @@ class PermitService:
             publico_estimado=str(evento.get("publico_estimado", "")),
             status_solicitacao=request.status,
             dam_status=request.dam_status,
+            verified_at=credential.verified_at,
+            verification_count=credential.verification_count or 0,
             requirements=[self._requirement_to_response(item) for item in request.requirements],
             dam_attachment=self._attachment_to_response(dam_attachment) if dam_attachment else None,
         )
@@ -501,6 +607,8 @@ class PermitService:
             campos_obrigatorios=payload.campos_obrigatorios,
             modelo_documento_nome=payload.modelo_documento_nome,
             modelo_documento_url=payload.modelo_documento_url,
+            requer_vistoria=payload.requer_vistoria,
+            checklist_vistoria=payload.checklist_vistoria,
         )
         self.db.add(question)
         self.db.commit()
@@ -534,6 +642,8 @@ class PermitService:
         question.campos_obrigatorios = payload.campos_obrigatorios
         question.modelo_documento_nome = payload.modelo_documento_nome
         question.modelo_documento_url = payload.modelo_documento_url
+        question.requer_vistoria = payload.requer_vistoria
+        question.checklist_vistoria = payload.checklist_vistoria
         self.db.commit()
         self.db.refresh(question)
         return self._question_to_response(question)
@@ -560,6 +670,8 @@ class PermitService:
             campos_obrigatorios=question.campos_obrigatorios,
             modelo_documento_nome=question.modelo_documento_nome,
             modelo_documento_url=question.modelo_documento_url,
+            requer_vistoria=question.requer_vistoria,
+            checklist_vistoria=question.checklist_vistoria or [],
             created_at=question.created_at,
             updated_at=question.updated_at,
         )
@@ -589,6 +701,17 @@ class PermitService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Campos obrigatórios devem fazer parte dos tipos de resposta selecionados.",
+            )
+        checklist = [item.strip() for item in payload.checklist_vistoria]
+        if payload.requer_vistoria and not checklist:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe ao menos um item de checklist para perguntas que exigem vistoria.",
+            )
+        if len(checklist) != len(payload.checklist_vistoria):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Itens de checklist não podem ficar vazios.",
             )
 
     def _ensure_can_manage_question_definition(self, secretaria_name: str, current_user: UserModel) -> None:
@@ -654,14 +777,21 @@ class PermitService:
         self.db.refresh(template)
         return self._template_to_response(template)
 
-    def _build_requirements(self, respostas: dict[str, Any]) -> list[tuple[str, str]]:
-        requirements: list[tuple[str, str]] = []
+    def _build_requirements(self, respostas: dict[str, Any]) -> list[dict[str, Any]]:
+        requirements: list[dict[str, Any]] = []
         seen = set()
         for answer_key, rules in QUESTION_RULES.items():
             if PermitService._answer_is_yes(respostas.get(answer_key)):
                 for secretaria_slug, tipo_exigencia in rules:
                     if (secretaria_slug, tipo_exigencia) not in seen:
-                        requirements.append((secretaria_slug, tipo_exigencia))
+                        requirements.append(
+                            {
+                                "secretaria_slug": secretaria_slug,
+                                "tipo_exigencia": tipo_exigencia,
+                                "requires_inspection": self._default_requires_inspection(tipo_exigencia),
+                                "inspection_checklist": self._default_inspection_checklist(tipo_exigencia),
+                            }
+                        )
                         seen.add((secretaria_slug, tipo_exigencia))
         definitions = self.db.query(QuestionDefinitionModel).all()
         for question in definitions:
@@ -672,9 +802,73 @@ class PermitService:
             secretaria_slug = self._normalize_secretaria_name(question.secretaria)
             tipo_exigencia = question.pergunta
             if (secretaria_slug, tipo_exigencia) not in seen:
-                requirements.append((secretaria_slug, tipo_exigencia))
+                requirements.append(
+                    {
+                        "secretaria_slug": secretaria_slug,
+                        "tipo_exigencia": tipo_exigencia,
+                        "requires_inspection": question.requer_vistoria,
+                        "inspection_checklist": question.checklist_vistoria or [],
+                    }
+                )
                 seen.add((secretaria_slug, tipo_exigencia))
         return requirements
+
+    @staticmethod
+    def _default_requires_inspection(tipo_exigencia: str) -> bool:
+        value = tipo_exigencia.lower()
+        return any(
+            item in value
+            for item in [
+                "vistoria",
+                "avcb",
+                "palco",
+                "gerador",
+                "trio",
+                "alimentação",
+                "alimentacao",
+            ]
+        )
+
+    @staticmethod
+    def _default_inspection_checklist(tipo_exigencia: str) -> list[str]:
+        value = tipo_exigencia.lower()
+        if "palco" in value or "estrutura" in value:
+            return [
+                "Conferir estabilidade da estrutura",
+                "Conferir ART",
+                "Verificar isolamento da área",
+            ]
+        if "gerador" in value:
+            return [
+                "Conferir instalação elétrica",
+                "Conferir aterramento",
+                "Verificar isolamento do gerador",
+            ]
+        if "trio" in value:
+            return [
+                "Conferir veículo",
+                "Conferir CNH do condutor",
+                "Conferir mapa do circuito",
+            ]
+        if "aliment" in value:
+            return [
+                "Conferir higiene das instalações",
+                "Conferir manipulação de alimentos",
+                "Registrar fotos dos equipamentos",
+            ]
+        if "avcb" in value:
+            return [
+                "Conferir AVCB apresentado",
+                "Conferir saídas de emergência",
+                "Conferir extintores/sinalização",
+            ]
+        if "vistoria" in value:
+            return [
+                "Conferir local da festa",
+                "Conferir saídas de emergência",
+                "Conferir alvará de funcionamento",
+            ]
+        return []
 
     def _validate_question_answers(self, respostas: dict[str, Any]) -> None:
         definitions = self.db.query(QuestionDefinitionModel).all()
@@ -848,6 +1042,9 @@ class PermitService:
             return
         if "pendente_documento" in requirement_statuses:
             request.status = "pendente_correcao"
+            return
+        if "aguardando_vistoria" in requirement_statuses:
+            request.status = "em_analise"
             return
         if all(item == "aprovada" for item in requirement_statuses):
             if request.is_beneficente:
@@ -1098,6 +1295,11 @@ class PermitService:
             tipo_exigencia=requirement.tipo_exigencia,
             status=requirement.status,
             observacoes=requirement.observacoes,
+            requires_inspection=requirement.requires_inspection,
+            inspection_checklist=requirement.inspection_checklist or [],
+            inspection_scheduled_for=requirement.inspection_scheduled_for,
+            inspection_status=requirement.inspection_status,
+            inspection_result=requirement.inspection_result,
         )
 
     @staticmethod
@@ -1136,6 +1338,8 @@ class PermitService:
             valid_from=credential.valid_from,
             valid_until=credential.valid_until,
             issued_at=credential.issued_at,
+            verified_at=credential.verified_at,
+            verification_count=credential.verification_count or 0,
             validation_url=validation_url,
         )
 
