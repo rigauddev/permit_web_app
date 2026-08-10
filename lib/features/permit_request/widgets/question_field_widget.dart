@@ -3,10 +3,12 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class QuestionFieldWidget extends StatefulWidget {
   final int questionId;
   final String questionText;
+  final String? descricao;
   final List<String> tiposResposta;
   final Map<String, dynamic> camposObrigatorios;
   final String? modeloDocumentoNome;
@@ -18,6 +20,7 @@ class QuestionFieldWidget extends StatefulWidget {
     super.key,
     required this.questionId,
     required this.questionText,
+    this.descricao,
     required this.tiposResposta,
     this.camposObrigatorios = const {},
     this.modeloDocumentoNome,
@@ -96,6 +99,13 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
           widget.questionText,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
+        if ((widget.descricao ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            widget.descricao!.trim(),
+            style: const TextStyle(color: Colors.black87, height: 1.35),
+          ),
+        ],
         Row(
           children: [
             Expanded(
@@ -146,16 +156,7 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: widget.modeloDocumentoUrl!),
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Referência do modelo copiada.'),
-                        ),
-                      );
-                    },
+                    onPressed: _openModelDocument,
                     icon: const Icon(Icons.download_outlined),
                     label: const Text('Baixar modelo'),
                   ),
@@ -277,5 +278,30 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
 
   String _labelWithRequired(String label, String field) {
     return widget.camposObrigatorios[field] == true ? '$label *' : label;
+  }
+
+  Future<void> _openModelDocument() async {
+    final rawReference = widget.modeloDocumentoUrl?.trim();
+    if (rawReference == null || rawReference.isEmpty) return;
+
+    final uri = _documentUri(rawReference);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened || !mounted) return;
+
+    await Clipboard.setData(ClipboardData(text: rawReference));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Não foi possível abrir o modelo. A referência foi copiada.',
+        ),
+      ),
+    );
+  }
+
+  Uri _documentUri(String rawReference) {
+    final parsed = Uri.tryParse(rawReference);
+    if (parsed != null && parsed.hasScheme) return parsed;
+    return Uri.base.resolve(rawReference);
   }
 }

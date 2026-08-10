@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
@@ -126,10 +127,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
                         initialValue: _pergunta,
                       ),
                       _buildTextField(
-                        label: 'Descrição',
+                        label: 'Descrição e orientação ao cidadão',
                         onChanged: (v) => _descricao = v,
-                        maxLines: 2,
+                        maxLines: 3,
                         initialValue: _descricao,
+                        hintText:
+                            'Explique quando marcar Sim, como preencher o modelo e quais documentos devem ser anexados.',
                       ),
                       _buildTextField(
                         label: 'Nome do modelo para baixar',
@@ -141,8 +144,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
                         label: 'URL ou referência do modelo',
                         onChanged: (v) => _modeloDocumentoUrl = v,
                         initialValue: _modeloDocumentoUrl,
-                        hintText: 'Exemplo: /modelos/oficio-bloqueio-via.pdf',
+                        hintText:
+                            'Exemplo: assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf',
                       ),
+                      _buildModelUploadButton(),
                       _buildDropdown(
                         'Secretaria',
                         _secretaria,
@@ -360,6 +365,46 @@ class _PerguntasPageState extends State<PerguntasPage> {
         ),
       ],
     );
+  }
+
+  Widget _buildModelUploadButton() {
+    return SizedBox(
+      width: MediaQuery.of(context).size.width < 600 ? double.infinity : 400,
+      child: OutlinedButton.icon(
+        onPressed: _pickModelFile,
+        icon: const Icon(Icons.upload_file),
+        label: const Text('Selecionar modelo de documento'),
+      ),
+    );
+  }
+
+  Future<void> _pickModelFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'doc', 'docx'],
+    );
+    final file =
+        result == null || result.files.isEmpty ? null : result.files.single;
+    if (file == null) return;
+    setState(() {
+      _modeloDocumentoNome =
+          _modeloDocumentoNome?.trim().isNotEmpty == true
+              ? _modeloDocumentoNome
+              : file.name;
+      _modeloDocumentoUrl = _modelReferenceFromFile(file);
+      _selectedResponseFields['Botão de Baixar'] = true;
+      _formVersion++;
+    });
+  }
+
+  String _modelReferenceFromFile(PlatformFile file) {
+    final fileName = file.name;
+    final path = file.path ?? '';
+    if (path.contains('/docs/arquivos/') ||
+        path.contains('\\docs\\arquivos\\')) {
+      return 'assets/docs/arquivos/$fileName';
+    }
+    return path.isNotEmpty ? path : 'assets/docs/arquivos/$fileName';
   }
 
   Widget _buildInspectionChecklistSection() {

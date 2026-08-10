@@ -247,14 +247,14 @@ QUESTION_DEFINITIONS = [
     {
         "key": "bloqueia_via",
         "pergunta": "O evento usará ou bloqueará vias/ruas municipais?",
-        "descricao": "Aciona autorização de trânsito e envio de croqui/mapa",
+        "descricao": "Baixe o modelo de solicitação de bloqueio de via, preencha local, data, horário, mapa/croqui do bloqueio ou desvio, assine e anexe o documento preenchido na solicitação.",
         "secretaria": "DMTRAN",
         "tipo": "Alvará de Eventos",
         "secretaria_dam": "Desenvolvimento Econômico",
         "tipos_resposta": ["Sim/Não", "Texto", "Anexar Documento", "Assinatura impressa", "Assinatura gov.br"],
-        "campos_obrigatorios": {"Texto": False, "Anexar Documento": True},
-        "modelo_documento_nome": "Modelo de ofício para bloqueio de via",
-        "modelo_documento_url": "/modelos/oficio-bloqueio-via.pdf",
+        "campos_obrigatorios": {"Texto": False, "Anexar Documento": False},
+        "modelo_documento_nome": "Solicitação de bloqueio de via",
+        "modelo_documento_url": "assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf",
     },
     {
         "key": "tem_alimentacao",
@@ -381,8 +381,19 @@ def seed_question_definitions(db):
     for data in QUESTION_DEFINITIONS:
         existing = db.query(QuestionDefinitionModel).filter_by(key=data["key"]).first()
         if existing:
-            for field in ["requer_vistoria", "checklist_vistoria"]:
-                if field in data and not getattr(existing, field, None):
+            fields_to_update = ["requer_vistoria", "checklist_vistoria"]
+            if data["key"] == "bloqueia_via":
+                fields_to_update.extend(
+                    [
+                        "descricao",
+                        "tipos_resposta",
+                        "campos_obrigatorios",
+                        "modelo_documento_nome",
+                        "modelo_documento_url",
+                    ]
+                )
+            for field in fields_to_update:
+                if field in data and (data["key"] == "bloqueia_via" or not getattr(existing, field, None)):
                     setattr(existing, field, data[field])
             continue
         db.add(QuestionDefinitionModel(**data))

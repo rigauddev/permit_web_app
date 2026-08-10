@@ -50,6 +50,8 @@
 - [x] Perguntar se exigirá brigadista.
 - [x] Perguntar se é evento beneficente.
 - [x] Exibir exigências geradas antes do envio.
+- [x] Exibir descrição/orientação de preenchimento definida pelo gestor em cada pergunta.
+- [x] Mostrar no resumo da solicitação perguntas respondidas com arquivo pendente de envio.
 
 ## Marco 4 - Regras por secretaria
 
@@ -169,6 +171,8 @@
 - [x] Preparar SMTP/Gmail para testes de envio de e-mail.
 - [x] Criar template HTML de MFA com cabeçalho da prefeitura e logo/texto da secretaria quando aplicável.
 - [x] Permitir modelo de documento por pergunta, com botão de baixar, assinatura impressa/gov.br e anexo obrigatório.
+- [x] Permitir selecionar/referenciar arquivo-modelo na criação da pergunta.
+- [x] Atualizar seed de bloqueio de via com modelo em `docs/arquivos` para download no teste.
 - [x] Limpar formulário após cadastrar ou atualizar pergunta.
 - [x] Permitir configurar na pergunta se ela exige vistoria e quais itens compõem o checklist.
 - [ ] Enviar e-mail para todas as secretarias responsáveis com cópia/resumo da solicitação e link de acesso.
