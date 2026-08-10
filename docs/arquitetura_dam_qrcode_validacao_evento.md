@@ -60,6 +60,7 @@ Credencial do evento:
 
 - Integração com sistema da Receita para gerar DAM diretamente.
 - Registro do número do DAM, valor, vencimento e status de pagamento.
+- Verificação automática do pagamento do DAM no sistema da Receita, sem depender exclusivamente do comprovante anexado pelo cidadão.
 - Conciliação automática ou manual de pagamento.
 - Atualização de `dam_status` para `pago`.
 
@@ -159,6 +160,7 @@ Futuro com integração DAM:
 - `POST /permit-requests/{id}/dam`
 - `GET /permit-requests/{id}/dam`
 - `PATCH /permit-requests/{id}/dam/payment-status`
+- `GET /permit-requests/{id}/dam/payment-verification`
 
 ## Auditoria Obrigatória
 

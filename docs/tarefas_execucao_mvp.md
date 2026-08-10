@@ -131,7 +131,8 @@
 - [x] Permitir que o cidadão anexe o comprovante de pagamento do DAM.
 - [x] Após comprovante, marcar `Aguardando geração do alvará` e notificar a Secretaria de Desenvolvimento Econômico.
 - [x] Permitir que a Secretaria de Desenvolvimento Econômico anexe o alvará final.
-- [x] Permitir gerar alvará pelo sistema após pagamento do DAM, com PDF disponível para visualizar/baixar/imprimir.
+- [x] Exigir que o alvará final anexado pela SDE seja PDF e fique disponível ao cidadão.
+- [x] Permitir anexar o alvará final em PDF após pagamento do DAM, deixando o arquivo disponível para visualizar/baixar/imprimir.
 - [x] Transformar anexos de DAM e comprovante em ação de upload/seleção de arquivo.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
 - [x] Emitir autorização final após alvará anexado ou isenção validada.
@@ -162,6 +163,7 @@
 ## Marco 9 - Pós-MVP / Integrações
 
 - [ ] Integrar geração automática de DAM com sistema da Receita.
+- [ ] V2: integrar verificação automática de pagamento do DAM com o sistema da Receita.
 - [ ] Integrar assinatura eletrônica quando exigida.
 - [x] Enviar e-mail para a Secretaria de Desenvolvimento Econômico nas etapas de geração do DAM e geração do alvará, com link filtrado da central.
 - [x] Preparar SMTP/Gmail para testes de envio de e-mail.

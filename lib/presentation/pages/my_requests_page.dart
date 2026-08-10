@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
@@ -128,6 +130,8 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                       requests: grouped['Alvará de Evento'] ?? const [],
                       onAttachPaymentProof: _attachPaymentProof,
                       onOpenCredential: _openCredential,
+                      onOpenAttachment: _openAttachment,
+                      onShareAttachment: _shareAttachment,
                     ),
                     const SizedBox(height: 14),
                     const _FutureTypeSection(
@@ -201,6 +205,32 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
     }
+  }
+
+  Future<void> _openAttachment(Map<String, dynamic> attachment) async {
+    final rawUrl = attachment['arquivo_url']?.toString() ?? '';
+    if (rawUrl.isEmpty) return;
+    final url = _api.resolveFileUrl(rawUrl);
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir o arquivo.')),
+      );
+    }
+  }
+
+  Future<void> _shareAttachment(Map<String, dynamic> attachment) async {
+    final rawUrl = attachment['arquivo_url']?.toString() ?? '';
+    if (rawUrl.isEmpty) return;
+    final url = _api.resolveFileUrl(rawUrl);
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Referência do alvará copiada para compartilhamento.'),
+      ),
+    );
   }
 
   Future<_AttachmentInput?> _askAttachment({
@@ -334,6 +364,8 @@ class _RequestTypeSection extends StatelessWidget {
     required this.requests,
     required this.onAttachPaymentProof,
     required this.onOpenCredential,
+    required this.onOpenAttachment,
+    required this.onShareAttachment,
   });
 
   final String title;
@@ -342,6 +374,8 @@ class _RequestTypeSection extends StatelessWidget {
   final List<Map<String, dynamic>> requests;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
+  final ValueChanged<Map<String, dynamic>> onShareAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -385,6 +419,8 @@ class _RequestTypeSection extends StatelessWidget {
                   request: request,
                   onAttachPaymentProof: onAttachPaymentProof,
                   onOpenCredential: onOpenCredential,
+                  onOpenAttachment: onOpenAttachment,
+                  onShareAttachment: onShareAttachment,
                 ),
               ),
           ],
@@ -399,11 +435,15 @@ class _RequestListTile extends StatelessWidget {
     required this.request,
     required this.onAttachPaymentProof,
     required this.onOpenCredential,
+    required this.onOpenAttachment,
+    required this.onShareAttachment,
   });
 
   final Map<String, dynamic> request;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
+  final ValueChanged<Map<String, dynamic>> onShareAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -414,6 +454,7 @@ class _RequestListTile extends StatelessWidget {
         (request['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
     final canAttachPayment = status == 'aguardando_pagamento_dam';
     final verified = _isCredentialVerified(request);
+    final finalPermit = _finalPermitAttachment(request);
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -427,6 +468,8 @@ class _RequestListTile extends StatelessWidget {
             'Protocolo: ${request['protocolo'] ?? '-'}',
             'Data: ${request['data_do_evento'] ?? '-'}',
             'Tipo: ${request['permitType'] ?? 'Alvará de Evento'}',
+            if (finalPermit != null)
+              'Alvará: ${finalPermit['nome_arquivo'] ?? 'PDF disponível'}',
           ].join('\n'),
         ),
         isThreeLine: true,
@@ -446,6 +489,18 @@ class _RequestListTile extends StatelessWidget {
                 onPressed: () => onAttachPaymentProof(request),
                 icon: const Icon(Icons.upload_file),
               ),
+            if (finalPermit != null)
+              IconButton(
+                tooltip: 'Visualizar ou baixar alvará',
+                onPressed: () => onOpenAttachment(finalPermit),
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+              ),
+            if (finalPermit != null)
+              IconButton(
+                tooltip: 'Compartilhar alvará',
+                onPressed: () => onShareAttachment(finalPermit),
+                icon: const Icon(Icons.share_outlined),
+              ),
             if (canOpenCredential)
               IconButton(
                 tooltip: verified ? 'Evento verificado' : 'Validar evento',
@@ -456,6 +511,20 @@ class _RequestListTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static Map<String, dynamic>? _finalPermitAttachment(
+    Map<String, dynamic> request,
+  ) {
+    final attachments =
+        (request['attachments'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>();
+    for (final attachment in attachments) {
+      if (attachment['tipo_documento'] == 'alvara_evento') {
+        return attachment;
+      }
+    }
+    return null;
   }
 
   static String _formatStatus(String status) {

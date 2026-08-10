@@ -15,6 +15,16 @@ class PermitApiService {
   final http.Client _client;
   final String _baseUrl;
 
+  String resolveFileUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.hasScheme) return value;
+    final base = Uri.parse(_baseUrl);
+    if (value.startsWith('/')) {
+      return base.replace(path: value, query: null, fragment: null).toString();
+    }
+    return base.resolve(value).toString();
+  }
+
   static const List<Map<String, dynamic>> eventPermitQuestions = [
     {
       'id': 1,
