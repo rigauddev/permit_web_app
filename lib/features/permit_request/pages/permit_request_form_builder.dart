@@ -122,38 +122,63 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       return ListView(
         children: [
           const _StepTitle('Responsável pelo evento'),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F8F5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFD8E0D8)),
+            ),
+            child: const Text(
+              'Os dados do responsável vêm da conta logada. Apenas o titular da conta pode solicitar o alvará de evento.',
+            ),
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: nomeController,
-            decoration: const InputDecoration(labelText: 'Nome completo'),
-            onChanged: (value) => controller.updateBasicInfo(name: value),
+            readOnly: true,
+            decoration: const InputDecoration(
+              labelText: 'Nome completo',
+              prefixIcon: Icon(Icons.lock_outline),
+            ),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: cpfCnpjController,
-            decoration: const InputDecoration(labelText: 'CPF/CNPJ'),
-            onChanged: (value) => controller.updateBasicInfo(cpfCnpj: value),
+            readOnly: true,
+            decoration: const InputDecoration(
+              labelText: 'CPF/CNPJ',
+              prefixIcon: Icon(Icons.lock_outline),
+            ),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: phoneController,
+            readOnly: true,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Telefone'),
-            onChanged: (value) => controller.updateBasicInfo(phone: value),
+            decoration: const InputDecoration(
+              labelText: 'Telefone',
+              prefixIcon: Icon(Icons.lock_outline),
+            ),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: emailController,
+            readOnly: true,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: 'E-mail'),
-            onChanged: (value) => controller.updateBasicInfo(email: value),
+            decoration: const InputDecoration(
+              labelText: 'E-mail',
+              prefixIcon: Icon(Icons.lock_outline),
+            ),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: addressController,
+            readOnly: true,
             decoration: const InputDecoration(
               labelText: 'Endereço residencial',
+              prefixIcon: Icon(Icons.lock_outline),
             ),
-            onChanged: (value) => controller.updateBasicInfo(address: value),
           ),
         ],
       );

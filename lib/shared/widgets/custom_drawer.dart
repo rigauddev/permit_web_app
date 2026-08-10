@@ -43,7 +43,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
     final colorScheme = Theme.of(context).colorScheme;
     final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
     final collapsed = widget.compactMode || _collapsed;
-    final drawerBackground = colorScheme.surfaceContainerHighest;
+    const drawerBackground = Color(0xFFF8FBF7);
     final content = SafeArea(
       child: Column(
         children: [
@@ -166,9 +166,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
       width: collapsed ? 84 : 280,
       decoration: BoxDecoration(
         color: drawerBackground,
-        border: Border(
-          right: BorderSide(color: colorScheme.outline.withValues(alpha: 0.35)),
-        ),
+        border: Border(right: BorderSide(color: const Color(0xFFD8E0D8))),
         boxShadow: [
           BoxShadow(
             color: colorScheme.shadow.withValues(alpha: 0.08),
@@ -299,16 +297,17 @@ class _DrawerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = currentRoute == route;
-    final colorScheme = Theme.of(context).colorScheme;
+    const selectedBackground = Color(0xFFE5F4EA);
+    const selectedForeground = Color(0xFF0E5F2F);
+    const defaultForeground = Color(0xFF26342A);
     final color =
-        iconColor ??
-        (selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface);
+        iconColor ?? (selected ? selectedForeground : defaultForeground);
     final tile = ListTile(
       selected: selected,
-      selectedColor: colorScheme.onPrimaryContainer,
-      textColor: colorScheme.onSurface,
-      iconColor: colorScheme.onSurface,
-      selectedTileColor: colorScheme.primaryContainer,
+      selectedColor: selectedForeground,
+      textColor: defaultForeground,
+      iconColor: defaultForeground,
+      selectedTileColor: selectedBackground,
       leading: Icon(icon, color: color),
       title:
           collapsed
@@ -316,7 +315,7 @@ class _DrawerTile extends StatelessWidget {
               : Text(
                 title,
                 style: TextStyle(
-                  color: selected ? colorScheme.onPrimaryContainer : null,
+                  color: selected ? selectedForeground : defaultForeground,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
@@ -366,22 +365,21 @@ class _DrawerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = routes.contains(currentRoute);
-    final colorScheme = Theme.of(context).colorScheme;
+    const selectedBackground = Color(0xFFE5F4EA);
+    const selectedForeground = Color(0xFF0E5F2F);
+    const defaultForeground = Color(0xFF26342A);
     if (collapsed) {
       final targetRoute = children.first.route;
       return Tooltip(
         message: title,
         child: ListTile(
           selected: selected,
-          selectedColor: colorScheme.onPrimaryContainer,
-          iconColor: colorScheme.onSurface,
-          selectedTileColor: colorScheme.primaryContainer,
+          selectedColor: selectedForeground,
+          iconColor: defaultForeground,
+          selectedTileColor: selectedBackground,
           leading: Icon(
             icon,
-            color:
-                selected
-                    ? colorScheme.onPrimaryContainer
-                    : colorScheme.onSurface,
+            color: selected ? selectedForeground : defaultForeground,
           ),
           horizontalTitleGap: 0,
           minLeadingWidth: 0,
@@ -403,29 +401,21 @@ class _DrawerSection extends StatelessWidget {
       initiallyExpanded: selected,
       leading: Icon(
         icon,
-        color:
-            selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+        color: selected ? selectedForeground : defaultForeground,
       ),
       title: Text(
         title,
         style: TextStyle(
-          color:
-              selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+          color: selected ? selectedForeground : defaultForeground,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
       ),
-      iconColor:
-          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-      collapsedIconColor:
-          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-      textColor: colorScheme.onPrimaryContainer,
-      collapsedTextColor:
-          selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-      collapsedBackgroundColor: selected ? colorScheme.primaryContainer : null,
-      backgroundColor:
-          selected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.62)
-              : null,
+      iconColor: selected ? selectedForeground : defaultForeground,
+      collapsedIconColor: selected ? selectedForeground : defaultForeground,
+      textColor: selectedForeground,
+      collapsedTextColor: selected ? selectedForeground : defaultForeground,
+      collapsedBackgroundColor: selected ? selectedBackground : null,
+      backgroundColor: selected ? selectedBackground : null,
       children:
           children
               .map(
@@ -446,17 +436,19 @@ class _DrawerSubTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = currentRoute == item.route;
-    final colorScheme = Theme.of(context).colorScheme;
+    const selectedBackground = Color(0xFFE5F4EA);
+    const selectedForeground = Color(0xFF0E5F2F);
+    const defaultForeground = Color(0xFF26342A);
     return ListTile(
       selected: selected,
-      selectedColor: colorScheme.onPrimaryContainer,
-      textColor: colorScheme.onSurface,
-      selectedTileColor: colorScheme.primaryContainer,
+      selectedColor: selectedForeground,
+      textColor: defaultForeground,
+      selectedTileColor: selectedBackground,
       contentPadding: const EdgeInsets.only(left: 72, right: 16),
       title: Text(
         item.title,
         style: TextStyle(
-          color: selected ? colorScheme.onPrimaryContainer : null,
+          color: selected ? selectedForeground : defaultForeground,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
       ),

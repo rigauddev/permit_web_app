@@ -145,6 +145,7 @@ class AuthService {
     String? telefone,
     String? endereco,
     required String emailVerificationToken,
+    required bool responsibilityTermAccepted,
   }) async {
     final response = await _post('/auth/register', {
       'tipo_pessoa': tipoPessoa,
@@ -158,6 +159,7 @@ class AuthService {
       'endereco': endereco,
       'role': 'cidadao',
       'email_verification_token': emailVerificationToken,
+      'termo_responsabilidade_aceito': responsibilityTermAccepted,
     });
     return UserModel.fromApiUser(response);
   }
