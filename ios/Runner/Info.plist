@@ -32,6 +32,11 @@
 	<string>Precisamos do microfone para anexar áudios (se necessário).</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Precisamos acessar a galeria para anexar arquivos.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

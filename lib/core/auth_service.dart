@@ -211,6 +211,11 @@ class AuthService {
     return UserModel.fromApiUser(response);
   }
 
+  Future<UserModel> currentUser({required String accessToken}) async {
+    final response = await _get('/auth/me', accessToken: accessToken);
+    return UserModel.fromApiUser(response);
+  }
+
   Future<List<UserModel>> listUsers({required String accessToken}) async {
     final response = await _getList('/auth/users', accessToken: accessToken);
     return response
@@ -272,6 +277,18 @@ class AuthService {
       detail is String ? detail : 'Não foi possível carregar os dados',
       statusCode: response.statusCode,
     );
+  }
+
+  Future<Map<String, dynamic>> _get(String path, {String? accessToken}) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final response = await _client.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+      },
+    );
+    return _decodeResponse(response);
   }
 }
 
