@@ -50,9 +50,21 @@ class ChatObservacoesWidgetState extends State<ChatObservacoesWidget> {
             controller: widget.scrollController,
             itemCount: widget.observacoes.length,
             itemBuilder: (ctx, i) {
-              final obs = widget.observacoes[i] as Map<String, dynamic>;
+              final rawObs = widget.observacoes[i];
+              final obs =
+                  rawObs is Map<String, dynamic>
+                      ? rawObs
+                      : <String, dynamic>{
+                        'user_type': 'operador_secretaria',
+                        'user_name': 'Secretaria',
+                        'descricao': rawObs.toString(),
+                      };
+              final userType = obs['user_type']?.toString().toLowerCase() ?? '';
               final isOp =
-                  (obs['user_type'] as String).toLowerCase() == 'operador';
+                  userType == 'operador' ||
+                  userType == 'operador_secretaria' ||
+                  userType == 'gestor_secretaria' ||
+                  userType == 'admin';
               return Align(
                 alignment: isOp ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
@@ -72,14 +84,14 @@ class ChatObservacoesWidgetState extends State<ChatObservacoesWidget> {
                             : CrossAxisAlignment.start,
                     children: [
                       Text(
-                        obs['user_name'],
+                        obs['user_name']?.toString() ?? 'Usuário',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(obs['descricao']),
+                      Text(obs['descricao']?.toString() ?? ''),
                       const SizedBox(height: 6),
                       // anexos existentes dentro da mesma pergunta
                       ...widget.anexosExistentes.map(

@@ -29,6 +29,7 @@ class QuestionCreateRequest(BaseModel):
     modelo_documento_url: str | None = Field(default=None, max_length=500)
     requer_vistoria: bool = False
     checklist_vistoria: list[str] = Field(default_factory=list)
+    prazo_resposta_dias_uteis: int = Field(default=2, ge=1, le=30)
 
 
 class QuestionResponse(BaseModel):
@@ -45,6 +46,7 @@ class QuestionResponse(BaseModel):
     modelo_documento_url: str | None = None
     requer_vistoria: bool = False
     checklist_vistoria: list[str] = Field(default_factory=list)
+    prazo_resposta_dias_uteis: int = 2
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -72,6 +74,7 @@ class RequirementResponse(BaseModel):
     inspection_scheduled_for: date | None = None
     inspection_status: str = "nao_agendada"
     inspection_result: dict[str, Any] | None = None
+    due_date: date | None = None
 
 
 class AttachmentCreateRequest(BaseModel):
@@ -85,8 +88,13 @@ class DamAttachmentRequest(AttachmentCreateRequest):
     pass
 
 
+class RequirementAttachmentRequest(AttachmentCreateRequest):
+    requirement_id: int
+
+
 class AttachmentResponse(BaseModel):
     id: int
+    requirement_id: int | None = None
     tipo_documento: str
     nome_arquivo: str
     arquivo_url: str
@@ -105,6 +113,7 @@ class CommentResponse(BaseModel):
     requirement_id: int | None = None
     author_id: int
     author_name: str
+    author_role: str | None = None
     mensagem: str
     created_at: datetime | None = None
 

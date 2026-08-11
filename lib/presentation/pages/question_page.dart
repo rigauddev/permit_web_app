@@ -30,6 +30,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   String? _secretariaDam;
   String? _modeloDocumentoNome;
   String? _modeloDocumentoUrl;
+  int _prazoRespostaDiasUteis = 2;
   bool _requerVistoria = false;
   final List<String> _checklistVistoria = [];
   final TextEditingController _checklistController = TextEditingController();
@@ -167,6 +168,15 @@ class _PerguntasPageState extends State<PerguntasPage> {
                         _secretarias,
                         (v) => _secretaria = v,
                       ),
+                      _buildTextField(
+                        label: 'Prazo interno de resposta (dias úteis)',
+                        onChanged:
+                            (v) =>
+                                _prazoRespostaDiasUteis =
+                                    int.tryParse(v.trim()) ?? 2,
+                        initialValue: _prazoRespostaDiasUteis.toString(),
+                        hintText: 'Exemplo: 2',
+                      ),
                       _buildDropdown(
                         'Serviço',
                         _tipoFormulario,
@@ -223,6 +233,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                           DataColumn(label: Text('Pergunta')),
                           DataColumn(label: Text('Secretaria')),
                           DataColumn(label: Text('Secretaria DAM')),
+                          DataColumn(label: Text('Prazo')),
                           DataColumn(label: Text('Respostas')),
                           DataColumn(label: Text('Vistoria')),
                           DataColumn(label: Text('Tipo')),
@@ -236,6 +247,11 @@ class _PerguntasPageState extends State<PerguntasPage> {
                               DataCell(Text(p['pergunta']!)),
                               DataCell(Text(p['secretaria']!)),
                               DataCell(Text(p['secretaria_dam'] ?? '')),
+                              DataCell(
+                                Text(
+                                  '${p['prazo_resposta_dias_uteis'] ?? 2} dia(s) úteis',
+                                ),
+                              ),
                               DataCell(Text(_formatResponseSummary(p))),
                               DataCell(
                                 Text(
@@ -672,6 +688,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _showError('Informe ao menos um item de checklist para a vistoria.');
       return;
     }
+    if (_prazoRespostaDiasUteis < 1 || _prazoRespostaDiasUteis > 30) {
+      _showError('Informe prazo de resposta entre 1 e 30 dias úteis.');
+      return;
+    }
 
     final tiposResposta = [
       'Sim/Não',
@@ -710,6 +730,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
       'modelo_documento_url': _modeloDocumentoUrl?.trim(),
       'requer_vistoria': _requerVistoria,
       'checklist_vistoria': _checklistVistoria,
+      'prazo_resposta_dias_uteis': _prazoRespostaDiasUteis,
     };
 
     final payload = Map<String, dynamic>.from(novaPergunta);
@@ -736,6 +757,11 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _secretariaDam = pergunta['secretaria_dam'];
       _modeloDocumentoNome = pergunta['modelo_documento_nome'];
       _modeloDocumentoUrl = pergunta['modelo_documento_url'];
+      _prazoRespostaDiasUteis =
+          int.tryParse(
+            pergunta['prazo_resposta_dias_uteis']?.toString() ?? '',
+          ) ??
+          2;
       _requerVistoria = pergunta['requer_vistoria'] == true;
       _checklistVistoria
         ..clear()
@@ -766,6 +792,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
         _pergunta =
             _descricao = _secretaria = _tipoFormulario = _secretariaDam = null;
     _modeloDocumentoNome = _modeloDocumentoUrl = null;
+    _prazoRespostaDiasUteis = 2;
     _requerVistoria = false;
     _checklistVistoria.clear();
     _checklistController.clear();

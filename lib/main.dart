@@ -50,7 +50,7 @@ class _AppRouter extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Sistema de Serviços da Prefeitura',
       theme: customTheme,
-      initialRoute: user == null ? AppRoutes.login : AppRoutes.home,
+      initialRoute: user == null ? AppRoutes.login : null,
       routes: {
         AppRoutes.login: (context) => const LoginPage(),
         AppRoutes.recoveryPassword: (context) => RecoveryPassword(),
