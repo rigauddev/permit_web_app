@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/session_store.dart';
 import '../../data/providers/user_provider.dart';
 
 class LoginPage extends HookConsumerWidget {
@@ -30,7 +30,7 @@ class LoginPage extends HookConsumerWidget {
     final errorMessage = useState<String?>(null);
 
     final authService = AuthService();
-    final secureStorage = const FlutterSecureStorage();
+    const sessionStore = SessionStore();
 
     useEffect(() {
       if (mfaResendSeconds.value <= 0) return null;
@@ -112,14 +112,10 @@ class LoginPage extends HookConsumerWidget {
                 )
                 .toUtc()
                 .toIso8601String();
-        await secureStorage.write(
-          key: 'access_token',
-          value: session.accessToken,
-        );
-        await secureStorage.write(key: 'session_expires_at', value: expiresAt);
-        await secureStorage.write(
-          key: 'user',
-          value: jsonEncode(session.user.toJson()),
+        await sessionStore.save(
+          accessToken: session.accessToken,
+          expiresAt: expiresAt,
+          userJson: jsonEncode(session.user.toJson()),
         );
         ref.read(userProvider.notifier).setUser(session.user);
         await Future<void>.delayed(Duration.zero);
