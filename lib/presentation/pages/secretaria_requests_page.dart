@@ -421,6 +421,7 @@ class _SecretariaRequestsPageState
                                 title: 'Anexar alvará final',
                                 action: 'alvara',
                               ),
+                          onOpenDetails: _showRequestDetails,
                         ),
                       ),
                   ],
@@ -467,6 +468,13 @@ class _SecretariaRequestsPageState
       grouped.putIfAbsent(type, () => []).add(request);
     }
     return grouped;
+  }
+
+  Future<void> _showRequestDetails(Map<String, dynamic> request) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _RequestDetailsDialog(request: request),
+    );
   }
 }
 
@@ -564,6 +572,7 @@ class _ServiceGroup extends StatelessWidget {
     required this.onReject,
     required this.onAttachDam,
     required this.onAttachFinalPermit,
+    required this.onOpenDetails,
   });
 
   final String title;
@@ -574,6 +583,7 @@ class _ServiceGroup extends StatelessWidget {
   final void Function(int requirementId) onReject;
   final ValueChanged<Map<String, dynamic>> onAttachDam;
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
+  final ValueChanged<Map<String, dynamic>> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -596,6 +606,7 @@ class _ServiceGroup extends StatelessWidget {
                   onReject: onReject,
                   onAttachDam: onAttachDam,
                   onAttachFinalPermit: onAttachFinalPermit,
+                  onOpenDetails: onOpenDetails,
                 ),
               );
             }).toList(),
@@ -627,6 +638,7 @@ class _RequestCard extends StatelessWidget {
     required this.onReject,
     required this.onAttachDam,
     required this.onAttachFinalPermit,
+    required this.onOpenDetails,
   });
 
   final Map<String, dynamic> request;
@@ -636,6 +648,7 @@ class _RequestCard extends StatelessWidget {
   final void Function(int requirementId) onReject;
   final ValueChanged<Map<String, dynamic>> onAttachDam;
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
+  final ValueChanged<Map<String, dynamic>> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -661,6 +674,11 @@ class _RequestCard extends StatelessWidget {
               ),
               _StatusChip(status: request['status']?.toString() ?? ''),
               Text('Protocolo: ${request['protocolo'] ?? '-'}'),
+              OutlinedButton.icon(
+                onPressed: () => onOpenDetails(request),
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Ver detalhes'),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -682,6 +700,125 @@ class _RequestCard extends StatelessWidget {
               onReject: onReject,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestDetailsDialog extends StatelessWidget {
+  const _RequestDetailsDialog({required this.request});
+
+  final Map<String, dynamic> request;
+
+  @override
+  Widget build(BuildContext context) {
+    final requirements =
+        (request['perguntas'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    return AlertDialog(
+      title: const Text('Detalhes da solicitação'),
+      content: SizedBox(
+        width: 640,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _DialogRow(
+                label: 'Evento',
+                value: request['nome_do_evento']?.toString() ?? '-',
+              ),
+              _DialogRow(
+                label: 'Protocolo',
+                value: request['protocolo']?.toString() ?? '-',
+              ),
+              _DialogRow(
+                label: 'Status geral',
+                value: _formatStatus(request['status']?.toString() ?? ''),
+              ),
+              _DialogRow(
+                label: 'Responsável',
+                value: request['responsavel']?.toString() ?? '-',
+              ),
+              _DialogRow(
+                label: 'Data',
+                value: request['data_do_evento']?.toString() ?? '-',
+              ),
+              _DialogRow(
+                label: 'Local',
+                value: request['local_evento']?.toString() ?? '-',
+              ),
+              _DialogRow(
+                label: 'Público',
+                value: request['publico_estimado']?.toString() ?? '-',
+              ),
+              const Divider(height: 24),
+              Text(
+                'Perguntas e validações',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              if (requirements.isEmpty)
+                const Text('Nenhuma exigência vinculada.')
+              else
+                ...requirements.map(
+                  (requirement) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.fact_check_outlined),
+                    title: Text(
+                      requirement['pergunta']?.toString() ?? 'Exigência',
+                    ),
+                    subtitle: Text(
+                      [
+                            requirement['secretaria']?.toString(),
+                            _formatStatus(
+                              requirement['status']?.toString() ?? '',
+                            ),
+                          ]
+                          .where((item) => item != null && item.isNotEmpty)
+                          .join(' | '),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogRow extends StatelessWidget {
+  const _DialogRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 116,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Expanded(child: Text(value.isEmpty ? '-' : value)),
         ],
       ),
     );
@@ -803,7 +940,7 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (status) {
       'aprovada' || 'autorizada' || 'isenta_dam' => Colors.green,
-      'recusada' || 'indeferida' => Colors.red,
+      'recusada' || 'indeferida' || 'cancelada' => Colors.red,
       'pendente_documento' || 'pendente_correcao' => Colors.orange,
       'dam_pendente' ||
       'aguardando_geracao_dam' ||
@@ -915,6 +1052,8 @@ String _formatStatus(String status) {
       return 'Indeferida';
     case 'pendente_correcao':
       return 'Pendente de correção';
+    case 'cancelada':
+      return 'Cancelada';
     default:
       return status.isEmpty ? 'Status' : status;
   }

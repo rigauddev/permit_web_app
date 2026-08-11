@@ -35,6 +35,7 @@ from src.schemas.permit_schema import (
     EventPublicRangeResponse,
     InspectionCompleteRequest,
     InspectionScheduleRequest,
+    PermitCancelRequest,
     PermitCreateRequest,
     PermitResponse,
     QuestionCreateRequest,
@@ -85,6 +86,7 @@ STATUS_AGUARDANDO_GERACAO_DAM = "aguardando_geracao_dam"
 STATUS_AGUARDANDO_PAGAMENTO_DAM = "aguardando_pagamento_dam"
 STATUS_AGUARDANDO_GERACAO_ALVARA = "aguardando_geracao_alvara"
 STATUS_AUTORIZADA = "autorizada"
+STATUS_CANCELADA = "cancelada"
 DAM_STATUS_PENDENTE_PREFEITURA = "pendente_prefeitura"
 DAM_STATUS_GERADO = "gerado"
 DAM_STATUS_PAGO = "pago"
@@ -178,6 +180,37 @@ class PermitService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
         if not self._can_view_request(request, current_user) and not self._can_issue_authorization(current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        return self.to_response(request)
+
+    def cancel_request(
+        self,
+        request_id: int,
+        payload: PermitCancelRequest,
+        current_user: UserModel,
+    ) -> PermitResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if current_user.role.slug == "cidadao" and request.solicitante_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        if current_user.role.slug != "admin" and current_user.role.slug != "cidadao":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        if request.status in {STATUS_AUTORIZADA, "isenta_dam", "indeferida", STATUS_CANCELADA}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Esta solicitação não pode mais ser cancelada.",
+            )
+
+        request.status = STATUS_CANCELADA
+        motivo = (payload.motivo or "").strip()
+        mensagem = "Solicitação cancelada pelo solicitante."
+        if current_user.role.slug == "admin":
+            mensagem = "Solicitação cancelada pela administração."
+        if motivo:
+            mensagem = f"{mensagem} Motivo: {motivo}"
+        self._add_comment(request.id, current_user, mensagem)
+        self.db.commit()
+        self.db.refresh(request)
         return self.to_response(request)
 
     def update_requirement_status(
@@ -1131,6 +1164,8 @@ class PermitService:
 
     @staticmethod
     def _recalculate_request_status(request: PermitRequestModel) -> None:
+        if request.status == STATUS_CANCELADA:
+            return
         requirement_statuses = [item.status for item in request.requirements]
         attachment_types = {item.tipo_documento for item in request.attachments}
         if not requirement_statuses:

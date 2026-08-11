@@ -129,6 +129,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                           'Autorizações municipais para festas e eventos, com análise das secretarias responsáveis.',
                       requests: grouped['Alvará de Evento'] ?? const [],
                       onOpenDetails: _openRequestDetails,
+                      onCancelRequest: _cancelRequest,
                       onAttachPaymentProof: _attachPaymentProof,
                       onOpenCredential: _openCredential,
                       onOpenAttachment: _openAttachment,
@@ -173,6 +174,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
               request: request,
               userType: widget.userType,
               onAttachPaymentProof: _attachPaymentProof,
+              onCancelRequest: _cancelRequest,
               onOpenCredential: _openCredential,
               onOpenAttachment: _openAttachment,
               onShareAttachment: _shareAttachment,
@@ -213,6 +215,75 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
           ),
         ),
       );
+      _refresh();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _cancelRequest(Map<String, dynamic> request) async {
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Cancelar solicitação'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Após cancelar, esta solicitação ficará encerrada e não seguirá para análise.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Motivo (opcional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Voltar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Cancelar solicitação'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) return;
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      final requestId = request['formId'] as int? ?? request['id'] as int?;
+      if (requestId == null) return;
+      await _api.cancelRequest(
+        accessToken: token,
+        requestId: requestId,
+        motivo: reasonController.text.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Solicitação cancelada.')));
       _refresh();
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -382,6 +453,7 @@ class _RequestTypeSection extends StatelessWidget {
     required this.description,
     required this.requests,
     required this.onOpenDetails,
+    required this.onCancelRequest,
     required this.onAttachPaymentProof,
     required this.onOpenCredential,
     required this.onOpenAttachment,
@@ -393,6 +465,7 @@ class _RequestTypeSection extends StatelessWidget {
   final String description;
   final List<Map<String, dynamic>> requests;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
+  final ValueChanged<Map<String, dynamic>> onCancelRequest;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
@@ -439,6 +512,7 @@ class _RequestTypeSection extends StatelessWidget {
                 (request) => _RequestListTile(
                   request: request,
                   onOpenDetails: onOpenDetails,
+                  onCancelRequest: onCancelRequest,
                   onAttachPaymentProof: onAttachPaymentProof,
                   onOpenCredential: onOpenCredential,
                   onOpenAttachment: onOpenAttachment,
@@ -456,6 +530,7 @@ class _RequestListTile extends StatelessWidget {
   const _RequestListTile({
     required this.request,
     required this.onOpenDetails,
+    required this.onCancelRequest,
     required this.onAttachPaymentProof,
     required this.onOpenCredential,
     required this.onOpenAttachment,
@@ -464,6 +539,7 @@ class _RequestListTile extends StatelessWidget {
 
   final Map<String, dynamic> request;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
+  final ValueChanged<Map<String, dynamic>> onCancelRequest;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
@@ -477,6 +553,7 @@ class _RequestListTile extends StatelessWidget {
         status == 'isenta_dam' ||
         (request['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
     final canAttachPayment = status == 'aguardando_pagamento_dam';
+    final canCancel = _canCancel(status);
     final verified = _isCredentialVerified(request);
     final finalPermit = _finalPermitAttachment(request);
 
@@ -528,17 +605,19 @@ class _RequestListTile extends StatelessWidget {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Chip(label: Text(_formatStatus(status))),
-                  if (verified)
-                    const Chip(
-                      avatar: Icon(Icons.verified, size: 16),
-                      label: Text('Verificado'),
-                    ),
+                  _StatusBadge(status: status),
+                  if (verified) const _VerifiedBadge(compact: true),
                   OutlinedButton.icon(
                     onPressed: () => onOpenDetails(request),
                     icon: const Icon(Icons.visibility_outlined),
-                    label: const Text('Detalhes'),
+                    label: const Text('Ver detalhes'),
                   ),
+                  if (canCancel)
+                    OutlinedButton.icon(
+                      onPressed: () => onCancelRequest(request),
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text('Cancelar'),
+                    ),
                   if (canAttachPayment)
                     OutlinedButton.icon(
                       onPressed: () => onAttachPaymentProof(request),
@@ -591,6 +670,8 @@ class _RequestListTile extends StatelessWidget {
     switch (status) {
       case 'em_analise':
         return 'Em análise';
+      case 'enviada':
+        return 'Enviada';
       case 'dam_pendente':
         return 'DAM pendente';
       case 'aguardando_geracao_dam':
@@ -603,11 +684,27 @@ class _RequestListTile extends StatelessWidget {
         return 'Autorizada';
       case 'recusada':
         return 'Recusada';
+      case 'indeferida':
+        return 'Indeferida';
       case 'correcao_solicitada':
+      case 'pendente_correcao':
         return 'Correção solicitada';
+      case 'isenta_dam':
+        return 'Isenta de DAM';
+      case 'cancelada':
+        return 'Cancelada';
       default:
         return status;
     }
+  }
+
+  static bool _canCancel(String status) {
+    return !{
+      'autorizada',
+      'isenta_dam',
+      'indeferida',
+      'cancelada',
+    }.contains(status);
   }
 
   static bool _isCredentialVerified(Map<String, dynamic> request) {
@@ -625,11 +722,78 @@ class _RequestListTile extends StatelessWidget {
   }
 }
 
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _RequestListTile._formatStatus(status);
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = switch (status) {
+      'autorizada' || 'isenta_dam' => Colors.green,
+      'indeferida' || 'recusada' || 'cancelada' => Colors.red,
+      'pendente_correcao' || 'correcao_solicitada' => Colors.orange,
+      _ => colorScheme.primary,
+    };
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 260),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Text(
+        label,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _VerifiedBadge extends StatelessWidget {
+  const _VerifiedBadge({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Colors.green.shade700;
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 6 : 7,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified, size: compact ? 15 : 16, color: color),
+          const SizedBox(width: 5),
+          Text(
+            compact ? 'Verificado' : 'Evento verificado',
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RequestDetailsPage extends StatelessWidget {
   const _RequestDetailsPage({
     required this.request,
     required this.userType,
     required this.onAttachPaymentProof,
+    required this.onCancelRequest,
     required this.onOpenCredential,
     required this.onOpenAttachment,
     required this.onShareAttachment,
@@ -638,6 +802,7 @@ class _RequestDetailsPage extends StatelessWidget {
   final Map<String, dynamic> request;
   final String userType;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
+  final ValueChanged<Map<String, dynamic>> onCancelRequest;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
   final ValueChanged<Map<String, dynamic>> onShareAttachment;
@@ -648,6 +813,7 @@ class _RequestDetailsPage extends StatelessWidget {
     final finalPermit = _RequestListTile._finalPermitAttachment(request);
     final verified = _RequestListTile._isCredentialVerified(request);
     final canAttachPayment = status == 'aguardando_pagamento_dam';
+    final canCancel = _RequestListTile._canCancel(status);
     final canOpenCredential =
         status == 'autorizada' ||
         status == 'isenta_dam' ||
@@ -682,16 +848,8 @@ class _RequestDetailsPage extends StatelessWidget {
                           runSpacing: 8,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Chip(
-                              label: Text(
-                                _RequestListTile._formatStatus(status),
-                              ),
-                            ),
-                            if (verified)
-                              const Chip(
-                                avatar: Icon(Icons.verified, size: 16),
-                                label: Text('Evento verificado'),
-                              ),
+                            _StatusBadge(status: status),
+                            if (verified) const _VerifiedBadge(),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -746,6 +904,12 @@ class _RequestDetailsPage extends StatelessWidget {
                           icon: const Icon(Icons.upload_file),
                           label: const Text('Anexar comprovante'),
                         ),
+                      if (canCancel)
+                        OutlinedButton.icon(
+                          onPressed: () => onCancelRequest(request),
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text('Cancelar solicitação'),
+                        ),
                       if (finalPermit != null)
                         OutlinedButton.icon(
                           onPressed: () => onOpenAttachment(finalPermit),
@@ -767,6 +931,7 @@ class _RequestDetailsPage extends StatelessWidget {
                           ),
                         ),
                       if (!canAttachPayment &&
+                          !canCancel &&
                           finalPermit == null &&
                           !canOpenCredential)
                         const Text(
@@ -885,14 +1050,7 @@ class _RequirementList extends StatelessWidget {
                     requirement['pergunta']?.toString() ??
                     'Exigência',
               ),
-              subtitle: Text(
-                [
-                      requirement['secretaria']?.toString(),
-                      _RequestListTile._formatStatus(status),
-                    ]
-                    .where((value) => value != null && value.isNotEmpty)
-                    .join(' | '),
-              ),
+              subtitle: Text(_RequestListTile._formatStatus(status)),
             );
           }).toList(),
     );

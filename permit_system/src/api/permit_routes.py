@@ -19,6 +19,7 @@ from src.schemas.permit_schema import (
     EventPublicRangeResponse,
     InspectionCompleteRequest,
     InspectionScheduleRequest,
+    PermitCancelRequest,
     PermitCreateRequest,
     PermitResponse,
     QuestionCreateRequest,
@@ -146,6 +147,16 @@ def get_permit_request(
     current_user: UserModel = Depends(get_current_user),
 ):
     return PermitService(db).get_request(request_id, current_user)
+
+
+@router.patch("/{request_id}/cancel", response_model=PermitResponse)
+def cancel_permit_request(
+    request_id: int,
+    payload: PermitCancelRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("cidadao", "admin")),
+):
+    return PermitService(db).cancel_request(request_id, payload, current_user)
 
 
 @router.post("/{request_id}/comments", response_model=CommentResponse)

@@ -659,6 +659,22 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> cancelRequest({
+    required String accessToken,
+    required int requestId,
+    String? motivo,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/cancel'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'motivo': motivo}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   static const Map<String, List<Map<String, String>>> requirementRules = {
     'tem_som': [
       {

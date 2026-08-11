@@ -22,6 +22,34 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     );
   }
 
+  Map<String, dynamic> toDraftJson() {
+    return {
+      'currentStep': state.currentStep,
+      'responsibleData': state.responsibleData,
+      'eventData': state.eventData,
+      'answers': state.answers,
+      'answerDetails': state.answerDetails,
+      'savedAt': DateTime.now().toIso8601String(),
+    };
+  }
+
+  void restoreDraft(Map<String, dynamic> draft) {
+    final currentStep = draft['currentStep'];
+    final maxStep = state.totalSteps > 0 ? state.totalSteps - 1 : 0;
+    state = state.copyWith(
+      currentStep:
+          currentStep is int
+              ? currentStep.clamp(0, maxStep)
+              : int.tryParse(currentStep?.toString() ?? '')?.clamp(0, maxStep),
+      responsibleData: _stringMap(draft['responsibleData']),
+      eventData: _stringMap(draft['eventData']),
+      answers: _boolMap(draft['answers']),
+      answerDetails: _dynamicMap(draft['answerDetails']),
+      attachments: const [],
+      submittedProtocol: null,
+    );
+  }
+
   void updateAnswer(String questionKey, dynamic answer) {
     final response = answer is Map ? answer['resposta'] : answer;
     state = state.copyWith(
@@ -119,6 +147,26 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
 
   void resetForm() {
     state = PermitRequestState.initial();
+  }
+
+  static Map<String, String> _stringMap(Object? value) {
+    if (value is! Map) return {};
+    return value.map(
+      (key, entry) => MapEntry(key.toString(), entry.toString()),
+    );
+  }
+
+  static Map<String, bool> _boolMap(Object? value) {
+    if (value is! Map) return {};
+    return value.map((key, entry) {
+      final parsed = entry is bool ? entry : entry.toString() == 'true';
+      return MapEntry(key.toString(), parsed);
+    });
+  }
+
+  static Map<String, dynamic> _dynamicMap(Object? value) {
+    if (value is! Map) return {};
+    return value.map((key, entry) => MapEntry(key.toString(), entry));
   }
 
   bool canGoNext(BuildContext context) {

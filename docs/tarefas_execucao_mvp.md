@@ -35,6 +35,11 @@
 - [x] Criar página `Minhas solicitações` separada por tipo de serviço.
 - [x] Ajustar `Minhas solicitações` para mobile com cards responsivos e tela de detalhes.
 - [x] Exibir ações da solicitação conforme status na tela de detalhes do cidadão.
+- [x] Permitir salvar rascunho local da solicitação para continuar depois.
+- [x] Permitir cancelar solicitação em preenchimento antes do envio.
+- [x] Permitir cancelamento de solicitação já criada pelo cidadão, respeitando status finais.
+- [x] Melhorar visualização mobile da flag de evento verificado.
+- [x] Remover secretaria dos detalhes exibidos ao cidadão em `Minhas solicitações`.
 - [x] Fixar dados do responsável pelo evento a partir da conta logada.
 - [x] Buscar dados completos do cidadão sob demanda ao iniciar nova solicitação.
 - [x] Transformar expectativa de público em seletor configurável por faixa.
@@ -91,6 +96,7 @@
 - [x] Mover criação de perguntas para a área de Gestão de Serviços no menu.
 - [x] Reorganizar menu por contexto: Serviços do cidadão, Atendimento interno, Gestão de Serviços e Gestão do Sistema.
 - [x] Ajustar cards da home interna para refletir Gestão de Serviços, Gestão do Sistema e Permissões.
+- [x] Incluir botão `Ver detalhes` na central interna para visualizar status geral e exigências completas.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
@@ -118,6 +124,7 @@
 - [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
+- [x] Criar endpoint protegido para cancelamento de solicitação pelo cidadão solicitante.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 - [x] Criar seed com gestor e operador para cada secretaria.
 - [x] Criar seed com reset do banco e cenários de teste do fluxo de alvará.

@@ -12,6 +12,10 @@ class PermitCreateRequest(BaseModel):
     respostas: dict[str, Any] = Field(default_factory=dict)
 
 
+class PermitCancelRequest(BaseModel):
+    motivo: str | None = Field(default=None, max_length=500)
+
+
 class QuestionCreateRequest(BaseModel):
     key: str = Field(..., min_length=3, max_length=80, pattern="^[a-z0-9_]+$")
     pergunta: str = Field(..., min_length=3, max_length=255)
