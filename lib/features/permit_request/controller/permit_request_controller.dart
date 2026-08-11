@@ -22,6 +22,34 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     );
   }
 
+  Map<String, dynamic> toDraftJson() {
+    return {
+      'currentStep': state.currentStep,
+      'responsibleData': state.responsibleData,
+      'eventData': state.eventData,
+      'answers': state.answers,
+      'answerDetails': state.answerDetails,
+      'savedAt': DateTime.now().toIso8601String(),
+    };
+  }
+
+  void restoreDraft(Map<String, dynamic> draft) {
+    final currentStep = draft['currentStep'];
+    final maxStep = state.totalSteps > 0 ? state.totalSteps - 1 : 0;
+    state = state.copyWith(
+      currentStep:
+          currentStep is int
+              ? currentStep.clamp(0, maxStep)
+              : int.tryParse(currentStep?.toString() ?? '')?.clamp(0, maxStep),
+      responsibleData: _stringMap(draft['responsibleData']),
+      eventData: _stringMap(draft['eventData']),
+      answers: _boolMap(draft['answers']),
+      answerDetails: _dynamicMap(draft['answerDetails']),
+      attachments: const [],
+      submittedProtocol: null,
+    );
+  }
+
   void updateAnswer(String questionKey, dynamic answer) {
     final response = answer is Map ? answer['resposta'] : answer;
     state = state.copyWith(
@@ -57,6 +85,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     bool? isBeneficente,
     String? instituicaoBeneficiada,
     bool? termoAceite,
+    String? publicRangeId,
+    String? publicMin,
+    String? publicMax,
+    String? deadlineBusinessDays,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -70,6 +102,12 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     }
     if (instituicaoBeneficiada != null) {
       updated['instituicao_beneficiada'] = instituicaoBeneficiada;
+    }
+    if (publicRangeId != null) updated['publico_faixa_id'] = publicRangeId;
+    if (publicMin != null) updated['publico_estimado_min'] = publicMin;
+    if (publicMax != null) updated['publico_estimado_max'] = publicMax;
+    if (deadlineBusinessDays != null) {
+      updated['prazo_dias_uteis'] = deadlineBusinessDays;
     }
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
@@ -109,6 +147,26 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
 
   void resetForm() {
     state = PermitRequestState.initial();
+  }
+
+  static Map<String, String> _stringMap(Object? value) {
+    if (value is! Map) return {};
+    return value.map(
+      (key, entry) => MapEntry(key.toString(), entry.toString()),
+    );
+  }
+
+  static Map<String, bool> _boolMap(Object? value) {
+    if (value is! Map) return {};
+    return value.map((key, entry) {
+      final parsed = entry is bool ? entry : entry.toString() == 'true';
+      return MapEntry(key.toString(), parsed);
+    });
+  }
+
+  static Map<String, dynamic> _dynamicMap(Object? value) {
+    if (value is! Map) return {};
+    return value.map((key, entry) => MapEntry(key.toString(), entry));
   }
 
   bool canGoNext(BuildContext context) {
@@ -156,8 +214,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       final today = DateTime.now();
       final currentDate = DateTime(today.year, today.month, today.day);
-      if (eventDate.isBefore(_addBusinessDays(currentDate, 15))) {
-        return 'A solicitação precisa ser feita com pelo menos 15 dias úteis de antecedência.';
+      final deadlineDays =
+          int.tryParse(state.eventData['prazo_dias_uteis'] ?? '') ?? 15;
+      if (eventDate.isBefore(_addBusinessDays(currentDate, deadlineDays))) {
+        return 'A solicitação precisa ser feita com pelo menos $deadlineDays dias úteis de antecedência.';
       }
       if (state.eventData['is_beneficente'] == 'true' &&
           (state.eventData['instituicao_beneficiada'] ?? '').trim().isEmpty) {

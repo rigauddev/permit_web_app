@@ -12,6 +12,10 @@ class PermitCreateRequest(BaseModel):
     respostas: dict[str, Any] = Field(default_factory=dict)
 
 
+class PermitCancelRequest(BaseModel):
+    motivo: str | None = Field(default=None, max_length=500)
+
+
 class QuestionCreateRequest(BaseModel):
     key: str = Field(..., min_length=3, max_length=80, pattern="^[a-z0-9_]+$")
     pergunta: str = Field(..., min_length=3, max_length=255)
@@ -43,6 +47,18 @@ class QuestionResponse(BaseModel):
     checklist_vistoria: list[str] = Field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class EventPublicRangeRequest(BaseModel):
+    label: str = Field(..., min_length=3, max_length=120)
+    min_publico: int = Field(..., ge=0)
+    max_publico: int = Field(..., ge=1)
+    prazo_dias_uteis: int = Field(..., ge=1, le=365)
+    is_active: bool = True
+
+
+class EventPublicRangeResponse(EventPublicRangeRequest):
+    id: int
 
 
 class RequirementResponse(BaseModel):

@@ -111,6 +111,11 @@ class _PermissionsPageState extends State<PermissionsPage> {
           icon: const Icon(Icons.save_outlined),
           label: Text(_saving ? 'Salvando...' : 'Salvar permissões'),
         ),
+        OutlinedButton.icon(
+          onPressed: _saving ? null : _createRole,
+          icon: const Icon(Icons.add),
+          label: const Text('Novo tipo'),
+        ),
       ],
     );
   }
@@ -252,6 +257,100 @@ class _PermissionsPageState extends State<PermissionsPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _createRole() async {
+    final token = await _token();
+    if (token == null) return;
+    if (!mounted) return;
+    final nameController = TextEditingController();
+    final slugController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final created = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Novo tipo de usuário'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Nome do tipo'),
+                  onChanged: (value) {
+                    if (slugController.text.trim().isEmpty) {
+                      slugController.text = _slugFrom(value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: slugController,
+                  decoration: const InputDecoration(
+                    labelText: 'Chave',
+                    helperText: 'Use letras minúsculas, números e underline.',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(labelText: 'Descrição'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                icon: const Icon(Icons.add),
+                label: const Text('Criar'),
+              ),
+            ],
+          ),
+    );
+
+    if (created != true) return;
+    setState(() => _saving = true);
+    try {
+      final role = await _api.createRole(
+        accessToken: token,
+        slug: slugController.text.trim(),
+        nome: nameController.text.trim(),
+        descricao: descriptionController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        final slug = role['slug']?.toString() ?? '';
+        _rolesBySlug[slug] = role;
+        _rolePermissions[slug] = Set<String>.from(
+          role['permissions'] as List<dynamic>? ?? [],
+        );
+        _selectedRole = slug;
+      });
+      _showMessage('Tipo de usuário criado.');
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    } finally {
+      nameController.dispose();
+      slugController.dispose();
+      descriptionController.dispose();
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _slugFrom(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
   }
 
   void _showMessage(String message) {

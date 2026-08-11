@@ -360,6 +360,84 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> createRole({
+    required String accessToken,
+    required String slug,
+    required String nome,
+    String? descricao,
+    List<String> permissions = const [],
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permissions/roles'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'slug': slug,
+        'nome': nome,
+        'descricao': descricao,
+        'permissions': permissions,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> listPublicRanges({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/public-ranges'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createPublicRange({
+    required String accessToken,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/public-ranges'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updatePublicRange({
+    required String accessToken,
+    required int rangeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/permit-requests/public-ranges/$rangeId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<void> deletePublicRange({
+    required String accessToken,
+    required int rangeId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/permit-requests/public-ranges/$rangeId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
   Future<Map<String, dynamic>> getAuthorization({
     required String accessToken,
     required int requestId,
@@ -577,6 +655,22 @@ class PermitApiService {
                     : entry.value,
         },
       }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> cancelRequest({
+    required String accessToken,
+    required int requestId,
+    String? motivo,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/cancel'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'motivo': motivo}),
     );
     return _decodeResponse(response) as Map<String, dynamic>;
   }

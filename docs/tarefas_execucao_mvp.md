@@ -13,7 +13,7 @@
 - [x] Limitar tela de serviços ao MVP de `Solicitação de Alvará de Evento`.
 - [x] Criar cadastro PF/PJ com validação de e-mail antes do formulário.
 - [x] Corrigir estado do formulário para separar dados do responsável, evento, respostas e anexos.
-- [ ] Ajustar validação de antecedência mínima para 15 dias úteis.
+- [x] Ajustar validação de antecedência mínima por faixa de público configurável.
 - [x] Validar campos obrigatórios do evento: nome, data, local, público esperado, início e término.
 - [x] Validar anexos obrigatórios: RG/CPF, comprovante de residência e alvará do local.
 - [x] Criar tela de revisão antes do envio.
@@ -35,8 +35,14 @@
 - [x] Criar página `Minhas solicitações` separada por tipo de serviço.
 - [x] Ajustar `Minhas solicitações` para mobile com cards responsivos e tela de detalhes.
 - [x] Exibir ações da solicitação conforme status na tela de detalhes do cidadão.
+- [x] Permitir salvar rascunho local da solicitação para continuar depois.
+- [x] Permitir cancelar solicitação em preenchimento antes do envio.
+- [x] Permitir cancelamento de solicitação já criada pelo cidadão, respeitando status finais.
+- [x] Melhorar visualização mobile da flag de evento verificado.
+- [x] Remover secretaria dos detalhes exibidos ao cidadão em `Minhas solicitações`.
 - [x] Fixar dados do responsável pelo evento a partir da conta logada.
 - [x] Buscar dados completos do cidadão sob demanda ao iniciar nova solicitação.
+- [x] Transformar expectativa de público em seletor configurável por faixa.
 - [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
 - [x] Permitir marcar serviços como favoritos e exibir lista de favoritos no mobile.
 
@@ -90,6 +96,7 @@
 - [x] Mover criação de perguntas para a área de Gestão de Serviços no menu.
 - [x] Reorganizar menu por contexto: Serviços do cidadão, Atendimento interno, Gestão de Serviços e Gestão do Sistema.
 - [x] Ajustar cards da home interna para refletir Gestão de Serviços, Gestão do Sistema e Permissões.
+- [x] Incluir botão `Ver detalhes` na central interna para visualizar status geral e exigências completas.
 - [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
@@ -112,11 +119,12 @@
 - [x] Limpar campos de login/senha/MFA ao trocar o tipo de acesso.
 - [x] Deslogar automaticamente o usuário quando a sessão/token expirar.
 - [x] Restaurar sessão salva ao recarregar o app e evitar loop de login.
-- [x] Emitir sessão web com validade de 2 horas e sessão app com validade de 2 dias.
+- [x] Emitir sessão web com validade de 30 minutos e sessão app com validade de 5 dias.
 - [x] Manter resposta de MFA com dados mínimos e carregar perfil completo via `/auth/me` quando necessário.
 - [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
+- [x] Criar endpoint protegido para cancelamento de solicitação pelo cidadão solicitante.
 - [x] Criar seeds de usuários, secretarias e solicitação de exemplo.
 - [x] Criar seed com gestor e operador para cada secretaria.
 - [x] Criar seed com reset do banco e cenários de teste do fluxo de alvará.
@@ -130,6 +138,9 @@
 - [x] Persistir cards de carrossel com título, texto, imagem e ordem de exibição.
 - [x] Criar seed de permissões por categoria e vínculo inicial por perfil de usuário.
 - [x] Criar tela de gestão de perfis/permissões para admin.
+- [x] Permitir criar novo tipo de usuário na gestão de permissões.
+- [x] Permitir editar perfil próprio com campos sensíveis bloqueados.
+- [x] Permitir que gestor/admin atualize usuários conforme escopo.
 - [ ] Migrar guards do frontend/backend para validação granular por permissão além do perfil base.
 
 ## Marco 7 - Documento final e DAM
