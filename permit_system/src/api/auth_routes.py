@@ -16,7 +16,7 @@ from src.schemas.auth_schema import (
     MfaVerifyRequest,
     TokenResponse,
 )
-from src.schemas.user_schema import UserCreateRequest, UserResponse
+from src.schemas.user_schema import UserAdminUpdateRequest, UserCreateRequest, UserResponse, UserSelfUpdateRequest
 from src.services.auth_service import AuthService
 
 
@@ -80,6 +80,15 @@ def me(current_user: UserModel = Depends(get_current_user)):
     return AuthService.to_response(current_user)
 
 
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UserSelfUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    return AuthService(db).update_current_user(current_user, payload)
+
+
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
@@ -90,3 +99,13 @@ def list_users(
         query = query.filter(UserModel.secretaria_id == current_user.secretaria_id)
     users = query.order_by(UserModel.nome).all()
     return [AuthService.to_response(user) for user in users]
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: int,
+    payload: UserAdminUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return AuthService(db).update_user_by_admin(user_id, payload, current_user)

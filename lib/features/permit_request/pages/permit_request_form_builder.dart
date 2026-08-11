@@ -1,7 +1,9 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../../core/permit_api_service.dart';
 import '../../../data/providers/user_provider.dart';
 import '../controller/permit_request_controller.dart';
 import '../models/permit_request_state.dart';
@@ -37,12 +39,14 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
   late final TextEditingController startTimeController;
   late final TextEditingController endTimeController;
   late final TextEditingController beneficiaryController;
+  late Future<List<Map<String, dynamic>>> _publicRangesFuture;
 
   @override
   void initState() {
     super.initState();
     final state = ref.read(permitRequestControllerProvider);
     final user = ref.read(userProvider);
+    _publicRangesFuture = _loadPublicRanges();
 
     nomeController = TextEditingController(
       text: user?.name ?? state.responsibleData['nome'] ?? '',
@@ -94,6 +98,17 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     beneficiaryController = TextEditingController(
       text: state.eventData['instituicao_beneficiada'] ?? '',
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _loadPublicRanges() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'access_token');
+    if (token == null || token.isEmpty) return const [];
+    try {
+      return await PermitApiService().listPublicRanges(accessToken: token);
+    } catch (_) {
+      return const [];
+    }
   }
 
   @override
@@ -233,6 +248,64 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
             onChanged: (value) => controller.updateEventInfo(eventName: value),
           ),
           const SizedBox(height: 12),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _publicRangesFuture,
+            builder: (context, snapshot) {
+              final ranges = snapshot.data ?? const <Map<String, dynamic>>[];
+              if (ranges.isEmpty) {
+                return TextFormField(
+                  controller: expectedPublicController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Expectativa de público',
+                  ),
+                  onChanged:
+                      (value) =>
+                          controller.updateEventInfo(expectedPublic: value),
+                );
+              }
+              final currentId = state.eventData['publico_faixa_id'];
+              return DropdownButtonFormField<String>(
+                initialValue:
+                    ranges.any((range) => range['id'].toString() == currentId)
+                        ? currentId
+                        : null,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Expectativa de público',
+                ),
+                items:
+                    ranges
+                        .map(
+                          (range) => DropdownMenuItem<String>(
+                            value: range['id'].toString(),
+                            child: Text(
+                              '${range['label']} - prazo mínimo ${range['prazo_dias_uteis']} dias úteis',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (value) {
+                  final selected = ranges.firstWhere(
+                    (range) => range['id'].toString() == value,
+                  );
+                  expectedPublicController.text =
+                      selected['label']?.toString() ?? '';
+                  eventDateController.clear();
+                  controller.updateEventInfo(
+                    expectedPublic: selected['label']?.toString() ?? '',
+                    publicRangeId: selected['id']?.toString(),
+                    publicMin: selected['min_publico']?.toString(),
+                    publicMax: selected['max_publico']?.toString(),
+                    deadlineBusinessDays:
+                        selected['prazo_dias_uteis']?.toString(),
+                    eventDate: '',
+                  );
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: eventDateController,
             readOnly: true,
@@ -249,17 +322,6 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
             onChanged:
                 (value) => controller.updateEventInfo(eventAddress: value),
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: expectedPublicController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Expectativa de público',
-            ),
-            onChanged:
-                (value) => controller.updateEventInfo(expectedPublic: value),
-          ),
-          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -469,6 +531,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     required VoidCallback onRefused,
   }) async {
     var reachedEnd = false;
+    final scrollController = ScrollController();
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -480,11 +543,18 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
                 setDialogState(() => reachedEnd = true);
               }
 
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!scrollController.hasClients) return;
+                if (scrollController.position.maxScrollExtent <= 0) {
+                  markReachedEnd();
+                }
+              });
+
               return AlertDialog(
                 title: const Text('Termo de responsabilidade'),
                 content: SizedBox(
                   width: 620,
-                  height: MediaQuery.of(context).size.height * 0.62,
+                  height: MediaQuery.of(context).size.height * 0.56,
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (notification) {
                       final metrics = notification.metrics;
@@ -495,6 +565,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
                       return false;
                     },
                     child: SingleChildScrollView(
+                      controller: scrollController,
                       padding: const EdgeInsets.only(right: 8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,6 +615,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     } else if (result == false) {
       onRefused();
     }
+    scrollController.dispose();
   }
 
   List<Map<String, String>> _pendingQuestionFiles(PermitRequestState state) {
@@ -576,7 +648,10 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
   }
 
   Future<void> _pickDate() async {
-    final firstValidDate = _addBusinessDays(DateTime.now(), 15);
+    final state = ref.read(permitRequestControllerProvider);
+    final deadlineDays =
+        int.tryParse(state.eventData['prazo_dias_uteis'] ?? '') ?? 15;
+    final firstValidDate = _addBusinessDays(DateTime.now(), deadlineDays);
     final selected = await showDatePicker(
       context: context,
       initialDate: firstValidDate,

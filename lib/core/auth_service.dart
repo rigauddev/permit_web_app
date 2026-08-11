@@ -216,11 +216,52 @@ class AuthService {
     return UserModel.fromApiUser(response);
   }
 
+  Future<UserModel> updateCurrentUser({
+    required String accessToken,
+    required String nome,
+    String? sobrenome,
+    String? telefone,
+    String? endereco,
+  }) async {
+    final response = await _patch('/auth/me', {
+      'nome': nome,
+      'sobrenome': sobrenome,
+      'telefone': telefone,
+      'endereco': endereco,
+    }, accessToken: accessToken);
+    return UserModel.fromApiUser(response);
+  }
+
   Future<List<UserModel>> listUsers({required String accessToken}) async {
     final response = await _getList('/auth/users', accessToken: accessToken);
     return response
         .map((item) => UserModel.fromApiUser(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<UserModel> updateUser({
+    required String accessToken,
+    required int userId,
+    required String nome,
+    String? sobrenome,
+    String? email,
+    String? telefone,
+    String? endereco,
+    String? role,
+    String? secretaria,
+    bool? isActive,
+  }) async {
+    final response = await _patch('/auth/users/$userId', {
+      'nome': nome,
+      'sobrenome': sobrenome,
+      'email': email,
+      'telefone': telefone,
+      'endereco': endereco,
+      'role': role,
+      'secretaria': secretaria,
+      'is_active': isActive,
+    }, accessToken: accessToken);
+    return UserModel.fromApiUser(response);
   }
 
   Future<Map<String, dynamic>> _post(
@@ -287,6 +328,23 @@ class AuthService {
         'Content-Type': 'application/json',
         if (accessToken != null) 'Authorization': 'Bearer $accessToken',
       },
+    );
+    return _decodeResponse(response);
+  }
+
+  Future<Map<String, dynamic>> _patch(
+    String path,
+    Map<String, dynamic> body, {
+    String? accessToken,
+  }) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final response = await _client.patch(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(body),
     );
     return _decodeResponse(response);
   }

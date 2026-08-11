@@ -7,6 +7,7 @@ from src.infra.database.mysql_db import get_db
 from src.schemas.permission_schema import (
     PermissionMatrixResponse,
     PermissionResponse,
+    RoleCreateRequest,
     RolePermissionResponse,
     RolePermissionUpdateRequest,
 )
@@ -78,6 +79,45 @@ def update_role_permissions(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Permissão inválida")
 
     db.query(RolePermissionModel).filter(RolePermissionModel.role_id == role.id).delete()
+    for permission in permissions:
+        db.add(RolePermissionModel(role_id=role.id, permission_id=permission.id))
+    db.commit()
+    db.refresh(role)
+    return RolePermissionResponse(
+        slug=role.slug,
+        nome=role.nome,
+        descricao=role.descricao,
+        permissions=sorted(
+            role_permission.permission.slug
+            for role_permission in role.permissions
+            if role_permission.permission and role_permission.permission.is_active
+        ),
+    )
+
+
+@router.post("/roles", response_model=RolePermissionResponse)
+def create_role(
+    payload: RoleCreateRequest,
+    db: Session = Depends(get_db),
+    _: UserModel = Depends(require_roles("admin")),
+):
+    existing = db.query(RoleModel).filter(RoleModel.slug == payload.slug).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tipo de usuário já cadastrado")
+
+    permissions = (
+        db.query(PermissionModel)
+        .filter(PermissionModel.slug.in_(payload.permissions), PermissionModel.is_active.is_(True))
+        .all()
+    )
+    found_slugs = {permission.slug for permission in permissions}
+    missing = set(payload.permissions) - found_slugs
+    if missing:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Permissão inválida")
+
+    role = RoleModel(slug=payload.slug, nome=payload.nome, descricao=payload.descricao)
+    db.add(role)
+    db.flush()
     for permission in permissions:
         db.add(RolePermissionModel(role_id=role.id, permission_id=permission.id))
     db.commit()

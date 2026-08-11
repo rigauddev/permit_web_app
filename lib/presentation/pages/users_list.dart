@@ -146,6 +146,10 @@ class _UsersListPageState extends State<UsersListPage> {
                           user: users[index],
                           secretariaLabel: _formatSecretaria(users[index]),
                           roleLabel: _formatRole(users[index].role),
+                          onEdit:
+                              _canManageUsers
+                                  ? () => _editUser(users[index])
+                                  : null,
                         ),
                   );
                 }
@@ -159,6 +163,7 @@ class _UsersListPageState extends State<UsersListPage> {
                       DataColumn(label: Text('Perfil')),
                       DataColumn(label: Text('Secretaria')),
                       DataColumn(label: Text('Telefone')),
+                      DataColumn(label: Text('Ações')),
                     ],
                     rows:
                         users
@@ -170,6 +175,16 @@ class _UsersListPageState extends State<UsersListPage> {
                                   DataCell(Text(_formatRole(user.role))),
                                   DataCell(Text(_formatSecretaria(user))),
                                   DataCell(Text(user.phone)),
+                                  DataCell(
+                                    IconButton(
+                                      tooltip: 'Editar usuário',
+                                      onPressed:
+                                          _canManageUsers
+                                              ? () => _editUser(user)
+                                              : null,
+                                      icon: const Icon(Icons.edit_outlined),
+                                    ),
+                                  ),
                                 ],
                               ),
                             )
@@ -205,6 +220,172 @@ class _UsersListPageState extends State<UsersListPage> {
       Navigator.pushReplacementNamed(context, '/home');
     }
   }
+
+  Future<void> _editUser(UserModel user) async {
+    final token = await _secureStorage.read(key: 'access_token');
+    if (token == null || token.isEmpty) {
+      if (mounted) await SessionExpiration.logout(context);
+      return;
+    }
+    if (!mounted) return;
+    final nameController = TextEditingController(text: user.name);
+    final lastNameController = TextEditingController(text: user.lastName);
+    final emailController = TextEditingController(text: user.email);
+    final phoneController = TextEditingController(text: user.phone);
+    final addressController = TextEditingController(text: user.address);
+    var selectedRole = user.role;
+    var selectedSecretaria = user.secretaria;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Editar usuário'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: nameController,
+                          decoration: const InputDecoration(labelText: 'Nome'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: lastNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Sobrenome',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: emailController,
+                          decoration: const InputDecoration(
+                            labelText: 'E-mail',
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: phoneController,
+                          decoration: const InputDecoration(
+                            labelText: 'Telefone',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: addressController,
+                          decoration: const InputDecoration(
+                            labelText: 'Endereço',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue:
+                              _roleLabels.containsKey(selectedRole)
+                                  ? selectedRole
+                                  : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Perfil',
+                          ),
+                          items:
+                              _roleLabels.entries
+                                  .map(
+                                    (entry) => DropdownMenuItem(
+                                      value: entry.key,
+                                      child: Text(entry.value),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged:
+                              (value) => setDialogState(() {
+                                selectedRole = value ?? selectedRole;
+                                if (selectedRole == 'admin') {
+                                  selectedSecretaria = null;
+                                }
+                              }),
+                        ),
+                        if (selectedRole != 'admin') ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue:
+                                _secretariaLabels.containsKey(
+                                      selectedSecretaria,
+                                    )
+                                    ? selectedSecretaria
+                                    : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Secretaria',
+                            ),
+                            items:
+                                _secretariaLabels.entries
+                                    .map(
+                                      (entry) => DropdownMenuItem(
+                                        value: entry.key,
+                                        child: Text(entry.value),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged:
+                                (value) => setDialogState(
+                                  () => selectedSecretaria = value,
+                                ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context, true),
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text('Salvar'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+
+    if (saved != true) return;
+    try {
+      await _authService.updateUser(
+        accessToken: token,
+        userId: user.id!,
+        nome: nameController.text.trim(),
+        sobrenome: lastNameController.text.trim(),
+        email: emailController.text.trim(),
+        telefone: phoneController.text.trim(),
+        endereco: addressController.text.trim(),
+        role: selectedRole,
+        secretaria: selectedRole == 'admin' ? null : selectedSecretaria,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Usuário atualizado.')));
+      _refresh();
+    } on AuthException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      nameController.dispose();
+      lastNameController.dispose();
+      emailController.dispose();
+      phoneController.dispose();
+      addressController.dispose();
+    }
+  }
 }
 
 class _UserCard extends StatelessWidget {
@@ -212,11 +393,13 @@ class _UserCard extends StatelessWidget {
     required this.user,
     required this.secretariaLabel,
     required this.roleLabel,
+    this.onEdit,
   });
 
   final UserModel user;
   final String secretariaLabel;
   final String roleLabel;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -226,6 +409,14 @@ class _UserCard extends StatelessWidget {
         title: Text('${user.name} ${user.lastName}'.trim()),
         subtitle: Text('$roleLabel\n$secretariaLabel\n${user.email}'),
         isThreeLine: true,
+        trailing:
+            onEdit == null
+                ? null
+                : IconButton(
+                  tooltip: 'Editar usuário',
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
       ),
     );
   }

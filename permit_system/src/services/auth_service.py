@@ -21,7 +21,7 @@ from src.schemas.auth_schema import (
     TokenResponse,
     UserSessionResponse,
 )
-from src.schemas.user_schema import UserCreateRequest, UserResponse
+from src.schemas.user_schema import UserAdminUpdateRequest, UserCreateRequest, UserResponse, UserSelfUpdateRequest
 from src.services.email_service import build_mfa_email_html, send_email
 
 
@@ -92,7 +92,7 @@ class AuthService:
         self.db.commit()
 
         session = self._to_session(user)
-        expires_delta = timedelta(days=2) if client_type == "app" else timedelta(hours=2)
+        expires_delta = timedelta(days=5) if client_type == "app" else timedelta(minutes=30)
         token = create_access_token(
             subject=str(user.id),
             claims={
@@ -214,6 +214,71 @@ class AuthService:
             mfa_email_enabled=True,
         )
         self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return self.to_response(user)
+
+    def update_current_user(self, user: UserModel, payload: UserSelfUpdateRequest) -> UserResponse:
+        for field in ["nome", "sobrenome", "telefone", "endereco"]:
+            value = getattr(payload, field)
+            if value is not None:
+                setattr(user, field, value)
+        self.db.commit()
+        self.db.refresh(user)
+        return self.to_response(user)
+
+    def update_user_by_admin(
+        self,
+        user_id: int,
+        payload: UserAdminUpdateRequest,
+        current_user: UserModel,
+    ) -> UserResponse:
+        user = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
+        current_role = current_user.role.slug
+        if current_role == "gestor_secretaria":
+            if user.secretaria_id != current_user.secretaria_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+            if payload.role == "admin":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Gestor de secretaria não pode promover administrador",
+                )
+
+        for field in ["nome", "sobrenome", "telefone", "endereco", "email"]:
+            value = getattr(payload, field)
+            if value is not None:
+                setattr(user, field, value)
+
+        if payload.role is not None:
+            role = self.db.query(RoleModel).filter(RoleModel.slug == payload.role, RoleModel.is_active.is_(True)).first()
+            if not role:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Perfil inválido")
+            if current_role == "gestor_secretaria" and role.slug == "admin":
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+            user.role_id = role.id
+
+        if payload.secretaria is not None:
+            secretaria = None
+            if payload.secretaria:
+                secretaria = (
+                    self.db.query(SecretariaModel)
+                    .filter(SecretariaModel.slug == payload.secretaria, SecretariaModel.is_active.is_(True))
+                    .first()
+                )
+                if not secretaria:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Secretaria inválida")
+            if current_role == "gestor_secretaria" and (
+                not secretaria or secretaria.id != current_user.secretaria_id
+            ):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+            user.secretaria_id = secretaria.id if secretaria else None
+
+        if payload.is_active is not None and current_role == "admin":
+            user.is_active = payload.is_active
+
         self.db.commit()
         self.db.refresh(user)
         return self.to_response(user)

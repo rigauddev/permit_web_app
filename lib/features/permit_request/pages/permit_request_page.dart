@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth_service.dart';
 import '../../../core/session_expiration.dart';
 import '../../../data/models/user_model.dart';
@@ -29,6 +32,8 @@ class PermitRequestPage extends ConsumerStatefulWidget {
 }
 
 class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
+  static const _draftKey = 'event_permit_request_draft_v1';
+
   final _storage = const FlutterSecureStorage();
   final _authService = AuthService();
   late Future<UserModel?> _profileFuture;
@@ -37,11 +42,38 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
   void initState() {
     super.initState();
     _profileFuture = _loadCurrentUser();
-    Future.microtask(() {
-      ref
-          .read(permitRequestControllerProvider.notifier)
-          .initializeQuestions(widget.questions);
+    Future.microtask(() async {
+      final controller = ref.read(permitRequestControllerProvider.notifier);
+      controller.initializeQuestions(widget.questions);
+      await _offerDraftRestore();
     });
+  }
+
+  Future<void> _offerDraftRestore() async {
+    final preferences = await SharedPreferences.getInstance();
+    final rawDraft = preferences.getString(_draftKey);
+    if (rawDraft == null || rawDraft.isEmpty || !mounted) return;
+    try {
+      final decoded = jsonDecode(rawDraft);
+      if (decoded is Map<String, dynamic>) {
+        ref
+            .read(permitRequestControllerProvider.notifier)
+            .restoreDraft(decoded);
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Rascunho restaurado. Se havia anexos, selecione os arquivos novamente.',
+              ),
+            ),
+          );
+        });
+      }
+    } catch (_) {
+      await preferences.remove(_draftKey);
+    }
   }
 
   Future<UserModel?> _loadCurrentUser() async {
@@ -63,6 +95,54 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
       }
       rethrow;
     }
+  }
+
+  Future<void> _saveDraft() async {
+    final controller = ref.read(permitRequestControllerProvider.notifier);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _draftKey,
+      jsonEncode(controller.toDraftJson()),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Rascunho salvo para continuar depois.')),
+    );
+  }
+
+  Future<void> _clearDraft() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_draftKey);
+  }
+
+  Future<void> _cancelDraft() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Cancelar solicitação'),
+            content: const Text(
+              'A solicitação em preenchimento será descartada neste dispositivo.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Voltar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Cancelar solicitação'),
+              ),
+            ],
+          ),
+    );
+    if (confirm != true || !mounted) return;
+    await _clearDraft();
+    final controller = ref.read(permitRequestControllerProvider.notifier);
+    controller.resetForm();
+    controller.initializeQuestions(widget.questions);
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -140,6 +220,29 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                                 MediaQuery.of(context).size.width < 420
                                     ? 140
                                     : null,
+                            child: TextButton.icon(
+                              onPressed: state.isSubmitting ? null : _saveDraft,
+                              icon: const Icon(Icons.save_outlined),
+                              label: const Text('Salvar'),
+                            ),
+                          ),
+                          SizedBox(
+                            width:
+                                MediaQuery.of(context).size.width < 420
+                                    ? 140
+                                    : null,
+                            child: TextButton.icon(
+                              onPressed:
+                                  state.isSubmitting ? null : _cancelDraft,
+                              icon: const Icon(Icons.close),
+                              label: const Text('Cancelar'),
+                            ),
+                          ),
+                          SizedBox(
+                            width:
+                                MediaQuery.of(context).size.width < 420
+                                    ? 140
+                                    : null,
                             child: OutlinedButton(
                               onPressed: () {
                                 if (state.currentStep == 0) {
@@ -173,6 +276,8 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                                               !context.mounted) {
                                             return;
                                           }
+                                          await _clearDraft();
+                                          if (!context.mounted) return;
                                           controller.resetForm();
                                           Navigator.pushReplacement(
                                             context,

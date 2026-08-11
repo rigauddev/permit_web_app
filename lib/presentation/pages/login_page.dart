@@ -106,7 +106,9 @@ class LoginPage extends HookConsumerWidget {
         final expiresAt =
             DateTime.now()
                 .add(
-                  kIsWeb ? const Duration(hours: 2) : const Duration(days: 2),
+                  kIsWeb
+                      ? const Duration(minutes: 30)
+                      : const Duration(days: 5),
                 )
                 .toUtc()
                 .toIso8601String();

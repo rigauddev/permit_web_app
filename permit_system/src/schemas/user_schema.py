@@ -17,6 +17,20 @@ class UserCreateRequest(BaseModel):
     termo_responsabilidade_aceito: bool = False
 
 
+class UserSelfUpdateRequest(BaseModel):
+    nome: str | None = Field(default=None, min_length=2, max_length=255)
+    sobrenome: str | None = Field(default=None, max_length=255)
+    telefone: str | None = Field(default=None, max_length=20)
+    endereco: str | None = Field(default=None, max_length=255)
+
+
+class UserAdminUpdateRequest(UserSelfUpdateRequest):
+    email: str | None = None
+    role: str | None = Field(default=None, max_length=50)
+    secretaria: str | None = Field(default=None, max_length=80)
+    is_active: bool | None = None
+
+
 class UserResponse(BaseModel):
     id: int
     tipo_pessoa: str

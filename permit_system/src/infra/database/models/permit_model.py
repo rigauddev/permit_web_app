@@ -49,6 +49,19 @@ class QuestionDefinitionModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+class EventPublicRangeModel(Base):
+    __tablename__ = "faixas_publico_evento"
+
+    id = Column(Integer, primary_key=True, index=True)
+    label = Column(String(120), nullable=False)
+    min_publico = Column(Integer, nullable=False)
+    max_publico = Column(Integer, nullable=False)
+    prazo_dias_uteis = Column(Integer, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class PermitRequirementModel(Base):
     __tablename__ = "exigencias_alvara"
 
