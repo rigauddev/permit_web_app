@@ -19,6 +19,7 @@
 - [x] Criar tela de revisão antes do envio.
 - [x] Exibir termo de responsabilidade e veracidade das informações antes do envio.
 - [x] Exigir aceite do termo de responsabilidade no frontend e backend.
+- [x] Exigir leitura do termo até o final antes de liberar aceitar ou recusar.
 - [x] Exigir aceite do termo de responsabilidade também no auto cadastro do cidadão.
 - [x] Gerar protocolo após envio.
 - [ ] Exibir que a Secretaria de Desenvolvimento Econômico coordena a Central de Eventos.
@@ -35,6 +36,7 @@
 - [x] Ajustar `Minhas solicitações` para mobile com cards responsivos e tela de detalhes.
 - [x] Exibir ações da solicitação conforme status na tela de detalhes do cidadão.
 - [x] Fixar dados do responsável pelo evento a partir da conta logada.
+- [x] Buscar dados completos do cidadão sob demanda ao iniciar nova solicitação.
 - [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
 - [x] Permitir marcar serviços como favoritos e exibir lista de favoritos no mobile.
 
@@ -111,6 +113,7 @@
 - [x] Deslogar automaticamente o usuário quando a sessão/token expirar.
 - [x] Restaurar sessão salva ao recarregar o app e evitar loop de login.
 - [x] Emitir sessão web com validade de 2 horas e sessão app com validade de 2 dias.
+- [x] Manter resposta de MFA com dados mínimos e carregar perfil completo via `/auth/me` quando necessário.
 - [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
 - [x] Substituir mocks de solicitações por chamadas HTTP.
