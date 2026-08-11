@@ -45,6 +45,18 @@ class QuestionResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class EventPublicRangeRequest(BaseModel):
+    label: str = Field(..., min_length=3, max_length=120)
+    min_publico: int = Field(..., ge=0)
+    max_publico: int = Field(..., ge=1)
+    prazo_dias_uteis: int = Field(..., ge=1, le=365)
+    is_active: bool = True
+
+
+class EventPublicRangeResponse(EventPublicRangeRequest):
+    id: int
+
+
 class RequirementResponse(BaseModel):
     id: int
     secretaria: str

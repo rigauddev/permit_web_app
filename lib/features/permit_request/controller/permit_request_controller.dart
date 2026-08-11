@@ -57,6 +57,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     bool? isBeneficente,
     String? instituicaoBeneficiada,
     bool? termoAceite,
+    String? publicRangeId,
+    String? publicMin,
+    String? publicMax,
+    String? deadlineBusinessDays,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -70,6 +74,12 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     }
     if (instituicaoBeneficiada != null) {
       updated['instituicao_beneficiada'] = instituicaoBeneficiada;
+    }
+    if (publicRangeId != null) updated['publico_faixa_id'] = publicRangeId;
+    if (publicMin != null) updated['publico_estimado_min'] = publicMin;
+    if (publicMax != null) updated['publico_estimado_max'] = publicMax;
+    if (deadlineBusinessDays != null) {
+      updated['prazo_dias_uteis'] = deadlineBusinessDays;
     }
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
@@ -156,8 +166,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       final today = DateTime.now();
       final currentDate = DateTime(today.year, today.month, today.day);
-      if (eventDate.isBefore(_addBusinessDays(currentDate, 15))) {
-        return 'A solicitação precisa ser feita com pelo menos 15 dias úteis de antecedência.';
+      final deadlineDays =
+          int.tryParse(state.eventData['prazo_dias_uteis'] ?? '') ?? 15;
+      if (eventDate.isBefore(_addBusinessDays(currentDate, deadlineDays))) {
+        return 'A solicitação precisa ser feita com pelo menos $deadlineDays dias úteis de antecedência.';
       }
       if (state.eventData['is_beneficente'] == 'true' &&
           (state.eventData['instituicao_beneficiada'] ?? '').trim().isEmpty) {

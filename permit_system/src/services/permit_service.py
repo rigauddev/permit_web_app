@@ -12,6 +12,7 @@ from src.infra.database.models import (
     AttachmentModel,
     AuthorizationTemplateModel,
     EventCredentialModel,
+    EventPublicRangeModel,
     PermitCommentModel,
     PermitRequestModel,
     PermitRequirementModel,
@@ -30,6 +31,8 @@ from src.schemas.permit_schema import (
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
+    EventPublicRangeRequest,
+    EventPublicRangeResponse,
     InspectionCompleteRequest,
     InspectionScheduleRequest,
     PermitCreateRequest,
@@ -578,6 +581,51 @@ class PermitService:
         definitions = self.db.query(QuestionDefinitionModel).order_by(QuestionDefinitionModel.id.asc()).all()
         return [self._question_to_response(item) for item in definitions]
 
+    def list_public_ranges(self, include_inactive: bool = False) -> list[EventPublicRangeResponse]:
+        query = self.db.query(EventPublicRangeModel)
+        if not include_inactive:
+            query = query.filter(EventPublicRangeModel.is_active.is_(True))
+        ranges = query.order_by(EventPublicRangeModel.min_publico.asc()).all()
+        return [self._public_range_to_response(item) for item in ranges]
+
+    def create_public_range(
+        self,
+        payload: EventPublicRangeRequest,
+        current_user: UserModel,
+    ) -> EventPublicRangeResponse:
+        self._ensure_can_manage_service_rules(current_user)
+        self._validate_public_range(payload)
+        item = EventPublicRangeModel(**payload.model_dump())
+        self.db.add(item)
+        self.db.commit()
+        self.db.refresh(item)
+        return self._public_range_to_response(item)
+
+    def update_public_range(
+        self,
+        range_id: int,
+        payload: EventPublicRangeRequest,
+        current_user: UserModel,
+    ) -> EventPublicRangeResponse:
+        self._ensure_can_manage_service_rules(current_user)
+        item = self.db.query(EventPublicRangeModel).filter(EventPublicRangeModel.id == range_id).first()
+        if not item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Faixa de público não encontrada")
+        self._validate_public_range(payload)
+        for field, value in payload.model_dump().items():
+            setattr(item, field, value)
+        self.db.commit()
+        self.db.refresh(item)
+        return self._public_range_to_response(item)
+
+    def delete_public_range(self, range_id: int, current_user: UserModel) -> None:
+        self._ensure_can_manage_service_rules(current_user)
+        item = self.db.query(EventPublicRangeModel).filter(EventPublicRangeModel.id == range_id).first()
+        if not item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Faixa de público não encontrada")
+        item.is_active = False
+        self.db.commit()
+
     def create_question_definition(self, payload: QuestionCreateRequest, current_user: UserModel) -> QuestionResponse:
         self._validate_question_definition(payload)
         self._ensure_can_manage_question_definition(payload.secretaria, current_user)
@@ -906,8 +954,67 @@ class PermitService:
         }
         return answer.get(field_map.get(field_name, field_name))
 
+    def _required_business_days(self, event_data: dict[str, Any]) -> int:
+        range_id = event_data.get("publico_faixa_id")
+        range_item = None
+        if range_id is not None and str(range_id).strip():
+            try:
+                range_item = (
+                    self.db.query(EventPublicRangeModel)
+                    .filter(
+                        EventPublicRangeModel.id == int(range_id),
+                        EventPublicRangeModel.is_active.is_(True),
+                    )
+                    .first()
+                )
+            except (TypeError, ValueError):
+                range_item = None
+
+        if range_item is None:
+            try:
+                public_value = int(str(event_data.get("publico_estimado_max") or event_data.get("publico_estimado")))
+            except (TypeError, ValueError):
+                public_value = None
+            if public_value is not None:
+                range_item = (
+                    self.db.query(EventPublicRangeModel)
+                    .filter(
+                        EventPublicRangeModel.is_active.is_(True),
+                        EventPublicRangeModel.min_publico <= public_value,
+                        EventPublicRangeModel.max_publico >= public_value,
+                    )
+                    .order_by(EventPublicRangeModel.min_publico.asc())
+                    .first()
+                )
+
+        return range_item.prazo_dias_uteis if range_item else 15
+
     @staticmethod
-    def _validate_payload(payload: PermitCreateRequest) -> None:
+    def _validate_public_range(payload: EventPublicRangeRequest) -> None:
+        if payload.max_publico < payload.min_publico:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="O público final deve ser maior ou igual ao público inicial.",
+            )
+
+    @staticmethod
+    def _public_range_to_response(item: EventPublicRangeModel) -> EventPublicRangeResponse:
+        return EventPublicRangeResponse(
+            id=item.id,
+            label=item.label,
+            min_publico=item.min_publico,
+            max_publico=item.max_publico,
+            prazo_dias_uteis=item.prazo_dias_uteis,
+            is_active=item.is_active,
+        )
+
+    @staticmethod
+    def _ensure_can_manage_service_rules(current_user: UserModel) -> None:
+        if current_user.role.slug in {"admin", "gestor_secretaria"}:
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+
+    def _validate_payload(self, payload: PermitCreateRequest) -> None:
         responsible_required = ["nome", "cpf_cnpj", "telefone", "email", "endereco"]
         event_required = [
             "nome_evento",
@@ -938,10 +1045,11 @@ class PermitService:
                 detail="Data do evento deve estar no formato AAAA-MM-DD.",
             ) from exc
 
-        if event_date < PermitService._add_business_days(date.today(), 15):
+        required_business_days = self._required_business_days(payload.dados_evento)
+        if event_date < PermitService._add_business_days(date.today(), required_business_days):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="A solicitação precisa ter pelo menos 15 dias úteis de antecedência.",
+                detail=f"A solicitação precisa ter pelo menos {required_business_days} dias úteis de antecedência.",
             )
 
         attachment_names = payload.dados_evento.get("anexos_informados") or []

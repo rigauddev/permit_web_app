@@ -12,6 +12,7 @@ from src.infra.database.models import (
     AttachmentModel,
     Base,
     EventCredentialModel,
+    EventPublicRangeModel,
     HomeContentCardModel,
     PermissionModel,
     PermitRequestModel,
@@ -50,6 +51,7 @@ PERMISSIONS = [
     ("management.home_content.manage", "Gerenciar conteúdo da home", "Gestão", "Cria cards de carrossel da prefeitura/secretarias."),
     ("management.services.manage", "Gerenciar serviços", "Gestão de Serviços", "Configura serviços municipais disponíveis no sistema."),
     ("management.questions.manage", "Gerenciar perguntas", "Gestão de Serviços", "Cria perguntas, tipos de resposta, modelos e checklist de vistoria."),
+    ("management.event_deadlines.manage", "Gerenciar prazos por público", "Gestão de Serviços", "Configura faixas de público e prazo mínimo em dias úteis para alvará de eventos."),
     ("management.permissions.manage", "Gerenciar permissões", "Permissões", "Mantém matriz de permissões por perfil."),
 ]
 
@@ -81,6 +83,7 @@ ROLE_PERMISSIONS = {
         "management.home_content.manage",
         "management.services.manage",
         "management.questions.manage",
+        "management.event_deadlines.manage",
         "event_credential.validate",
     },
     "admin": "all",
@@ -796,6 +799,36 @@ def seed_home_content(db, users):
         )
 
 
+def seed_public_ranges(db):
+    ranges = [
+        ("10 a 50 pessoas", 10, 50, 3),
+        ("51 a 100 pessoas", 51, 100, 5),
+        ("101 a 300 pessoas", 101, 300, 10),
+        ("301 a 500 pessoas", 301, 500, 15),
+        ("Acima de 500 pessoas", 501, 100000, 20),
+    ]
+    for label, min_publico, max_publico, prazo_dias_uteis in ranges:
+        existing = (
+            db.query(EventPublicRangeModel)
+            .filter(EventPublicRangeModel.min_publico == min_publico, EventPublicRangeModel.max_publico == max_publico)
+            .first()
+        )
+        if existing:
+            existing.label = label
+            existing.prazo_dias_uteis = prazo_dias_uteis
+            existing.is_active = True
+            continue
+        db.add(
+            EventPublicRangeModel(
+                label=label,
+                min_publico=min_publico,
+                max_publico=max_publico,
+                prazo_dias_uteis=prazo_dias_uteis,
+                is_active=True,
+            )
+        )
+
+
 def add_business_days(start_date, business_days):
     current_date = start_date
     added_days = 0
@@ -822,6 +855,7 @@ def main():
         secretarias = seed_secretarias(db)
         users = seed_users(db, roles, secretarias)
         seed_question_definitions(db)
+        seed_public_ranges(db)
         seed_permit_request(db, users, secretarias)
         seed_test_scenarios(db, users, secretarias)
         seed_home_content(db, users)

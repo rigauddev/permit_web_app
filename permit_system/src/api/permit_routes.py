@@ -15,6 +15,8 @@ from src.schemas.permit_schema import (
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
+    EventPublicRangeRequest,
+    EventPublicRangeResponse,
     InspectionCompleteRequest,
     InspectionScheduleRequest,
     PermitCreateRequest,
@@ -71,6 +73,42 @@ def list_question_definitions(
     _: UserModel = Depends(get_current_user),
 ):
     return PermitService(db).list_question_definitions()
+
+
+@router.get("/public-ranges", response_model=list[EventPublicRangeResponse])
+def list_public_ranges(
+    db: Session = Depends(get_db),
+    _: UserModel = Depends(get_current_user),
+):
+    return PermitService(db).list_public_ranges()
+
+
+@router.post("/public-ranges", response_model=EventPublicRangeResponse)
+def create_public_range(
+    payload: EventPublicRangeRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).create_public_range(payload, current_user)
+
+
+@router.put("/public-ranges/{range_id}", response_model=EventPublicRangeResponse)
+def update_public_range(
+    range_id: int,
+    payload: EventPublicRangeRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).update_public_range(range_id, payload, current_user)
+
+
+@router.delete("/public-ranges/{range_id}", status_code=204)
+def delete_public_range(
+    range_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    PermitService(db).delete_public_range(range_id, current_user)
 
 
 @router.post("/question-definitions", response_model=QuestionResponse)

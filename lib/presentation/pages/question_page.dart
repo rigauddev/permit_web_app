@@ -20,6 +20,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   final _formKey = GlobalKey<FormState>();
 
   final List<Map<String, dynamic>> _perguntas = [];
+  final List<Map<String, dynamic>> _publicRanges = [];
 
   String? _key;
   String? _pergunta;
@@ -32,10 +33,16 @@ class _PerguntasPageState extends State<PerguntasPage> {
   bool _requerVistoria = false;
   final List<String> _checklistVistoria = [];
   final TextEditingController _checklistController = TextEditingController();
+  final TextEditingController _rangeLabelController = TextEditingController();
+  final TextEditingController _rangeMinController = TextEditingController();
+  final TextEditingController _rangeMaxController = TextEditingController();
+  final TextEditingController _rangeDaysController = TextEditingController();
   final Map<String, bool> _selectedResponseFields = {};
   final Map<String, bool> _requiredResponseFields = {};
   int _formVersion = 0;
+  int? _rangeEditId;
   bool _isSaving = false;
+  bool _isSavingRange = false;
 
   int? _indiceEdicao;
 
@@ -67,11 +74,16 @@ class _PerguntasPageState extends State<PerguntasPage> {
   void initState() {
     super.initState();
     _fetchQuestionDefinitions();
+    _fetchPublicRanges();
   }
 
   @override
   void dispose() {
     _checklistController.dispose();
+    _rangeLabelController.dispose();
+    _rangeMinController.dispose();
+    _rangeMaxController.dispose();
+    _rangeDaysController.dispose();
     super.dispose();
   }
 
@@ -193,6 +205,8 @@ class _PerguntasPageState extends State<PerguntasPage> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 32),
+                _buildPublicRangeSection(),
                 const SizedBox(height: 32),
                 const Text(
                   'Perguntas Cadastradas',
@@ -502,6 +516,123 @@ class _PerguntasPageState extends State<PerguntasPage> {
     );
   }
 
+  Widget _buildPublicRangeSection() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Prazo de solicitação por público',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Configure as faixas de público que o cidadão seleciona no formulário e o prazo mínimo em dias úteis para cada faixa.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _rangeField(_rangeLabelController, 'Rótulo', isMobile),
+                _rangeField(
+                  _rangeMinController,
+                  'Público inicial',
+                  isMobile,
+                  number: true,
+                ),
+                _rangeField(
+                  _rangeMaxController,
+                  'Público final',
+                  isMobile,
+                  number: true,
+                ),
+                _rangeField(
+                  _rangeDaysController,
+                  'Prazo em dias úteis',
+                  isMobile,
+                  number: true,
+                ),
+                SizedBox(
+                  width: isMobile ? double.infinity : 180,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSavingRange ? null : _savePublicRange,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(
+                      _isSavingRange
+                          ? 'Salvando...'
+                          : _rangeEditId == null
+                          ? 'Adicionar'
+                          : 'Atualizar',
+                    ),
+                  ),
+                ),
+                if (_rangeEditId != null)
+                  TextButton(
+                    onPressed: _resetPublicRangeForm,
+                    child: const Text('Cancelar edição'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_publicRanges.isEmpty)
+              const Text('Nenhuma faixa cadastrada.')
+            else
+              ..._publicRanges.map(
+                (range) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.groups_outlined),
+                  title: Text(range['label']?.toString() ?? ''),
+                  subtitle: Text(
+                    '${range['min_publico']} a ${range['max_publico']} pessoas • ${range['prazo_dias_uteis']} dias úteis',
+                  ),
+                  trailing: Wrap(
+                    spacing: 4,
+                    children: [
+                      IconButton(
+                        tooltip: 'Editar faixa',
+                        onPressed: () => _editPublicRange(range),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Inativar faixa',
+                        onPressed: () => _deletePublicRange(range),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rangeField(
+    TextEditingController controller,
+    String label,
+    bool isMobile, {
+    bool number = false,
+  }) {
+    return SizedBox(
+      width: isMobile ? double.infinity : 180,
+      child: TextField(
+        controller: controller,
+        keyboardType: number ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
   void _addChecklistItem() {
     final value = _checklistController.text.trim();
     if (value.isEmpty || _checklistVistoria.contains(value)) return;
@@ -696,6 +827,129 @@ class _PerguntasPageState extends State<PerguntasPage> {
         _showError(error.toString());
       }
     }
+  }
+
+  Future<String?> _accessToken() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'access_token');
+    if (token == null || token.isEmpty) {
+      if (mounted) await SessionExpiration.logout(context);
+      return null;
+    }
+    return token;
+  }
+
+  Future<void> _fetchPublicRanges() async {
+    final token = await _accessToken();
+    if (token == null) return;
+    try {
+      final ranges = await PermitApiService().listPublicRanges(
+        accessToken: token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _publicRanges
+          ..clear()
+          ..addAll(ranges);
+      });
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    }
+  }
+
+  Future<void> _savePublicRange() async {
+    final token = await _accessToken();
+    if (token == null) return;
+    final minPublico = int.tryParse(_rangeMinController.text.trim());
+    final maxPublico = int.tryParse(_rangeMaxController.text.trim());
+    final prazo = int.tryParse(_rangeDaysController.text.trim());
+    final label = _rangeLabelController.text.trim();
+    if (label.isEmpty ||
+        minPublico == null ||
+        maxPublico == null ||
+        prazo == null) {
+      _showError('Preencha rótulo, público inicial, público final e prazo.');
+      return;
+    }
+    final payload = {
+      'label': label,
+      'min_publico': minPublico,
+      'max_publico': maxPublico,
+      'prazo_dias_uteis': prazo,
+      'is_active': true,
+    };
+    setState(() => _isSavingRange = true);
+    try {
+      if (_rangeEditId == null) {
+        await PermitApiService().createPublicRange(
+          accessToken: token,
+          payload: payload,
+        );
+      } else {
+        await PermitApiService().updatePublicRange(
+          accessToken: token,
+          rangeId: _rangeEditId!,
+          payload: payload,
+        );
+      }
+      if (!mounted) return;
+      _resetPublicRangeForm();
+      await _fetchPublicRanges();
+      if (mounted) _showSuccess('Faixa de público salva.');
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isSavingRange = false);
+    }
+  }
+
+  void _editPublicRange(Map<String, dynamic> range) {
+    setState(() {
+      _rangeEditId = range['id'] as int?;
+      _rangeLabelController.text = range['label']?.toString() ?? '';
+      _rangeMinController.text = range['min_publico']?.toString() ?? '';
+      _rangeMaxController.text = range['max_publico']?.toString() ?? '';
+      _rangeDaysController.text = range['prazo_dias_uteis']?.toString() ?? '';
+    });
+  }
+
+  Future<void> _deletePublicRange(Map<String, dynamic> range) async {
+    final token = await _accessToken();
+    final rangeId = range['id'] as int?;
+    if (token == null || rangeId == null) return;
+    try {
+      await PermitApiService().deletePublicRange(
+        accessToken: token,
+        rangeId: rangeId,
+      );
+      if (!mounted) return;
+      await _fetchPublicRanges();
+      _showSuccess('Faixa inativada.');
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    }
+  }
+
+  void _resetPublicRangeForm() {
+    setState(() {
+      _rangeEditId = null;
+      _rangeLabelController.clear();
+      _rangeMinController.clear();
+      _rangeMaxController.clear();
+      _rangeDaysController.clear();
+    });
   }
 
   Future<void> _enviarParaAPISalvar(Map<String, dynamic> pergunta) async {
