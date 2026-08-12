@@ -169,6 +169,47 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> createComment({
+    required String accessToken,
+    required int requestId,
+    required String mensagem,
+    int? requirementId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/comments'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'mensagem': mensagem, 'requirement_id': requirementId}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> attachRequirementDocument({
+    required String accessToken,
+    required int requestId,
+    required int requirementId,
+    required String fileName,
+    required String fileUrl,
+    String? mimeType,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/requirement-attachment'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'requirement_id': requirementId,
+        'nome_arquivo': fileName,
+        'arquivo_url': fileUrl,
+        'mime_type': mimeType,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> scheduleInspection({
     required String accessToken,
     required int requirementId,
@@ -823,6 +864,26 @@ class PermitApiService {
     final requirements = item['requirements'] as List<dynamic>? ?? [];
     final attachments = item['attachments'] as List<dynamic>? ?? [];
     final comments = item['comments'] as List<dynamic>? ?? [];
+    final commentsByRequirement = <int, List<Map<String, dynamic>>>{};
+    for (final comment in comments.whereType<Map<String, dynamic>>()) {
+      final requirementId = comment['requirement_id'];
+      if (requirementId is! int) continue;
+      commentsByRequirement.putIfAbsent(requirementId, () => []).add({
+        'id': comment['id'],
+        'user_type': comment['author_role']?.toString() ?? '',
+        'user_name': comment['author_name']?.toString() ?? 'Usuário',
+        'descricao': comment['mensagem']?.toString() ?? '',
+        'created_at': comment['created_at']?.toString(),
+      });
+    }
+    final attachmentsByRequirement = <int, List<Map<String, dynamic>>>{};
+    for (final attachment in attachments.whereType<Map<String, dynamic>>()) {
+      final requirementId = attachment['requirement_id'];
+      if (requirementId is! int) continue;
+      attachmentsByRequirement
+          .putIfAbsent(requirementId, () => [])
+          .add(attachment);
+    }
     return {
       'id': item['id'],
       'formId': item['id'],
@@ -843,15 +904,24 @@ class PermitApiService {
       'perguntas':
           requirements.map((requirement) {
             final data = requirement as Map<String, dynamic>;
+            final requirementId = data['id'];
             return {
-              'id': data['id'],
+              'id': requirementId,
               'pergunta': data['tipo_exigencia'],
               'secretaria_slug': data['secretaria'] ?? '',
               'secretaria': _formatSecretaria(data['secretaria'] as String?),
               'status': data['status'] ?? 'aguardando_analise',
               'observacoes':
-                  data['observacoes'] == null ? [] : [data['observacoes']],
-              'anexos': const <String>[],
+                  requirementId is int
+                      ? commentsByRequirement[requirementId] ??
+                          _legacyObservation(data['observacoes'])
+                      : _legacyObservation(data['observacoes']),
+              'anexos':
+                  requirementId is int
+                      ? attachmentsByRequirement[requirementId] ??
+                          const <Map<String, dynamic>>[]
+                      : const <Map<String, dynamic>>[],
+              'due_date': data['due_date'],
               'requires_inspection': data['requires_inspection'] ?? false,
               'inspection_checklist':
                   data['inspection_checklist'] ?? const <dynamic>[],
@@ -882,6 +952,18 @@ class PermitApiService {
       default:
         return slug ?? '';
     }
+  }
+
+  static List<Map<String, dynamic>> _legacyObservation(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty || text == 'null') return const <Map<String, dynamic>>[];
+    return [
+      {
+        'user_type': 'operador_secretaria',
+        'user_name': 'Secretaria',
+        'descricao': text,
+      },
+    ];
   }
 }
 

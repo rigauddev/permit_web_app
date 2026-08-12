@@ -175,6 +175,8 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
               userType: widget.userType,
               onAttachPaymentProof: _attachPaymentProof,
               onCancelRequest: _cancelRequest,
+              onSendRequirementComment: _sendRequirementComment,
+              onAttachRequirementDocument: _attachRequirementDocument,
               onOpenCredential: _openCredential,
               onOpenAttachment: _openAttachment,
               onShareAttachment: _shareAttachment,
@@ -284,6 +286,84 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Solicitação cancelada.')));
+      _refresh();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _sendRequirementComment({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> requirement,
+    required String message,
+  }) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null || token.isEmpty) {
+      if (mounted) await SessionExpiration.logout(context);
+      return;
+    }
+    final requestId = request['formId'] as int? ?? request['id'] as int?;
+    final requirementId = requirement['id'] as int?;
+    if (requestId == null || requirementId == null) return;
+    try {
+      await _api.createComment(
+        accessToken: token,
+        requestId: requestId,
+        requirementId: requirementId,
+        mensagem: message,
+      );
+      _refresh();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _attachRequirementDocument({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> requirement,
+  }) async {
+    final attachment = await _askAttachment(
+      title: 'Anexar arquivo corrigido',
+      description:
+          'Selecione o arquivo corrigido solicitado pela secretaria. Ele ficará vinculado à exigência em análise.',
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+    if (attachment == null) return;
+    final token = await _storage.read(key: 'access_token');
+    if (token == null || token.isEmpty) {
+      if (mounted) await SessionExpiration.logout(context);
+      return;
+    }
+    final requestId = request['formId'] as int? ?? request['id'] as int?;
+    final requirementId = requirement['id'] as int?;
+    if (requestId == null || requirementId == null) return;
+    try {
+      await _api.attachRequirementDocument(
+        accessToken: token,
+        requestId: requestId,
+        requirementId: requirementId,
+        fileName: attachment.fileName,
+        fileUrl: attachment.fileUrl,
+        mimeType: attachment.mimeType,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Arquivo corrigido anexado.')),
+      );
       _refresh();
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -794,6 +874,8 @@ class _RequestDetailsPage extends StatelessWidget {
     required this.userType,
     required this.onAttachPaymentProof,
     required this.onCancelRequest,
+    required this.onSendRequirementComment,
+    required this.onAttachRequirementDocument,
     required this.onOpenCredential,
     required this.onOpenAttachment,
     required this.onShareAttachment,
@@ -803,6 +885,17 @@ class _RequestDetailsPage extends StatelessWidget {
   final String userType;
   final ValueChanged<Map<String, dynamic>> onAttachPaymentProof;
   final ValueChanged<Map<String, dynamic>> onCancelRequest;
+  final Future<void> Function({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> requirement,
+    required String message,
+  })
+  onSendRequirementComment;
+  final Future<void> Function({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> requirement,
+  })
+  onAttachRequirementDocument;
   final ValueChanged<Map<String, dynamic>> onOpenCredential;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
   final ValueChanged<Map<String, dynamic>> onShareAttachment;
@@ -943,7 +1036,12 @@ class _RequestDetailsPage extends StatelessWidget {
                 const SizedBox(height: 12),
                 _DetailsSection(
                   title: 'Exigências e validações',
-                  child: _RequirementList(request: request),
+                  child: _RequirementList(
+                    request: request,
+                    onSendRequirementComment: onSendRequirementComment,
+                    onAttachRequirementDocument: onAttachRequirementDocument,
+                    onOpenAttachment: onOpenAttachment,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _DetailsSection(
@@ -1020,15 +1118,33 @@ class _DetailRow extends StatelessWidget {
 }
 
 class _RequirementList extends StatelessWidget {
-  const _RequirementList({required this.request});
+  const _RequirementList({
+    required this.request,
+    required this.onSendRequirementComment,
+    required this.onAttachRequirementDocument,
+    required this.onOpenAttachment,
+  });
 
   final Map<String, dynamic> request;
+  final Future<void> Function({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> requirement,
+    required String message,
+  })
+  onSendRequirementComment;
+  final Future<void> Function({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> requirement,
+  })
+  onAttachRequirementDocument;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
 
   @override
   Widget build(BuildContext context) {
     final requirements =
         (request['requirements'] as List<dynamic>? ??
                 request['exigencias'] as List<dynamic>? ??
+                request['perguntas'] as List<dynamic>? ??
                 const [])
             .whereType<Map<String, dynamic>>()
             .toList();
@@ -1042,17 +1158,206 @@ class _RequirementList extends StatelessWidget {
                 requirement['status']?.toString() ??
                 requirement['status_secretaria']?.toString() ??
                 'pendente';
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.fact_check_outlined),
-              title: Text(
-                requirement['exigencia']?.toString() ??
-                    requirement['pergunta']?.toString() ??
-                    'Exigência',
+            final isCorrection = status == 'pendente_documento';
+            final comments =
+                (requirement['observacoes'] as List<dynamic>? ?? const [])
+                    .whereType<Map<String, dynamic>>()
+                    .toList();
+            final attachments =
+                (requirement['anexos'] as List<dynamic>? ?? const [])
+                    .whereType<Map<String, dynamic>>()
+                    .toList();
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color:
+                      isCorrection
+                          ? Colors.orange.withValues(alpha: 0.45)
+                          : Theme.of(context).dividerColor,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                color:
+                    isCorrection ? Colors.orange.withValues(alpha: 0.06) : null,
               ),
-              subtitle: Text(_RequestListTile._formatStatus(status)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Icon(
+                        isCorrection
+                            ? Icons.report_problem_outlined
+                            : Icons.fact_check_outlined,
+                        color: isCorrection ? Colors.orange : null,
+                      ),
+                      SizedBox(
+                        width: 360,
+                        child: Text(
+                          requirement['exigencia']?.toString() ??
+                              requirement['pergunta']?.toString() ??
+                              'Exigência',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      _StatusBadge(status: status),
+                      if ((requirement['due_date']?.toString() ?? '')
+                          .isNotEmpty)
+                        Text(
+                          'Prazo: ${requirement['due_date']}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                    ],
+                  ),
+                  if (comments.isNotEmpty || attachments.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _CorrectionTimeline(
+                      comments: comments,
+                      attachments: attachments,
+                      onOpenAttachment: onOpenAttachment,
+                    ),
+                  ],
+                  if (isCorrection) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed:
+                              () => _openCorrectionDialog(context, requirement),
+                          icon: const Icon(Icons.chat_outlined),
+                          label: const Text('Responder correção'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed:
+                              () => onAttachRequirementDocument(
+                                request: request,
+                                requirement: requirement,
+                              ),
+                          icon: const Icon(Icons.upload_file),
+                          label: const Text('Anexar arquivo corrigido'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             );
           }).toList(),
+    );
+  }
+
+  Future<void> _openCorrectionDialog(
+    BuildContext context,
+    Map<String, dynamic> requirement,
+  ) async {
+    final controller = TextEditingController();
+    final message = await showDialog<String>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Responder correção'),
+            content: TextField(
+              controller: controller,
+              minLines: 4,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Mensagem para a secretaria',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, controller.text.trim()),
+                child: const Text('Enviar'),
+              ),
+            ],
+          ),
+    );
+    if (message == null || message.isEmpty) return;
+    await onSendRequirementComment(
+      request: request,
+      requirement: requirement,
+      message: message,
+    );
+  }
+}
+
+class _CorrectionTimeline extends StatelessWidget {
+  const _CorrectionTimeline({
+    required this.comments,
+    required this.attachments,
+    required this.onOpenAttachment,
+  });
+
+  final List<Map<String, dynamic>> comments;
+  final List<Map<String, dynamic>> attachments;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ...comments.map((comment) {
+          final role = comment['user_type']?.toString() ?? '';
+          final fromCitizen = role == 'cidadao';
+          return Align(
+            alignment:
+                fromCitizen ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 560),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color:
+                    fromCitizen
+                        ? Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.1)
+                        : Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment:
+                    fromCitizen
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    comment['user_name']?.toString() ?? 'Usuário',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(comment['descricao']?.toString() ?? ''),
+                ],
+              ),
+            ),
+          );
+        }),
+        ...attachments.map(
+          (attachment) => ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.attach_file),
+            title: Text(attachment['nome_arquivo']?.toString() ?? 'Arquivo'),
+            subtitle: const Text('Anexo da correção'),
+            trailing: IconButton(
+              tooltip: 'Abrir anexo',
+              onPressed: () => onOpenAttachment(attachment),
+              icon: const Icon(Icons.open_in_new),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

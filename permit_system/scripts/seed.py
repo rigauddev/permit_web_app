@@ -224,6 +224,7 @@ def ensure_question_definition_columns():
         "modelo_documento_url": "ALTER TABLE question_definitions ADD COLUMN modelo_documento_url VARCHAR(500) NULL",
         "requer_vistoria": "ALTER TABLE question_definitions ADD COLUMN requer_vistoria BOOLEAN NOT NULL DEFAULT 0",
         "checklist_vistoria": "ALTER TABLE question_definitions ADD COLUMN checklist_vistoria JSON NULL",
+        "prazo_resposta_dias_uteis": "ALTER TABLE question_definitions ADD COLUMN prazo_resposta_dias_uteis INTEGER NOT NULL DEFAULT 2",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -274,6 +275,7 @@ QUESTION_DEFINITIONS = [
         "secretaria_dam": "Desenvolvimento Econômico",
         "tipos_resposta": ["Sim/Não", "Texto"],
         "campos_obrigatorios": {"Texto": False},
+        "prazo_resposta_dias_uteis": 2,
     },
     {
         "key": "local_fixo_sem_alvara",
@@ -480,7 +482,7 @@ def seed_question_definitions(db):
     for data in QUESTION_DEFINITIONS:
         existing = db.query(QuestionDefinitionModel).filter_by(key=data["key"]).first()
         if existing:
-            fields_to_update = ["requer_vistoria", "checklist_vistoria"]
+            fields_to_update = ["requer_vistoria", "checklist_vistoria", "prazo_resposta_dias_uteis"]
             if data["key"] == "bloqueia_via":
                 fields_to_update.extend(
                     [
@@ -494,6 +496,8 @@ def seed_question_definitions(db):
             for field in fields_to_update:
                 if field in data and (data["key"] == "bloqueia_via" or not getattr(existing, field, None)):
                     setattr(existing, field, data[field])
+            if not getattr(existing, "prazo_resposta_dias_uteis", None):
+                existing.prazo_resposta_dias_uteis = 2
             continue
         db.add(QuestionDefinitionModel(**data))
 

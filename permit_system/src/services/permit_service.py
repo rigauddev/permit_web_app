@@ -40,6 +40,7 @@ from src.schemas.permit_schema import (
     PermitResponse,
     QuestionCreateRequest,
     QuestionResponse,
+    RequirementAttachmentRequest,
     RequirementResponse,
     RequirementStatusUpdateRequest,
 )
@@ -134,12 +135,14 @@ class PermitService:
         for requirement_data in self._build_requirements(payload.respostas):
             secretaria_slug = requirement_data["secretaria_slug"]
             secretaria = self.db.query(SecretariaModel).filter(SecretariaModel.slug == secretaria_slug).first()
+            prazo_resposta = int(requirement_data.get("prazo_resposta_dias_uteis") or 2)
             if secretaria:
                 self.db.add(
                     PermitRequirementModel(
                         permit_request_id=request.id,
                         secretaria_id=secretaria.id,
                         tipo_exigencia=requirement_data["tipo_exigencia"],
+                        due_date=self._add_business_days(date.today(), prazo_resposta),
                         requires_inspection=requirement_data["requires_inspection"],
                         inspection_checklist=requirement_data["inspection_checklist"],
                     )
@@ -245,6 +248,8 @@ class PermitService:
                 )
 
         self._recalculate_request_status(permit_request)
+        if new_status == "pendente_documento":
+            self._notify_citizen_correction_required(permit_request, requirement, current_user)
         if (
             previous_status != STATUS_AGUARDANDO_GERACAO_DAM
             and permit_request.status == STATUS_AGUARDANDO_GERACAO_DAM
@@ -433,6 +438,44 @@ class PermitService:
         request.status = STATUS_AGUARDANDO_GERACAO_ALVARA
         self._notify_development_economico_ready_for_final_permit(request, current_user)
         self.db.add(attachment)
+        self.db.commit()
+        self.db.refresh(attachment)
+        return self._attachment_to_response(attachment)
+
+    def attach_requirement_document(
+        self,
+        request_id: int,
+        payload: RequirementAttachmentRequest,
+        current_user: UserModel,
+    ) -> AttachmentResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        requirement = (
+            self.db.query(PermitRequirementModel)
+            .filter(
+                PermitRequirementModel.id == payload.requirement_id,
+                PermitRequirementModel.permit_request_id == request.id,
+            )
+            .first()
+        )
+        if not requirement:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
+        if current_user.role.slug == "cidadao":
+            if request.solicitante_id != current_user.id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        else:
+            self._ensure_can_manage_requirement(requirement, current_user)
+
+        attachment = self._create_attachment(request, payload, "correcao_exigencia")
+        attachment.requirement_id = requirement.id
+        self.db.add(attachment)
+        self._add_comment(
+            request.id,
+            current_user,
+            f"Arquivo anexado para a exigência: {payload.nome_arquivo}",
+            requirement_id=requirement.id,
+        )
         self.db.commit()
         self.db.refresh(attachment)
         return self._attachment_to_response(attachment)
@@ -681,6 +724,7 @@ class PermitService:
             modelo_documento_url=payload.modelo_documento_url,
             requer_vistoria=payload.requer_vistoria,
             checklist_vistoria=payload.checklist_vistoria,
+            prazo_resposta_dias_uteis=payload.prazo_resposta_dias_uteis,
         )
         self.db.add(question)
         self.db.commit()
@@ -716,6 +760,7 @@ class PermitService:
         question.modelo_documento_url = payload.modelo_documento_url
         question.requer_vistoria = payload.requer_vistoria
         question.checklist_vistoria = payload.checklist_vistoria
+        question.prazo_resposta_dias_uteis = payload.prazo_resposta_dias_uteis
         self.db.commit()
         self.db.refresh(question)
         return self._question_to_response(question)
@@ -744,6 +789,7 @@ class PermitService:
             modelo_documento_url=question.modelo_documento_url,
             requer_vistoria=question.requer_vistoria,
             checklist_vistoria=question.checklist_vistoria or [],
+            prazo_resposta_dias_uteis=question.prazo_resposta_dias_uteis or 2,
             created_at=question.created_at,
             updated_at=question.updated_at,
         )
@@ -852,20 +898,25 @@ class PermitService:
     def _build_requirements(self, respostas: dict[str, Any]) -> list[dict[str, Any]]:
         requirements: list[dict[str, Any]] = []
         seen = set()
+        definitions = self.db.query(QuestionDefinitionModel).all()
+        definitions_by_key = {question.key: question for question in definitions}
         for answer_key, rules in QUESTION_RULES.items():
             if PermitService._answer_is_yes(respostas.get(answer_key)):
+                question = definitions_by_key.get(answer_key)
                 for secretaria_slug, tipo_exigencia in rules:
                     if (secretaria_slug, tipo_exigencia) not in seen:
                         requirements.append(
                             {
                                 "secretaria_slug": secretaria_slug,
                                 "tipo_exigencia": tipo_exigencia,
+                                "prazo_resposta_dias_uteis": (
+                                    question.prazo_resposta_dias_uteis if question else 2
+                                ),
                                 "requires_inspection": self._default_requires_inspection(tipo_exigencia),
                                 "inspection_checklist": self._default_inspection_checklist(tipo_exigencia),
                             }
                         )
                         seen.add((secretaria_slug, tipo_exigencia))
-        definitions = self.db.query(QuestionDefinitionModel).all()
         for question in definitions:
             if question.key in QUESTION_RULES:
                 continue
@@ -878,6 +929,7 @@ class PermitService:
                     {
                         "secretaria_slug": secretaria_slug,
                         "tipo_exigencia": tipo_exigencia,
+                        "prazo_resposta_dias_uteis": question.prazo_resposta_dias_uteis,
                         "requires_inspection": question.requer_vistoria,
                         "inspection_checklist": question.checklist_vistoria or [],
                     }
@@ -1270,6 +1322,24 @@ class PermitService:
             ),
         )
 
+    def _notify_citizen_correction_required(
+        self,
+        request: PermitRequestModel,
+        requirement: PermitRequirementModel,
+        actor: UserModel,
+    ) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=str((request.dados_responsavel or {}).get("email") or request.solicitante.email),
+            assunto="Correção solicitada na sua solicitação de alvará",
+            link=f"{PUBLIC_BASE_URL}/my-requests?status=pendente_correcao",
+            mensagem=(
+                f"A secretaria solicitou correção na exigência '{requirement.tipo_exigencia}'. "
+                "Acesse o sistema, abra Minhas solicitações e consulte as mensagens da exigência."
+            ),
+        )
+
     def _notify_development_economico_ready_for_final_permit(
         self,
         request: PermitRequestModel,
@@ -1441,12 +1511,14 @@ class PermitService:
             inspection_scheduled_for=requirement.inspection_scheduled_for,
             inspection_status=requirement.inspection_status,
             inspection_result=requirement.inspection_result,
+            due_date=requirement.due_date,
         )
 
     @staticmethod
     def _attachment_to_response(attachment: AttachmentModel) -> AttachmentResponse:
         return AttachmentResponse(
             id=attachment.id,
+            requirement_id=attachment.requirement_id,
             tipo_documento=attachment.tipo_documento,
             nome_arquivo=attachment.nome_arquivo,
             arquivo_url=attachment.arquivo_url,
@@ -1462,6 +1534,7 @@ class PermitService:
             requirement_id=comment.requirement_id,
             author_id=comment.author_id,
             author_name=comment.author.nome,
+            author_role=comment.author.role.slug if comment.author and comment.author.role else None,
             mensagem=comment.mensagem,
             created_at=comment.created_at,
         )
