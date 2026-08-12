@@ -225,6 +225,8 @@ def ensure_question_definition_columns():
         "requer_vistoria": "ALTER TABLE question_definitions ADD COLUMN requer_vistoria BOOLEAN NOT NULL DEFAULT 0",
         "checklist_vistoria": "ALTER TABLE question_definitions ADD COLUMN checklist_vistoria JSON NULL",
         "prazo_resposta_dias_uteis": "ALTER TABLE question_definitions ADD COLUMN prazo_resposta_dias_uteis INTEGER NOT NULL DEFAULT 2",
+        "display_order": "ALTER TABLE question_definitions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
+        "vistoria_exige_foto": "ALTER TABLE question_definitions ADD COLUMN vistoria_exige_foto BOOLEAN NOT NULL DEFAULT 0",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -255,6 +257,7 @@ def ensure_requirement_inspection_columns():
     migrations = {
         "requires_inspection": "ALTER TABLE exigencias_alvara ADD COLUMN requires_inspection BOOLEAN NOT NULL DEFAULT 0",
         "inspection_checklist": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_checklist JSON NULL",
+        "inspection_requires_photo": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_requires_photo BOOLEAN NOT NULL DEFAULT 0",
         "inspection_scheduled_for": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_for DATE NULL",
         "inspection_status": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_status VARCHAR(50) NOT NULL DEFAULT 'nao_agendada'",
         "inspection_result": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_result JSON NULL",
@@ -479,10 +482,18 @@ def seed_users(db, roles, secretarias):
 def seed_question_definitions(db):
     from src.infra.database.models import QuestionDefinitionModel
 
-    for data in QUESTION_DEFINITIONS:
+    for index, data in enumerate(QUESTION_DEFINITIONS, start=1):
+        data.setdefault("display_order", index)
+        data.setdefault("vistoria_exige_foto", data.get("requer_vistoria", False))
         existing = db.query(QuestionDefinitionModel).filter_by(key=data["key"]).first()
         if existing:
-            fields_to_update = ["requer_vistoria", "checklist_vistoria", "prazo_resposta_dias_uteis"]
+            fields_to_update = [
+                "requer_vistoria",
+                "checklist_vistoria",
+                "prazo_resposta_dias_uteis",
+                "display_order",
+                "vistoria_exige_foto",
+            ]
             if data["key"] == "bloqueia_via":
                 fields_to_update.extend(
                     [
@@ -498,6 +509,8 @@ def seed_question_definitions(db):
                     setattr(existing, field, data[field])
             if not getattr(existing, "prazo_resposta_dias_uteis", None):
                 existing.prazo_resposta_dias_uteis = 2
+            if not getattr(existing, "display_order", None):
+                existing.display_order = index
             continue
         db.add(QuestionDefinitionModel(**data))
 
@@ -518,6 +531,7 @@ def inspection_fields(tipo_exigencia, scheduled_for=None):
     return {
         "requires_inspection": bool(checklist),
         "inspection_checklist": checklist,
+        "inspection_requires_photo": bool(checklist),
         "inspection_scheduled_for": scheduled_for if checklist else None,
         "inspection_status": "agendada" if checklist and scheduled_for else "nao_agendada",
     }

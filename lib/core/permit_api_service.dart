@@ -925,6 +925,8 @@ class PermitApiService {
               'requires_inspection': data['requires_inspection'] ?? false,
               'inspection_checklist':
                   data['inspection_checklist'] ?? const <dynamic>[],
+              'inspection_requires_photo':
+                  data['inspection_requires_photo'] ?? false,
               'inspection_scheduled_for': data['inspection_scheduled_for'],
               'inspection_status': data['inspection_status'] ?? 'nao_agendada',
               'inspection_result': data['inspection_result'],

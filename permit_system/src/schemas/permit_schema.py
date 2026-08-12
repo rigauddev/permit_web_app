@@ -30,6 +30,8 @@ class QuestionCreateRequest(BaseModel):
     requer_vistoria: bool = False
     checklist_vistoria: list[str] = Field(default_factory=list)
     prazo_resposta_dias_uteis: int = Field(default=2, ge=1, le=30)
+    display_order: int = Field(default=0, ge=0, le=1000)
+    vistoria_exige_foto: bool = False
 
 
 class QuestionResponse(BaseModel):
@@ -47,6 +49,8 @@ class QuestionResponse(BaseModel):
     requer_vistoria: bool = False
     checklist_vistoria: list[str] = Field(default_factory=list)
     prazo_resposta_dias_uteis: int = 2
+    display_order: int = 0
+    vistoria_exige_foto: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -71,6 +75,7 @@ class RequirementResponse(BaseModel):
     observacoes: str | None = None
     requires_inspection: bool = False
     inspection_checklist: list[str] = Field(default_factory=list)
+    inspection_requires_photo: bool = False
     inspection_scheduled_for: date | None = None
     inspection_status: str = "nao_agendada"
     inspection_result: dict[str, Any] | None = None
