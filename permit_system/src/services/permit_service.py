@@ -145,6 +145,7 @@ class PermitService:
                         due_date=self._add_business_days(date.today(), prazo_resposta),
                         requires_inspection=requirement_data["requires_inspection"],
                         inspection_checklist=requirement_data["inspection_checklist"],
+                        inspection_requires_photo=requirement_data.get("inspection_requires_photo", False),
                     )
                 )
 
@@ -312,6 +313,11 @@ class PermitService:
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="Para aprovar a vistoria, todos os itens do checklist devem estar marcados.",
                 )
+            if requirement.inspection_requires_photo and not payload.fotos:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Registre ao menos uma imagem para concluir esta vistoria.",
+                )
 
         result_status = "aprovada" if payload.approved else "reprovada"
         requirement.inspection_status = result_status
@@ -464,6 +470,21 @@ class PermitService:
         if current_user.role.slug == "cidadao":
             if request.solicitante_id != current_user.id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+            self._recalculate_request_status(request)
+            if request.status in {
+                STATUS_AGUARDANDO_GERACAO_DAM,
+                STATUS_AGUARDANDO_PAGAMENTO_DAM,
+                STATUS_AGUARDANDO_GERACAO_ALVARA,
+                STATUS_AUTORIZADA,
+                "isenta_dam",
+            }:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Solicitação em modo de visualização. "
+                        "Novos anexos de exigência não são permitidos nesta etapa."
+                    ),
+                )
         else:
             self._ensure_can_manage_requirement(requirement, current_user)
 
@@ -654,7 +675,11 @@ class PermitService:
         return self._credential_to_response(credential)
 
     def list_question_definitions(self) -> list[QuestionResponse]:
-        definitions = self.db.query(QuestionDefinitionModel).order_by(QuestionDefinitionModel.id.asc()).all()
+        definitions = (
+            self.db.query(QuestionDefinitionModel)
+            .order_by(QuestionDefinitionModel.display_order.asc(), QuestionDefinitionModel.id.asc())
+            .all()
+        )
         return [self._question_to_response(item) for item in definitions]
 
     def list_public_ranges(self, include_inactive: bool = False) -> list[EventPublicRangeResponse]:
@@ -725,6 +750,8 @@ class PermitService:
             requer_vistoria=payload.requer_vistoria,
             checklist_vistoria=payload.checklist_vistoria,
             prazo_resposta_dias_uteis=payload.prazo_resposta_dias_uteis,
+            display_order=payload.display_order,
+            vistoria_exige_foto=payload.vistoria_exige_foto,
         )
         self.db.add(question)
         self.db.commit()
@@ -761,6 +788,8 @@ class PermitService:
         question.requer_vistoria = payload.requer_vistoria
         question.checklist_vistoria = payload.checklist_vistoria
         question.prazo_resposta_dias_uteis = payload.prazo_resposta_dias_uteis
+        question.display_order = payload.display_order
+        question.vistoria_exige_foto = payload.vistoria_exige_foto
         self.db.commit()
         self.db.refresh(question)
         return self._question_to_response(question)
@@ -790,6 +819,8 @@ class PermitService:
             requer_vistoria=question.requer_vistoria,
             checklist_vistoria=question.checklist_vistoria or [],
             prazo_resposta_dias_uteis=question.prazo_resposta_dias_uteis or 2,
+            display_order=question.display_order or 0,
+            vistoria_exige_foto=question.vistoria_exige_foto,
             created_at=question.created_at,
             updated_at=question.updated_at,
         )
@@ -914,6 +945,9 @@ class PermitService:
                                 ),
                                 "requires_inspection": self._default_requires_inspection(tipo_exigencia),
                                 "inspection_checklist": self._default_inspection_checklist(tipo_exigencia),
+                                "inspection_requires_photo": (
+                                    bool(question.vistoria_exige_foto) if question else False
+                                ),
                             }
                         )
                         seen.add((secretaria_slug, tipo_exigencia))
@@ -932,6 +966,7 @@ class PermitService:
                         "prazo_resposta_dias_uteis": question.prazo_resposta_dias_uteis,
                         "requires_inspection": question.requer_vistoria,
                         "inspection_checklist": question.checklist_vistoria or [],
+                        "inspection_requires_photo": question.vistoria_exige_foto,
                     }
                 )
                 seen.add((secretaria_slug, tipo_exigencia))
@@ -1508,6 +1543,7 @@ class PermitService:
             observacoes=requirement.observacoes,
             requires_inspection=requirement.requires_inspection,
             inspection_checklist=requirement.inspection_checklist or [],
+            inspection_requires_photo=requirement.inspection_requires_photo,
             inspection_scheduled_for=requirement.inspection_scheduled_for,
             inspection_status=requirement.inspection_status,
             inspection_result=requirement.inspection_result,

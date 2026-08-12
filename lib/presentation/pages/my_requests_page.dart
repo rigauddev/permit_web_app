@@ -190,7 +190,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     final attachment = await _askAttachment(
       title: 'Anexar comprovante',
       description:
-          'Anexe o comprovante de pagamento do seu DAM. Pagamento em PIX até 24h para geração do alvará, ou boleto com prazo de 72h para confirmação e emissão.',
+          'Anexe o comprovante de pagamento do seu DAM. Pagamentos realizados via PIX têm prazo de geração do alvará de 2 dias úteis. Pagamentos por boleto têm prazo de 4 dias úteis.',
       allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
     );
     if (attachment == null) return;
@@ -213,7 +213,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Comprovante anexado. Solicitação em aguardando confirmação de pagamento.',
+            'Comprovante anexado. PIX: alvará em até 2 dias úteis. Boleto: em até 4 dias úteis.',
           ),
         ),
       );

@@ -31,7 +31,9 @@ class _PerguntasPageState extends State<PerguntasPage> {
   String? _modeloDocumentoNome;
   String? _modeloDocumentoUrl;
   int _prazoRespostaDiasUteis = 2;
+  int _displayOrder = 0;
   bool _requerVistoria = false;
+  bool _vistoriaExigeFoto = false;
   final List<String> _checklistVistoria = [];
   final TextEditingController _checklistController = TextEditingController();
   final TextEditingController _rangeLabelController = TextEditingController();
@@ -177,6 +179,13 @@ class _PerguntasPageState extends State<PerguntasPage> {
                         initialValue: _prazoRespostaDiasUteis.toString(),
                         hintText: 'Exemplo: 2',
                       ),
+                      _buildTextField(
+                        label: 'Ordem da pergunta',
+                        onChanged:
+                            (v) => _displayOrder = int.tryParse(v.trim()) ?? 0,
+                        initialValue: _displayOrder.toString(),
+                        hintText: 'Exemplo: 10',
+                      ),
                       _buildDropdown(
                         'Serviço',
                         _tipoFormulario,
@@ -234,6 +243,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                           DataColumn(label: Text('Secretaria')),
                           DataColumn(label: Text('Secretaria DAM')),
                           DataColumn(label: Text('Prazo')),
+                          DataColumn(label: Text('Ordem')),
                           DataColumn(label: Text('Respostas')),
                           DataColumn(label: Text('Vistoria')),
                           DataColumn(label: Text('Tipo')),
@@ -252,6 +262,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                                   '${p['prazo_resposta_dias_uteis'] ?? 2} dia(s) úteis',
                                 ),
                               ),
+                              DataCell(Text('${p['display_order'] ?? 0}')),
                               DataCell(Text(_formatResponseSummary(p))),
                               DataCell(
                                 Text(
@@ -473,10 +484,25 @@ class _PerguntasPageState extends State<PerguntasPage> {
           ),
           value: _requerVistoria,
           onChanged:
-              (value) => setState(() => _requerVistoria = value ?? false),
+              (value) => setState(() {
+                _requerVistoria = value ?? false;
+                if (!_requerVistoria) _vistoriaExigeFoto = false;
+              }),
           controlAffinity: ListTileControlAffinity.leading,
         ),
         if (_requerVistoria) ...[
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Exigir registro de imagem na vistoria'),
+            subtitle: const Text(
+              'Quando ativo, a equipe de vistoria deverá registrar ao menos uma imagem usando câmera/galeria antes de concluir.',
+            ),
+            value: _vistoriaExigeFoto,
+            onChanged:
+                (value) => setState(() => _vistoriaExigeFoto = value ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
           const SizedBox(height: 8),
           const Text(
             'Itens do checklist da vistoria',
@@ -692,6 +718,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _showError('Informe prazo de resposta entre 1 e 30 dias úteis.');
       return;
     }
+    if (_displayOrder < 0 || _displayOrder > 1000) {
+      _showError('Informe uma ordem entre 0 e 1000.');
+      return;
+    }
 
     final tiposResposta = [
       'Sim/Não',
@@ -731,6 +761,8 @@ class _PerguntasPageState extends State<PerguntasPage> {
       'requer_vistoria': _requerVistoria,
       'checklist_vistoria': _checklistVistoria,
       'prazo_resposta_dias_uteis': _prazoRespostaDiasUteis,
+      'display_order': _displayOrder,
+      'vistoria_exige_foto': _requerVistoria && _vistoriaExigeFoto,
     };
 
     final payload = Map<String, dynamic>.from(novaPergunta);
@@ -762,7 +794,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
             pergunta['prazo_resposta_dias_uteis']?.toString() ?? '',
           ) ??
           2;
+      _displayOrder =
+          int.tryParse(pergunta['display_order']?.toString() ?? '') ?? 0;
       _requerVistoria = pergunta['requer_vistoria'] == true;
+      _vistoriaExigeFoto = pergunta['vistoria_exige_foto'] == true;
       _checklistVistoria
         ..clear()
         ..addAll(List<String>.from(pergunta['checklist_vistoria'] ?? []));
@@ -793,7 +828,9 @@ class _PerguntasPageState extends State<PerguntasPage> {
             _descricao = _secretaria = _tipoFormulario = _secretariaDam = null;
     _modeloDocumentoNome = _modeloDocumentoUrl = null;
     _prazoRespostaDiasUteis = 2;
+    _displayOrder = 0;
     _requerVistoria = false;
+    _vistoriaExigeFoto = false;
     _checklistVistoria.clear();
     _checklistController.clear();
     _selectedResponseFields.clear();
@@ -840,6 +877,14 @@ class _PerguntasPageState extends State<PerguntasPage> {
         accessToken: token,
       );
       if (!mounted) return;
+      definitions.sort((a, b) {
+        final orderA = int.tryParse(a['display_order']?.toString() ?? '') ?? 0;
+        final orderB = int.tryParse(b['display_order']?.toString() ?? '') ?? 0;
+        if (orderA != orderB) return orderA.compareTo(orderB);
+        final idA = int.tryParse(a['id']?.toString() ?? '') ?? 0;
+        final idB = int.tryParse(b['id']?.toString() ?? '') ?? 0;
+        return idA.compareTo(idB);
+      });
       setState(() {
         _perguntas
           ..clear()
