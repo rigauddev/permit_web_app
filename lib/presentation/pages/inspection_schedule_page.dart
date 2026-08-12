@@ -185,6 +185,7 @@ class _InspectionSchedulePageState
             checklist: List<String>.from(
               requirement['inspection_checklist'] ?? const [],
             ),
+            requiresPhoto: requirement['inspection_requires_photo'] == true,
             inspectionResult:
                 requirement['inspection_result'] as Map<String, dynamic>?,
             date: _parseDate(
@@ -887,8 +888,16 @@ class _InspectionFormDialogState extends State<_InspectionFormDialog> {
                 children: [
                   OutlinedButton.icon(
                     onPressed: _pickPhotos,
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: const Text('Anexar fotos'),
+                    icon: Icon(
+                      widget.item.requiresPhoto
+                          ? Icons.photo_camera
+                          : Icons.photo_camera_outlined,
+                    ),
+                    label: Text(
+                      widget.item.requiresPhoto
+                          ? 'Registrar imagem obrigatória'
+                          : 'Anexar fotos',
+                    ),
                   ),
                   if (!_approved)
                     OutlinedButton.icon(
@@ -902,6 +911,13 @@ class _InspectionFormDialogState extends State<_InspectionFormDialog> {
                     ),
                 ],
               ),
+              if (widget.item.requiresPhoto && _approved) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Esta vistoria exige ao menos uma imagem para aprovação.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
               if (_fotos.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 ..._fotos.map(
@@ -970,6 +986,16 @@ class _InspectionFormDialogState extends State<_InspectionFormDialog> {
       );
       return;
     }
+    if (_approved && widget.item.requiresPhoto && _fotos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Registre ao menos uma imagem para aprovar a vistoria.',
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.pop(
       context,
       _InspectionResultInput(
@@ -1014,6 +1040,7 @@ class _InspectionItem {
     required this.status,
     required this.inspectionStatus,
     required this.checklist,
+    required this.requiresPhoto,
     required this.inspectionResult,
     required this.date,
   });
@@ -1027,6 +1054,7 @@ class _InspectionItem {
   final String status;
   final String inspectionStatus;
   final List<String> checklist;
+  final bool requiresPhoto;
   final Map<String, dynamic>? inspectionResult;
   final DateTime? date;
 

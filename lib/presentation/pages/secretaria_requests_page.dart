@@ -907,6 +907,8 @@ class _RequirementRow extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
+          if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
+            _DeadlineChip(dueDate: requirement['due_date']?.toString()),
           _StatusChip(status: status),
           if (!canAct)
             const Tooltip(
@@ -958,6 +960,36 @@ class _StatusChip extends StatelessWidget {
     };
     return Chip(
       label: Text(_formatStatus(status)),
+      side: BorderSide(color: color.withValues(alpha: 0.3)),
+      backgroundColor: color.withValues(alpha: 0.09),
+      labelStyle: TextStyle(color: color, fontWeight: FontWeight.w700),
+    );
+  }
+}
+
+class _DeadlineChip extends StatelessWidget {
+  const _DeadlineChip({required this.dueDate});
+
+  final String? dueDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final parsed = DateTime.tryParse(dueDate ?? '');
+    if (parsed == null) return const SizedBox.shrink();
+    final today = DateTime.now();
+    final currentDay = DateTime(today.year, today.month, today.day);
+    final deadline = DateTime(parsed.year, parsed.month, parsed.day);
+    final days = deadline.difference(currentDay).inDays;
+    final (label, color) = switch (days) {
+      < 0 => ('Prazo vencido', Colors.red),
+      0 => ('Vence hoje', Colors.deepOrange),
+      1 => ('Prazo próximo', Colors.orange),
+      2 => ('Prazo próximo', Colors.orange),
+      _ => ('No prazo', Colors.green),
+    };
+    return Chip(
+      avatar: Icon(Icons.schedule_outlined, size: 16, color: color),
+      label: Text(label),
       side: BorderSide(color: color.withValues(alpha: 0.3)),
       backgroundColor: color.withValues(alpha: 0.09),
       labelStyle: TextStyle(color: color, fontWeight: FontWeight.w700),

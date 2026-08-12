@@ -66,6 +66,7 @@
 - [x] Perguntar se é evento beneficente.
 - [x] Exibir exigências geradas antes do envio.
 - [x] Exibir descrição/orientação de preenchimento definida pelo gestor em cada pergunta.
+- [x] Permitir selecionar a ordem de exibição das perguntas na gestão de serviços.
 - [x] Mostrar no resumo da solicitação perguntas respondidas com arquivo pendente de envio.
 
 ## Marco 4 - Regras por secretaria
@@ -102,8 +103,9 @@
 - [x] Ajustar cards da home interna para refletir Gestão de Serviços, Gestão do Sistema e Permissões.
 - [x] Incluir botão `Ver detalhes` na central interna para visualizar status geral e exigências completas.
 - [x] Criar prazo interno configurável por pergunta/exigência para usuários da secretaria.
-- [ ] Exibir alertas de análise próxima do vencimento.
+- [x] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
+- [x] Bloquear edição/anexos de exigência pelo cidadão após todas as anuências, mantendo a solicitação em modo de visualização até a etapa de pagamento.
 
 ## Marco 6 - Backend e persistência
 
@@ -162,11 +164,13 @@
 - [x] Após anexo do DAM, marcar `Aguardando pagamento do DAM` e notificar o cidadão.
 - [x] Permitir que o cidadão anexe o comprovante de pagamento do DAM.
 - [x] Após comprovante, marcar `Aguardando geração do alvará` e notificar a Secretaria de Desenvolvimento Econômico.
+- [x] Exibir mensagem de prazo após comprovante: PIX em até 2 dias úteis e boleto em até 4 dias úteis.
 - [x] Permitir que a Secretaria de Desenvolvimento Econômico anexe o alvará final.
 - [x] Exigir que o alvará final anexado pela SDE seja PDF e fique disponível ao cidadão.
 - [x] Permitir anexar o alvará final em PDF após pagamento do DAM, deixando o arquivo disponível para visualizar/baixar/imprimir.
 - [x] Transformar anexos de DAM e comprovante em ação de upload/seleção de arquivo.
 - [ ] Quando beneficente, exigir declaração validada e marcar `Isento de DAM`.
+- [ ] Gerar documento pré-DAM direcionado à Polícia Militar com resumo do evento, autorizações, exigências e vistorias aprovadas.
 - [x] Emitir autorização final após alvará anexado ou isenção validada.
 - [x] Gerar credencial/link de validação do evento autorizado no backend.
 - [x] Gerar QR Code visual para impressão/exibição.
@@ -187,6 +191,8 @@
 - [x] Exibir detalhes da solicitação ao clicar em uma vistoria.
 - [x] Criar fluxo de vistoria quando exigência depender de inspeção técnica.
 - [x] Permitir anexar imagens da vistoria.
+- [x] Permitir configurar na pergunta se a vistoria exige registro de imagem.
+- [x] Bloquear aprovação da vistoria quando a pergunta exigir imagem e nenhuma foto for registrada.
 - [x] Criar formulário/checklist técnico de vistoria.
 - [x] Vincular resultado/checklist à exigência da secretaria responsável.
 - [x] Bloquear aprovação da vistoria quando checklist obrigatório estiver incompleto.
@@ -196,6 +202,8 @@
 
 - [ ] Integrar geração automática de DAM com sistema da Receita.
 - [ ] V2: integrar verificação automática de pagamento do DAM com o sistema da Receita.
+- [ ] Criar tela de mapa de eventos autorizados com Google Maps, pins por endereço, filtro por período e tabela de eventos.
+- [ ] Geocodificar endereços das solicitações aprovadas para exibição no mapa.
 - [ ] Integrar assinatura eletrônica quando exigida.
 - [x] Enviar e-mail para a Secretaria de Desenvolvimento Econômico nas etapas de geração do DAM e geração do alvará, com link filtrado da central.
 - [x] Preparar SMTP/Gmail para testes de envio de e-mail.

@@ -46,6 +46,8 @@ class QuestionDefinitionModel(Base):
     requer_vistoria = Column(Boolean, default=False, nullable=False)
     checklist_vistoria = Column(JSON, nullable=True)
     prazo_resposta_dias_uteis = Column(Integer, default=2, nullable=False)
+    display_order = Column(Integer, default=0, nullable=False)
+    vistoria_exige_foto = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -75,6 +77,7 @@ class PermitRequirementModel(Base):
     due_date = Column(Date, nullable=True)
     requires_inspection = Column(Boolean, default=False, nullable=False)
     inspection_checklist = Column(JSON, nullable=True)
+    inspection_requires_photo = Column(Boolean, default=False, nullable=False)
     inspection_scheduled_for = Column(Date, nullable=True)
     inspection_status = Column(String(50), default="nao_agendada", nullable=False)
     inspection_result = Column(JSON, nullable=True)
