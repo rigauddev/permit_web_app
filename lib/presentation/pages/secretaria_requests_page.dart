@@ -899,6 +899,14 @@ class _RequirementRow extends StatelessWidget {
             width: 180,
             child: Text(requirement['secretaria']?.toString() ?? ''),
           ),
+          if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
+            SizedBox(
+              width: 150,
+              child: Text(
+                'Prazo: ${requirement['due_date']}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
           _StatusChip(status: status),
           if (!canAct)
             const Tooltip(

@@ -45,6 +45,7 @@ class QuestionDefinitionModel(Base):
     modelo_documento_url = Column(String(500), nullable=True)
     requer_vistoria = Column(Boolean, default=False, nullable=False)
     checklist_vistoria = Column(JSON, nullable=True)
+    prazo_resposta_dias_uteis = Column(Integer, default=2, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

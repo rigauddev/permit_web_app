@@ -35,11 +35,14 @@
 - [x] Criar página `Minhas solicitações` separada por tipo de serviço.
 - [x] Ajustar `Minhas solicitações` para mobile com cards responsivos e tela de detalhes.
 - [x] Exibir ações da solicitação conforme status na tela de detalhes do cidadão.
+- [x] Manter a rota atual do navegador ao recarregar a página com sessão válida.
 - [x] Permitir salvar rascunho local da solicitação para continuar depois.
 - [x] Permitir cancelar solicitação em preenchimento antes do envio.
 - [x] Permitir cancelamento de solicitação já criada pelo cidadão, respeitando status finais.
 - [x] Melhorar visualização mobile da flag de evento verificado.
 - [x] Remover secretaria dos detalhes exibidos ao cidadão em `Minhas solicitações`.
+- [x] Exibir correções por exigência em formato de conversa, com mensagens e anexos vinculados.
+- [x] Permitir que o cidadão responda a correção e anexe arquivo corrigido por exigência.
 - [x] Fixar dados do responsável pelo evento a partir da conta logada.
 - [x] Buscar dados completos do cidadão sob demanda ao iniciar nova solicitação.
 - [x] Transformar expectativa de público em seletor configurável por faixa.
@@ -85,6 +88,7 @@
 - [x] Garantir que operador veja apenas demandas da sua secretaria.
 - [x] Garantir que gestor veja solicitações vinculadas à própria secretaria.
 - [x] Criar ações: aprovar, recusar, solicitar correção e comentar.
+- [x] Notificar o cidadão por e-mail quando uma exigência precisar de correção.
 - [x] Criar status por secretaria.
 - [x] Atualizar status geral a partir das anuências.
 - [x] Criar visão de gestor/admin para gestão interna com escopo por secretaria.
@@ -97,7 +101,7 @@
 - [x] Reorganizar menu por contexto: Serviços do cidadão, Atendimento interno, Gestão de Serviços e Gestão do Sistema.
 - [x] Ajustar cards da home interna para refletir Gestão de Serviços, Gestão do Sistema e Permissões.
 - [x] Incluir botão `Ver detalhes` na central interna para visualizar status geral e exigências completas.
-- [ ] Criar prazo interno de 2 dias úteis por exigência/secretaria.
+- [x] Criar prazo interno configurável por pergunta/exigência para usuários da secretaria.
 - [ ] Exibir alertas de análise próxima do vencimento.
 - [x] Garantir que a Secretaria de Desenvolvimento Econômico só anexe DAM após todas as anuências aplicáveis.
 

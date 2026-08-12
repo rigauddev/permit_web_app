@@ -23,6 +23,7 @@ from src.schemas.permit_schema import (
     PermitCreateRequest,
     PermitResponse,
     QuestionCreateRequest,
+    RequirementAttachmentRequest,
     QuestionResponse,
     RequirementResponse,
     RequirementStatusUpdateRequest,
@@ -187,6 +188,16 @@ def attach_dam_payment_proof_to_permit_request(
     current_user: UserModel = Depends(require_roles("cidadao")),
 ):
     return PermitService(db).attach_dam_payment_proof(request_id, payload, current_user)
+
+
+@router.post("/{request_id}/requirement-attachment", response_model=AttachmentResponse)
+def attach_requirement_document_to_permit_request(
+    request_id: int,
+    payload: RequirementAttachmentRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    return PermitService(db).attach_requirement_document(request_id, payload, current_user)
 
 
 @router.post("/{request_id}/final-permit-attachment", response_model=EventCredentialResponse)

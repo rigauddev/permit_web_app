@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:permit_web_app/core/routes/app_routes.dart';
+import 'package:permit_web_app/core/session_store.dart';
 import 'package:permit_web_app/core/themes/customer_theme.dart';
 import 'package:permit_web_app/data/models/user_model.dart';
 import 'package:permit_web_app/data/providers/user_provider.dart';
@@ -50,7 +50,7 @@ class _AppRouter extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Sistema de Serviços da Prefeitura',
       theme: customTheme,
-      initialRoute: AppRoutes.login,
+      initialRoute: user == null ? AppRoutes.login : null,
       routes: {
         AppRoutes.login: (context) => const LoginPage(),
         AppRoutes.recoveryPassword: (context) => RecoveryPassword(),
@@ -180,7 +180,7 @@ class _SessionBootstrap extends ConsumerStatefulWidget {
 }
 
 class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
-  static const _storage = FlutterSecureStorage();
+  static const _sessionStore = SessionStore();
   bool _checked = false;
 
   @override
@@ -190,18 +190,10 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
   }
 
   Future<void> _restoreSession() async {
-    final expiresAtText = await _storage.read(key: 'session_expires_at');
-    final token = await _storage.read(key: 'access_token');
-    final userJson = await _storage.read(key: 'user');
-    final expiresAt =
-        expiresAtText == null ? null : DateTime.tryParse(expiresAtText);
-    if (token == null ||
-        userJson == null ||
-        expiresAt == null ||
-        expiresAt.toUtc().isBefore(DateTime.now().toUtc())) {
-      await _storage.delete(key: 'access_token');
-      await _storage.delete(key: 'user');
-      await _storage.delete(key: 'session_expires_at');
+    final session = await _sessionStore.read();
+    if (session == null ||
+        session.expiresAt.toUtc().isBefore(DateTime.now().toUtc())) {
+      await _sessionStore.clear();
       if (mounted) setState(() => _checked = true);
       return;
     }
@@ -209,7 +201,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       ref
           .read(userProvider.notifier)
           .setUser(
-            UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>),
+            UserModel.fromJson(
+              jsonDecode(session.userJson) as Map<String, dynamic>,
+            ),
           );
     }
     if (mounted) setState(() => _checked = true);
