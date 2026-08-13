@@ -42,6 +42,7 @@ PERMISSIONS = [
     ("requests.secretaria.analyze", "Analisar solicitações da secretaria", "Atendimento", "Aprova, recusa, comenta ou pede correção em exigências da secretaria."),
     ("inspections.view", "Visualizar vistorias", "Vistorias", "Consulta vistorias agendadas da secretaria."),
     ("inspections.manage", "Gerenciar vistorias", "Vistorias", "Agenda, executa e registra checklist/laudo de vistoria."),
+    ("events.map.view", "Visualizar mapa de eventos", "Atendimento", "Consulta eventos autorizados por período e endereço."),
     ("dam.attach", "Anexar DAM", "DAM e Alvará", "Anexa DAM quando todas as anuências aplicáveis estiverem concluídas."),
     ("dam.payment_proof.attach", "Anexar comprovante de DAM", "DAM e Alvará", "Permite anexar comprovante de pagamento do DAM pelo cidadão."),
     ("permit.final.attach", "Anexar alvará final", "DAM e Alvará", "Anexa PDF final do alvará após pagamento/isento."),
@@ -71,6 +72,7 @@ ROLE_PERMISSIONS = {
         "requests.secretaria.analyze",
         "inspections.view",
         "inspections.manage",
+        "events.map.view",
         "event_credential.validate",
     },
     "gestor_secretaria": {
@@ -79,6 +81,7 @@ ROLE_PERMISSIONS = {
         "requests.secretaria.analyze",
         "inspections.view",
         "inspections.manage",
+        "events.map.view",
         "management.users.manage",
         "management.home_content.manage",
         "management.services.manage",
@@ -659,9 +662,17 @@ def seed_test_scenarios(db, users, secretarias):
             True,
             [("receita_municipal", "Conferência de declaração de evento beneficente", "aprovada")],
         ),
+        (
+            "AL-EV0007",
+            "Festival Autorizado com DAM Pago",
+            "autorizada",
+            "pago",
+            False,
+            [("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada")],
+        ),
     ]
 
-    for protocolo, nome_evento, status_value, dam_status, is_beneficente, requirements in scenarios:
+    for index, (protocolo, nome_evento, status_value, dam_status, is_beneficente, requirements) in enumerate(scenarios):
         if db.query(PermitRequestModel).filter_by(protocolo=protocolo).first():
             continue
         request = PermitRequestModel(
@@ -682,7 +693,9 @@ def seed_test_scenarios(db, users, secretarias):
             dados_evento={
                 "nome_evento": nome_evento,
                 "data_evento": add_business_days(date.today(), 25).isoformat(),
-                "endereco_evento": "Orla de Valença",
+                "endereco_evento": "Rua Duque de Caxias, Centro, Valença - BA",
+                "latitude_evento": f"{-13.370400 + (index * 0.0012):.6f}",
+                "longitude_evento": f"{-39.073300 + (index * 0.0010):.6f}",
                 "publico_estimado": 500,
                 "horario_inicio": "17:00",
                 "horario_termino": "23:30",

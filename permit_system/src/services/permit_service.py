@@ -178,6 +178,22 @@ class PermitService:
             )
         return [self.to_response(item) for item in query.order_by(PermitRequestModel.created_at.desc()).all()]
 
+    def list_event_map_requests(self, current_user: UserModel) -> list[PermitResponse]:
+        if current_user.role.slug == "cidadao":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+
+        requests = self.db.query(PermitRequestModel).order_by(PermitRequestModel.created_at.desc()).all()
+        visible = []
+        for request in requests:
+            self._recalculate_request_status(request)
+            attachment_types = {item.tipo_documento for item in request.attachments}
+            has_active_credential = any(item.status == "ativa" for item in request.credentials)
+            if request.status in {STATUS_AUTORIZADA, "isenta_dam"}:
+                visible.append(request)
+            elif ATTACHMENT_FINAL_PERMIT in attachment_types or has_active_credential:
+                visible.append(request)
+        return [self.to_response(item) for item in visible]
+
     def get_request(self, request_id: int, current_user: UserModel) -> PermitResponse:
         request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
         if not request:
