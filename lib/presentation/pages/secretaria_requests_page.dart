@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/routes/app_routes.dart';
@@ -100,6 +101,27 @@ class _SecretariaRequestsPageState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _openAttachment(Map<String, dynamic> attachment) async {
+    final rawUrl = attachment['arquivo_url']?.toString() ?? '';
+    if (rawUrl.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Anexo sem URL disponível.')),
+      );
+      return;
+    }
+    final uri =
+        rawUrl.startsWith('http')
+            ? Uri.parse(rawUrl)
+            : Uri.parse('${Uri.base.origin}$rawUrl');
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir o anexo.')),
+      );
     }
   }
 
@@ -422,6 +444,7 @@ class _SecretariaRequestsPageState
                                 action: 'alvara',
                               ),
                           onOpenDetails: _showRequestDetails,
+                          onOpenAttachment: _openAttachment,
                         ),
                       ),
                   ],
@@ -573,6 +596,7 @@ class _ServiceGroup extends StatelessWidget {
     required this.onAttachDam,
     required this.onAttachFinalPermit,
     required this.onOpenDetails,
+    required this.onOpenAttachment,
   });
 
   final String title;
@@ -584,6 +608,7 @@ class _ServiceGroup extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onAttachDam;
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -601,12 +626,14 @@ class _ServiceGroup extends StatelessWidget {
                 child: _RequestCard(
                   request: request,
                   requirements: requirements,
+                  currentUser: currentUser,
                   onApprove: onApprove,
                   onPending: onPending,
                   onReject: onReject,
                   onAttachDam: onAttachDam,
                   onAttachFinalPermit: onAttachFinalPermit,
                   onOpenDetails: onOpenDetails,
+                  onOpenAttachment: onOpenAttachment,
                 ),
               );
             }).toList(),
@@ -633,22 +660,26 @@ class _RequestCard extends StatelessWidget {
   const _RequestCard({
     required this.request,
     required this.requirements,
+    required this.currentUser,
     required this.onApprove,
     required this.onPending,
     required this.onReject,
     required this.onAttachDam,
     required this.onAttachFinalPermit,
     required this.onOpenDetails,
+    required this.onOpenAttachment,
   });
 
   final Map<String, dynamic> request;
   final List<Map<String, dynamic>> requirements;
+  final UserModel? currentUser;
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
   final void Function(int requirementId) onReject;
   final ValueChanged<Map<String, dynamic>> onAttachDam;
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -695,9 +726,11 @@ class _RequestCard extends StatelessWidget {
           ...requirements.map(
             (requirement) => _RequirementRow(
               requirement: requirement,
+              currentUser: currentUser,
               onApprove: onApprove,
               onPending: onPending,
               onReject: onReject,
+              onOpenAttachment: onOpenAttachment,
             ),
           ),
         ],
@@ -869,67 +902,110 @@ class _WorkflowActions extends StatelessWidget {
 class _RequirementRow extends StatelessWidget {
   const _RequirementRow({
     required this.requirement,
+    required this.currentUser,
     required this.onApprove,
     required this.onPending,
     required this.onReject,
+    required this.onOpenAttachment,
   });
 
   final Map<String, dynamic> requirement;
+  final UserModel? currentUser;
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
   final void Function(int requirementId) onReject;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
 
   @override
   Widget build(BuildContext context) {
     final id = _requirementId(requirement['id']);
     final status = requirement['status']?.toString() ?? '';
-    final canAct = id != null;
+    final attachments =
+        (requirement['anexos'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    final isLocked = status == 'aprovada' || status == 'recusada';
+    final canManageLocked =
+        currentUser?.userType == 'admin' || currentUser?.userType == 'gestor';
+    final canAct = id != null && (!isLocked || canManageLocked);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 330,
-            child: Text(requirement['pergunta']?.toString() ?? 'Exigência'),
-          ),
-          SizedBox(
-            width: 180,
-            child: Text(requirement['secretaria']?.toString() ?? ''),
-          ),
-          if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
-            SizedBox(
-              width: 150,
-              child: Text(
-                'Prazo: ${requirement['due_date']}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 330,
+                child: Text(requirement['pergunta']?.toString() ?? 'Exigência'),
               ),
+              SizedBox(
+                width: 180,
+                child: Text(requirement['secretaria']?.toString() ?? ''),
+              ),
+              if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
+                SizedBox(
+                  width: 150,
+                  child: Text(
+                    'Prazo: ${requirement['due_date']}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
+                _DeadlineChip(dueDate: requirement['due_date']?.toString()),
+              _StatusChip(status: status),
+              if (id == null)
+                const Tooltip(
+                  message: 'A exigência veio sem identificador do backend.',
+                  child: Icon(Icons.info_outline, size: 18),
+                ),
+              if (canAct) ...[
+                OutlinedButton.icon(
+                  onPressed: () => onPending(id),
+                  icon: const Icon(Icons.assignment_late_outlined),
+                  label: const Text('Correção'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => onReject(id),
+                  icon: const Icon(Icons.block_outlined),
+                  label: const Text('Recusar'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => onApprove(id),
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Aprovar'),
+                ),
+              ] else if (isLocked)
+                const Chip(
+                  avatar: Icon(Icons.lock_outline, size: 16),
+                  label: Text('Ações bloqueadas'),
+                ),
+            ],
+          ),
+          if (attachments.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children:
+                  attachments
+                      .map(
+                        (attachment) => OutlinedButton.icon(
+                          onPressed: () => onOpenAttachment(attachment),
+                          icon: const Icon(Icons.attach_file, size: 18),
+                          label: Text(
+                            attachment['nome_arquivo']?.toString() ??
+                                'Documento anexado',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
             ),
-          if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
-            _DeadlineChip(dueDate: requirement['due_date']?.toString()),
-          _StatusChip(status: status),
-          if (!canAct)
-            const Tooltip(
-              message: 'A exigência veio sem identificador do backend.',
-              child: Icon(Icons.info_outline, size: 18),
-            ),
-          OutlinedButton.icon(
-            onPressed: canAct ? () => onPending(id) : null,
-            icon: const Icon(Icons.assignment_late_outlined),
-            label: const Text('Correção'),
-          ),
-          OutlinedButton.icon(
-            onPressed: canAct ? () => onReject(id) : null,
-            icon: const Icon(Icons.block_outlined),
-            label: const Text('Recusar'),
-          ),
-          ElevatedButton.icon(
-            onPressed: canAct ? () => onApprove(id) : null,
-            icon: const Icon(Icons.check_circle_outline),
-            label: const Text('Aprovar'),
-          ),
+          ],
         ],
       ),
     );

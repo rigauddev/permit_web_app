@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/permit_api_service.dart';
 import '../../../data/providers/user_provider.dart';
@@ -109,6 +112,50 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<void> _openEventAddressMap() async {
+    final address = eventAddressController.text.trim();
+    if (address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe o endereço do evento antes de abrir o mapa.'),
+        ),
+      );
+      return;
+    }
+    final query = Uri.encodeComponent('$address, Valença, BA');
+    final uri = Uri.parse('https://www.openstreetmap.org/search?query=$query');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _pickEventLocation() async {
+    final state = ref.read(permitRequestControllerProvider);
+    final initialLat = double.tryParse(
+      state.eventData['latitude_evento'] ?? '',
+    );
+    final initialLng = double.tryParse(
+      state.eventData['longitude_evento'] ?? '',
+    );
+    final result = await showDialog<({double latitude, double longitude})>(
+      context: context,
+      builder:
+          (context) => _AddressMapPickerDialog(
+            initialLatitude: initialLat,
+            initialLongitude: initialLng,
+          ),
+    );
+    if (result == null) return;
+    ref
+        .read(permitRequestControllerProvider.notifier)
+        .updateEventInfo(
+          eventLatitude: result.latitude.toStringAsFixed(6),
+          eventLongitude: result.longitude.toStringAsFixed(6),
+        );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Local do evento marcado no mapa.')),
+    );
   }
 
   @override
@@ -318,9 +365,37 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
           const SizedBox(height: 12),
           TextFormField(
             controller: eventAddressController,
-            decoration: const InputDecoration(labelText: 'Local/endereço'),
+            minLines: 1,
+            maxLines: 2,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Local/endereço do evento',
+              hintText: 'Rua/Avenida, número, bairro, Valença - BA',
+              helperText:
+                  'Informe um endereço completo para localização no mapa de eventos.',
+              suffixIcon: Icon(Icons.place_outlined),
+            ),
             onChanged:
                 (value) => controller.updateEventInfo(eventAddress: value),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton.icon(
+                  onPressed: _pickEventLocation,
+                  icon: const Icon(Icons.add_location_alt_outlined),
+                  label: const Text('Marcar no mapa gratuito'),
+                ),
+                TextButton.icon(
+                  onPressed: _openEventAddressMap,
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Conferir endereço'),
+                ),
+              ],
+            ),
           ),
           Row(
             children: [
@@ -805,5 +880,179 @@ class _ReviewSection extends StatelessWidget {
           RegExp(r'^[a-z]'),
           (match) => match[0]!.toUpperCase(),
         );
+  }
+}
+
+class _AddressMapPickerDialog extends StatefulWidget {
+  const _AddressMapPickerDialog({
+    required this.initialLatitude,
+    required this.initialLongitude,
+  });
+
+  final double? initialLatitude;
+  final double? initialLongitude;
+
+  @override
+  State<_AddressMapPickerDialog> createState() =>
+      _AddressMapPickerDialogState();
+}
+
+class _AddressMapPickerDialogState extends State<_AddressMapPickerDialog> {
+  static const _zoom = 14;
+  static const _centerLat = -13.3704;
+  static const _centerLng = -39.0733;
+
+  late double _latitude = widget.initialLatitude ?? _centerLat;
+  late double _longitude = widget.initialLongitude ?? _centerLng;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Marcar endereço do evento'),
+          actions: [
+            TextButton(
+              onPressed:
+                  () => Navigator.pop(context, (
+                    latitude: _latitude,
+                    longitude: _longitude,
+                  )),
+              child: const Text('Salvar'),
+            ),
+            IconButton(
+              tooltip: 'Fechar',
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                'Toque no mapa para marcar o local do evento. Use o endereço digitado como referência.',
+              ),
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final size = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
+                  final center = _project(_centerLat, _centerLng, _zoom);
+                  final selected = _project(_latitude, _longitude, _zoom);
+                  final markerLeft = selected.dx - center.dx + size.width / 2;
+                  final markerTop = selected.dy - center.dy + size.height / 2;
+                  return GestureDetector(
+                    onTapUp: (details) {
+                      final point = Offset(
+                        center.dx - size.width / 2 + details.localPosition.dx,
+                        center.dy - size.height / 2 + details.localPosition.dy,
+                      );
+                      final coordinates = _unproject(point, _zoom);
+                      setState(() {
+                        _latitude = coordinates.$1;
+                        _longitude = coordinates.$2;
+                      });
+                    },
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ..._tiles(size, center),
+                        Positioned(
+                          left:
+                              markerLeft.clamp(16, size.width - 48).toDouble(),
+                          top: markerTop.clamp(16, size.height - 56).toDouble(),
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Color(0xFF0E7C3A),
+                            size: 42,
+                          ),
+                        ),
+                        Positioned(
+                          left: 12,
+                          bottom: 12,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(
+                                'Lat ${_latitude.toStringAsFixed(6)} | Lng ${_longitude.toStringAsFixed(6)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _tiles(Size size, Offset center) {
+    final topLeft = Offset(
+      center.dx - size.width / 2,
+      center.dy - size.height / 2,
+    );
+    final bottomRight = Offset(
+      center.dx + size.width / 2,
+      center.dy + size.height / 2,
+    );
+    final minX = (topLeft.dx / 256).floor() - 1;
+    final maxX = (bottomRight.dx / 256).ceil() + 1;
+    final minY = (topLeft.dy / 256).floor() - 1;
+    final maxY = (bottomRight.dy / 256).ceil() + 1;
+    final widgets = <Widget>[];
+    for (var x = minX; x <= maxX; x++) {
+      for (var y = minY; y <= maxY; y++) {
+        widgets.add(
+          Positioned(
+            left: x * 256 - topLeft.dx,
+            top: y * 256 - topLeft.dy,
+            width: 256,
+            height: 256,
+            child: Image.network(
+              'https://tile.openstreetmap.org/$_zoom/$x/$y.png',
+              fit: BoxFit.cover,
+              errorBuilder:
+                  (_, __, ___) => Container(color: const Color(0xFFE8F2EC)),
+            ),
+          ),
+        );
+      }
+    }
+    return widgets;
+  }
+
+  static Offset _project(double lat, double lng, int zoom) {
+    final scale = 256 * math.pow(2, zoom).toDouble();
+    final x = (lng + 180) / 360 * scale;
+    final sinLat = math.sin(lat * math.pi / 180);
+    final y =
+        (0.5 - math.log((1 + sinLat) / (1 - sinLat)) / (4 * math.pi)) * scale;
+    return Offset(x, y);
+  }
+
+  static (double, double) _unproject(Offset point, int zoom) {
+    final scale = 256 * math.pow(2, zoom).toDouble();
+    final lng = point.dx / scale * 360 - 180;
+    final n = math.pi - 2 * math.pi * point.dy / scale;
+    final sinh = (math.exp(n) - math.exp(-n)) / 2;
+    final lat = 180 / math.pi * math.atan(sinh);
+    return (lat, lng);
   }
 }

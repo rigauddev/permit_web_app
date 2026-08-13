@@ -12,6 +12,7 @@ import 'features/services/receita_municipal/ui/receita_municipal_services_page.d
 import 'presentation/pages/login_page.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/home_content_page.dart';
+import 'presentation/pages/event_map_page.dart';
 import 'presentation/pages/my_requests_page.dart';
 import 'presentation/pages/permissions_page.dart';
 import 'presentation/pages/inspection_schedule_page.dart';
@@ -156,6 +157,16 @@ class _AppRouter extends StatelessWidget {
                 'operador_secretaria',
               },
               child: InspectionSchedulePage(userType: user?.userType ?? ''),
+            ),
+        AppRoutes.eventMap:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+              },
+              child: EventMapPage(userType: user?.userType ?? ''),
             ),
         AppRoutes.questions:
             (context) => _GuardedRoute(

@@ -89,6 +89,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? publicMin,
     String? publicMax,
     String? deadlineBusinessDays,
+    String? eventLatitude,
+    String? eventLongitude,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -109,6 +111,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     if (deadlineBusinessDays != null) {
       updated['prazo_dias_uteis'] = deadlineBusinessDays;
     }
+    if (eventLatitude != null) updated['latitude_evento'] = eventLatitude;
+    if (eventLongitude != null) updated['longitude_evento'] = eventLongitude;
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
     }
