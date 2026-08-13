@@ -152,6 +152,20 @@ class PermitApiService {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> listEventMapRequests(
+    String accessToken,
+  ) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/event-map'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response);
+    final requests = decoded as List<dynamic>;
+    return requests
+        .map((item) => _toDashboardForm(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> updateRequirementStatus({
     required String accessToken,
     required int requirementId,
@@ -892,6 +906,8 @@ class PermitApiService {
       'responsavel': responsavel['nome'] ?? '',
       'permitType': 'Alvará de Evento',
       'local_evento': evento['endereco_evento'] ?? '',
+      'latitude_evento': evento['latitude_evento'],
+      'longitude_evento': evento['longitude_evento'],
       'data_do_evento': evento['data_evento'] ?? '',
       'publico_estimado': evento['publico_estimado']?.toString() ?? '',
       'horario_inicio': evento['horario_inicio'] ?? '',

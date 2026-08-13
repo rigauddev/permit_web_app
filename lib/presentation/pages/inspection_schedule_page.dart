@@ -69,17 +69,21 @@ class _InspectionSchedulePageState
     final user = ref.watch(userProvider);
     final inspections = _buildInspections(_requests, user);
     final today = DateUtils.dateOnly(DateTime.now());
-    final performed =
-        inspections
-            .where((item) => item.date != null && item.date!.isBefore(today))
-            .toList();
+    final performed = inspections.where((item) => item.isPerformed).toList();
     final todayItems =
         inspections
-            .where((item) => DateUtils.isSameDay(item.date, today))
+            .where(
+              (item) =>
+                  !item.isPerformed && DateUtils.isSameDay(item.date, today),
+            )
             .toList();
     final future =
         inspections
-            .where((item) => item.date == null || item.date!.isAfter(today))
+            .where(
+              (item) =>
+                  !item.isPerformed &&
+                  (item.date == null || item.date!.isAfter(today)),
+            )
             .toList();
 
     return AppScaffold(
@@ -1057,6 +1061,11 @@ class _InspectionItem {
   final bool requiresPhoto;
   final Map<String, dynamic>? inspectionResult;
   final DateTime? date;
+
+  bool get isPerformed =>
+      inspectionResult != null ||
+      inspectionStatus == 'aprovada' ||
+      inspectionStatus == 'reprovada';
 
   String get dateLabel {
     final value = date;

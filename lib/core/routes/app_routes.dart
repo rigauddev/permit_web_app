@@ -29,6 +29,7 @@ class AppRoutes {
   static const String myRequests = '/my-requests';
   static const String secretariaRequests = '/secretaria-requests';
   static const String inspections = '/inspections';
+  static const String eventMap = '/event-map';
   static const String questions = '/questions';
   static const String userCreate = '/user-create';
   static const String homeContent = '/home-content';

@@ -202,8 +202,12 @@
 
 - [ ] Integrar geração automática de DAM com sistema da Receita.
 - [ ] V2: integrar verificação automática de pagamento do DAM com o sistema da Receita.
-- [ ] Criar tela de mapa de eventos autorizados com Google Maps, pins por endereço, filtro por período e tabela de eventos.
-- [ ] Geocodificar endereços das solicitações aprovadas para exibição no mapa.
+- [x] Criar tela operacional de mapa de eventos autorizados com pins visuais, filtro por período, tabela de eventos e abertura do endereço no OpenStreetMap.
+- [x] Criar endpoint interno próprio para mapa de eventos autorizados sem filtro por secretaria.
+- [x] Exibir mapa gratuito embutido com tiles do OpenStreetMap e botão `Ver todos` em tela cheia.
+- [x] Manter botão externo `Ver no Google Maps` nos detalhes do evento.
+- [x] Permitir marcar latitude/longitude do local do evento em mapa gratuito durante a solicitação.
+- [ ] Geocodificar automaticamente endereços das solicitações aprovadas para exibição no mapa.
 - [ ] Integrar assinatura eletrônica quando exigida.
 - [x] Enviar e-mail para a Secretaria de Desenvolvimento Econômico nas etapas de geração do DAM e geração do alvará, com link filtrado da central.
 - [x] Preparar SMTP/Gmail para testes de envio de e-mail.

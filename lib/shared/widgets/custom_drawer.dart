@@ -97,7 +97,11 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     collapsed: collapsed,
                     icon: Icons.assignment_outlined,
                     title: 'Atendimento',
-                    routes: const ['/secretaria-requests', '/inspections'],
+                    routes: const [
+                      '/secretaria-requests',
+                      '/inspections',
+                      '/event-map',
+                    ],
                     currentRoute: currentRoute,
                     children: const [
                       _DrawerSectionItem(
@@ -105,6 +109,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                         '/secretaria-requests',
                       ),
                       _DrawerSectionItem('Vistorias', '/inspections'),
+                      _DrawerSectionItem('Mapa de eventos', '/event-map'),
                     ],
                   ),
                 if (canManageServices)

@@ -141,6 +141,14 @@ def delete_question_definition(
     PermitService(db).delete_question_definition(question_id, current_user)
 
 
+@router.get("/event-map", response_model=list[PermitResponse])
+def list_event_map_requests(
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).list_event_map_requests(current_user)
+
+
 @router.get("/{request_id}", response_model=PermitResponse)
 def get_permit_request(
     request_id: int,

@@ -241,6 +241,13 @@ class _InternalHome extends StatelessWidget {
                             'Acompanhe exigências técnicas, documentos e retornos do cidadão.',
                         route: '/inspections',
                       ),
+                      const _HomeActionCard(
+                        icon: Icons.map_outlined,
+                        title: 'Mapa de eventos',
+                        description:
+                            'Visualize eventos autorizados por período e abra o endereço no Google Maps.',
+                        route: '/event-map',
+                      ),
                       if (_canManageUsers)
                         const _HomeActionCard(
                           icon: Icons.people_outline,

@@ -632,10 +632,11 @@ class _RequestListTile extends StatelessWidget {
         status == 'autorizada' ||
         status == 'isenta_dam' ||
         (request['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
-    final canAttachPayment = status == 'aguardando_pagamento_dam';
     final canCancel = _canCancel(status);
     final verified = _isCredentialVerified(request);
     final finalPermit = _finalPermitAttachment(request);
+    final damAttachment = _damAttachment(request);
+    final canAttachPayment = _canAttachPayment(request);
 
     final colorScheme = Theme.of(context).colorScheme;
     return Card(
@@ -674,6 +675,12 @@ class _RequestListTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                        if (damAttachment != null && finalPermit == null)
+                          Text(
+                            'DAM: ${damAttachment['nome_arquivo'] ?? 'PDF disponível'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                       ],
                     ),
                   ),
@@ -703,6 +710,12 @@ class _RequestListTile extends StatelessWidget {
                       onPressed: () => onAttachPaymentProof(request),
                       icon: const Icon(Icons.upload_file),
                       label: const Text('Comprovante'),
+                    ),
+                  if (damAttachment != null)
+                    IconButton(
+                      tooltip: 'Visualizar DAM',
+                      onPressed: () => onOpenAttachment(damAttachment),
+                      icon: const Icon(Icons.receipt_long_outlined),
                     ),
                   if (finalPermit != null)
                     IconButton(
@@ -744,6 +757,44 @@ class _RequestListTile extends StatelessWidget {
       }
     }
     return null;
+  }
+
+  static Map<String, dynamic>? _damAttachment(Map<String, dynamic> request) {
+    final attachments =
+        (request['attachments'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>();
+    for (final attachment in attachments) {
+      if (attachment['tipo_documento'] == 'dam') {
+        return attachment;
+      }
+    }
+    return null;
+  }
+
+  static Map<String, dynamic>? _paymentProofAttachment(
+    Map<String, dynamic> request,
+  ) {
+    final attachments =
+        (request['attachments'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>();
+    for (final attachment in attachments) {
+      if (attachment['tipo_documento'] == 'comprovante_pagamento_dam') {
+        return attachment;
+      }
+    }
+    return null;
+  }
+
+  static bool _canAttachPayment(Map<String, dynamic> request) {
+    final status = request['status']?.toString() ?? '';
+    final damStatus = request['dam_status']?.toString() ?? '';
+    final hasDam = _damAttachment(request) != null;
+    final hasPaymentProof = _paymentProofAttachment(request) != null;
+    final hasFinalPermit = _finalPermitAttachment(request) != null;
+    return hasDam &&
+        !hasPaymentProof &&
+        !hasFinalPermit &&
+        (status == 'aguardando_pagamento_dam' || damStatus == 'gerado');
   }
 
   static String _formatStatus(String status) {
@@ -904,8 +955,9 @@ class _RequestDetailsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = request['status']?.toString() ?? 'enviada';
     final finalPermit = _RequestListTile._finalPermitAttachment(request);
+    final damAttachment = _RequestListTile._damAttachment(request);
     final verified = _RequestListTile._isCredentialVerified(request);
-    final canAttachPayment = status == 'aguardando_pagamento_dam';
+    final canAttachPayment = _RequestListTile._canAttachPayment(request);
     final canCancel = _RequestListTile._canCancel(status);
     final canOpenCredential =
         status == 'autorizada' ||
@@ -997,6 +1049,12 @@ class _RequestDetailsPage extends StatelessWidget {
                           icon: const Icon(Icons.upload_file),
                           label: const Text('Anexar comprovante'),
                         ),
+                      if (damAttachment != null)
+                        OutlinedButton.icon(
+                          onPressed: () => onOpenAttachment(damAttachment),
+                          icon: const Icon(Icons.receipt_long_outlined),
+                          label: const Text('Ver DAM'),
+                        ),
                       if (canCancel)
                         OutlinedButton.icon(
                           onPressed: () => onCancelRequest(request),
@@ -1025,6 +1083,7 @@ class _RequestDetailsPage extends StatelessWidget {
                         ),
                       if (!canAttachPayment &&
                           !canCancel &&
+                          damAttachment == null &&
                           finalPermit == null &&
                           !canOpenCredential)
                         const Text(
