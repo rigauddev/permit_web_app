@@ -335,6 +335,10 @@ def ensure_event_credential_columns():
     columns = {column["name"] for column in inspector.get_columns("credenciais_evento")}
     migrations = {
         "verified_at": "ALTER TABLE credenciais_evento ADD COLUMN verified_at DATETIME NULL",
+        "verified_by": "ALTER TABLE credenciais_evento ADD COLUMN verified_by INTEGER NULL",
+        "verified_secretaria": "ALTER TABLE credenciais_evento ADD COLUMN verified_secretaria VARCHAR(120) NULL",
+        "verification_status": "ALTER TABLE credenciais_evento ADD COLUMN verification_status VARCHAR(50) NULL",
+        "verification_notes": "ALTER TABLE credenciais_evento ADD COLUMN verification_notes TEXT NULL",
         "verification_count": "ALTER TABLE credenciais_evento ADD COLUMN verification_count INTEGER NOT NULL DEFAULT 0",
     }
     with engine.begin() as connection:

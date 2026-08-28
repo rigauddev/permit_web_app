@@ -7,6 +7,7 @@
 .env.*
 !.env.example
 !.env.docker.example
+!.env.homologacao.example
 .venv/
 venv/
 __pycache__/

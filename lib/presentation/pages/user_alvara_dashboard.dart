@@ -111,6 +111,16 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildBullet(
+                          'Nome do solicitante / Responsável pelo evento',
+                        ),
+                        _buildBullet('CPF'),
+                        _buildBullet('Endereço residencial'),
+                        _buildBullet('Telefone de contato'),
+                        _buildBullet('Nome do evento'),
+                        _buildBullet('Data, local e horário do evento'),
+                        _buildBullet('Expectativa de público'),
+                        SizedBox(height: 8),
                         if (widget.eventTypes.isNotEmpty)
                           _EventTypeGuidanceCard(
                             eventTypes: widget.eventTypes,
@@ -122,56 +132,6 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                           ),
 
                         SizedBox(height: 4),
-                        _buildBullet(
-                          'Nome do solicitante / Responsável pelo evento',
-                        ),
-                        _buildBullet('CPF'),
-                        _buildBullet('Endereço residencial'),
-                        _buildBullet('Telefone de contato'),
-                        _buildBullet('Nome do evento'),
-                        _buildBullet('Data, local e horário do evento'),
-                        _buildBullet('Expectativa de público'),
-                        SizedBox(height: 8),
-                        // Text(
-                        //   'Documentos obrigatórios:',
-                        //   style: TextStyle(fontWeight: FontWeight.bold),
-                        // ),
-                        // _buildBullet('Foto ou cópia do RG e CPF'),
-                        // _buildBullet('Comprovante de residência'),
-                        // _buildBullet('Alvará de funcionamento do local'),
-                        // SizedBox(height: 8),
-                        // _buildBullet(
-                        //   'Termo de Responsabilidade Ambiental (Meio Ambiente)',
-                        // ),
-                        // _buildBullet(
-                        //   'Vistoria de palco/gerador (Infraestrutura)',
-                        // ),
-                        // _buildBullet(
-                        //   'Vistoria de trio elétrico e motorista + mapa do circuito (DMTRAN)',
-                        // ),
-                        // _buildBullet(
-                        //   'Autorização para uso/bloqueio de vias públicas (DMTRAN)',
-                        // ),
-                        // _buildBullet(
-                        //   'Vistoria da alimentação (Vigilância Sanitária)',
-                        // ),
-                        // _buildBullet(
-                        //   'Ofício à Guarda Civil Municipal, se necessário',
-                        // ),
-                        // _buildBullet('Contratação de brigadista, se exigido'),
-                        // SizedBox(height: 8),
-                        // Text(
-                        //   'Após todas as autorizações, realizar o pagamento do DAM na Receita Municipal para emissão da Licença/Alvará.',
-                        // ),
-                        // SizedBox(height: 4),
-                        // Text(
-                        //   'Observação: Eventos beneficentes são isentos do pagamento, mas devem encaminhar uma declaração com a instituição beneficiada.',
-                        //   style: TextStyle(
-                        //     fontStyle: FontStyle.italic,
-                        //     color: Colors.red,
-                        //   ),
-                        // ),
-                        // SizedBox(height: 12),
                       ],
                     ),
                   ),
@@ -509,8 +469,8 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
           icon: const Icon(Icons.qr_code_2),
           label: Text(
             _isCredentialVerified(form)
-                ? 'Evento verificado'
-                : 'Validar evento / QR Code',
+                ? 'Ver alvará verificado'
+                : 'Ver alvará com QR Code',
           ),
         ),
       ),

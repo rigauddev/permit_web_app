@@ -84,6 +84,20 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
     return profile == 'admin' || profile == 'gestor_secretaria';
   }
 
+  bool get _canInspectCredential {
+    final userType = widget.userType;
+    final profile = widget.userProfile;
+    if (widget.publicCode != null && userType.isEmpty) return false;
+    return userType != 'cidadao' &&
+        userType != 'user' &&
+        (profile == 'admin' ||
+            profile == 'gestor_secretaria' ||
+            profile == 'operador_secretaria' ||
+            userType == 'admin' ||
+            userType == 'gestor' ||
+            userType == 'operador');
+  }
+
   int? get _requestId {
     final value = widget.permitForm?['formId'];
     return value is int ? value : int.tryParse(value.toString());
@@ -215,10 +229,42 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       _authorization = authorization;
       _message = null;
     });
+  }
+
+  Future<void> _inspectCredential({
+    required String status,
+    String? notes,
+  }) async {
     final publicCode = _publicCodeController.text.trim();
     final token = _tokenController.text.trim();
-    if (publicCode.isNotEmpty && token.isNotEmpty) {
-      Future.microtask(_validateCredential);
+    if (publicCode.isEmpty || token.isEmpty) {
+      setState(() => _message = 'Informe o código público e o token.');
+      return;
+    }
+    setState(() {
+      _validatingCredential = true;
+      _message = null;
+    });
+    try {
+      final accessToken = await _readAccessToken();
+      final validation = await _api.inspectEventCredential(
+        accessToken: accessToken,
+        publicCode: publicCode,
+        token: token,
+        status: status,
+        notes: notes,
+      );
+      setState(() => _validation = validation);
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      setState(() => _message = error.message);
+    } catch (_) {
+      setState(() => _message = 'Não foi possível registrar a fiscalização.');
+    } finally {
+      if (mounted) setState(() => _validatingCredential = false);
     }
   }
 
@@ -226,7 +272,9 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   Widget build(BuildContext context) {
     final form = widget.permitForm;
     final appBar = AppBar(
-      title: const Text('Credencial do Evento'),
+      title: Text(
+        _canInspectCredential ? 'Fiscalização do evento' : 'Alvará do evento',
+      ),
       actions: [
         IconButton(
           tooltip: 'Voltar',
@@ -263,13 +311,16 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-              _ValidationPanel(
-                publicCodeController: _publicCodeController,
-                tokenController: _tokenController,
-                loading: _validatingCredential,
-                validation: _validation,
-                onValidate: _validateCredential,
-              ),
+              if (widget.publicCode != null || _canInspectCredential)
+                _ValidationPanel(
+                  publicCodeController: _publicCodeController,
+                  tokenController: _tokenController,
+                  loading: _validatingCredential,
+                  validation: _validation,
+                  onValidate: _validateCredential,
+                  canInspect: _canInspectCredential,
+                  onInspect: _inspectCredential,
+                ),
             ],
           ),
         ),
@@ -488,7 +539,7 @@ class _AuthorizationDocument extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Autorização de Evento',
+                          'Alvará de Evento',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -664,7 +715,7 @@ class _QrBox extends StatelessWidget {
               height: 160,
               child: Center(
                 child: Text(
-                  'QR Code disponível após emissão da credencial.',
+                  'QR Code disponível após emissão do alvará.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -690,6 +741,7 @@ class _SignatureFields extends StatelessWidget {
         final fields = [
           _SignatureLine(label: 'Responsável pelo evento'),
           _SignatureLine(label: 'Central de Eventos / Prefeitura'),
+          _SignatureLine(label: 'Secretaria fiscalizadora, quando exigido'),
         ];
         if (constraints.maxWidth >= 680) {
           return Row(
@@ -697,11 +749,19 @@ class _SignatureFields extends StatelessWidget {
               Expanded(child: fields[0]),
               const SizedBox(width: 18),
               Expanded(child: fields[1]),
+              const SizedBox(width: 18),
+              Expanded(child: fields[2]),
             ],
           );
         }
         return Column(
-          children: [fields[0], const SizedBox(height: 12), fields[1]],
+          children: [
+            fields[0],
+            const SizedBox(height: 12),
+            fields[1],
+            const SizedBox(height: 12),
+            fields[2],
+          ],
         );
       },
     );
@@ -778,6 +838,9 @@ class _ValidationPanel extends StatelessWidget {
   final bool loading;
   final Map<String, dynamic>? validation;
   final VoidCallback onValidate;
+  final bool canInspect;
+  final Future<void> Function({required String status, String? notes})
+  onInspect;
 
   const _ValidationPanel({
     required this.publicCodeController,
@@ -785,6 +848,8 @@ class _ValidationPanel extends StatelessWidget {
     required this.loading,
     required this.validation,
     required this.onValidate,
+    required this.canInspect,
+    required this.onInspect,
   });
 
   @override
@@ -839,8 +904,103 @@ class _ValidationPanel extends StatelessWidget {
               const SizedBox(height: 16),
               _ValidationResult(validation: validation!),
             ],
+            if (canInspect) ...[
+              const SizedBox(height: 16),
+              _InspectionRecordForm(loading: loading, onInspect: onInspect),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InspectionRecordForm extends StatefulWidget {
+  const _InspectionRecordForm({required this.loading, required this.onInspect});
+
+  final bool loading;
+  final Future<void> Function({required String status, String? notes})
+  onInspect;
+
+  @override
+  State<_InspectionRecordForm> createState() => _InspectionRecordFormState();
+}
+
+class _InspectionRecordFormState extends State<_InspectionRecordForm> {
+  final _notesController = TextEditingController();
+  String _status = 'regular';
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Registro de fiscalização',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: _status,
+            decoration: const InputDecoration(
+              labelText: 'Resultado',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'regular', child: Text('Regular')),
+              DropdownMenuItem(
+                value: 'irregular',
+                child: Text('Irregularidade'),
+              ),
+              DropdownMenuItem(value: 'multa', child: Text('Aplicar multa')),
+              DropdownMenuItem(
+                value: 'encerrado',
+                child: Text('Encerrar evento'),
+              ),
+            ],
+            onChanged:
+                widget.loading
+                    ? null
+                    : (value) => setState(() => _status = value ?? 'regular'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _notesController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Justificativa/observações',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ElevatedButton.icon(
+              onPressed:
+                  widget.loading
+                      ? null
+                      : () => widget.onInspect(
+                        status: _status,
+                        notes: _notesController.text.trim(),
+                      ),
+              icon: const Icon(Icons.assignment_turned_in_outlined),
+              label: const Text('Registrar fiscalização'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -905,6 +1065,25 @@ class _ValidationResult extends StatelessWidget {
               label: 'Verificação',
               value: _verificationLabel(validation),
             ),
+          if ((validation['verified_secretaria']?.toString() ?? '').isNotEmpty)
+            _DetailRow(
+              label: 'Secretaria',
+              value: validation['verified_secretaria'],
+            ),
+          if ((validation['verified_by']?.toString() ?? '').isNotEmpty)
+            _DetailRow(label: 'Fiscal', value: validation['verified_by']),
+          if ((validation['verification_status']?.toString() ?? '').isNotEmpty)
+            _DetailRow(
+              label: 'Resultado',
+              value: _inspectionStatusLabel(
+                validation['verification_status']?.toString() ?? '',
+              ),
+            ),
+          if ((validation['verification_notes']?.toString() ?? '').isNotEmpty)
+            _DetailRow(
+              label: 'Observações',
+              value: validation['verification_notes'],
+            ),
           if (validation['dam_attachment'] != null)
             _DetailRow(
               label: 'Arquivo DAM',
@@ -943,6 +1122,21 @@ String _verificationLabel(Map<String, dynamic> validation) {
     return 'Evento verificado nesta consulta';
   }
   return 'Evento verificado em $verifiedAt. Consultas: $countText';
+}
+
+String _inspectionStatusLabel(String status) {
+  switch (status) {
+    case 'regular':
+      return 'Regular';
+    case 'irregular':
+      return 'Irregularidade registrada';
+    case 'multa':
+      return 'Irregularidade com possibilidade de multa';
+    case 'encerrado':
+      return 'Evento encerrado';
+    default:
+      return status;
+  }
 }
 
 class _DetailRow extends StatelessWidget {
@@ -1217,6 +1411,8 @@ Future<Uint8List> _buildAuthorizationPdf({
                 pw.Expanded(
                   child: _pdfSignature('Central de Eventos / Prefeitura'),
                 ),
+                pw.SizedBox(width: 24),
+                pw.Expanded(child: _pdfSignature('Secretaria fiscalizadora')),
               ],
             ),
             if (requirements.isNotEmpty) ...[

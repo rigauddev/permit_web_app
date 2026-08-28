@@ -174,6 +174,10 @@ class EventCredentialResponse(BaseModel):
     valid_until: datetime
     issued_at: datetime | None = None
     verified_at: datetime | None = None
+    verified_by: str | None = None
+    verified_secretaria: str | None = None
+    verification_status: str | None = None
+    verification_notes: str | None = None
     verification_count: int = 0
     validation_url: str
 
@@ -193,9 +197,20 @@ class EventCredentialValidationResponse(BaseModel):
     status_solicitacao: str | None = None
     dam_status: str | None = None
     verified_at: datetime | None = None
+    verified_by: str | None = None
+    verified_secretaria: str | None = None
+    verification_status: str | None = None
+    verification_notes: str | None = None
     verification_count: int = 0
     requirements: list[RequirementResponse] = []
     dam_attachment: AttachmentResponse | None = None
+
+
+class EventCredentialInspectionRequest(BaseModel):
+    token: str = Field(..., min_length=10)
+    status: str = Field(default="regular", pattern="^(regular|irregular|multa|encerrado)$")
+    notes: str | None = Field(default=None, max_length=2000)
+    notify_owner: bool = True
 
 
 class EventCredentialRevokeRequest(BaseModel):

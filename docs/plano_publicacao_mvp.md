@@ -4,18 +4,20 @@ Data alvo: segunda-feira, 31/08/2026.
 
 ## Estratégia de branches
 
-- `main`: manter limpa, recebendo somente merge aprovado da release.
-- `release/mvp-2026-08-31`: branch de estabilização para subir o MVP.
+- `main`: manter limpa, recebendo somente merge aprovado depois da homologação.
+- `develop`: branch de integração das entregas aprovadas para o MVP.
+- `mvp`: branch usada no servidor de homologação/MVP.
 - `feat/*` e `fix/*`: branches de trabalho para novas telas e correções.
 
 Fluxo recomendado:
 
 1. Finalizar alterações na branch de trabalho.
 2. Rodar validações locais: `flutter analyze`, build web e compilação do backend.
-3. Criar PR da branch de trabalho para `release/mvp-2026-08-31`.
-4. Homologar o sistema pela URL de staging.
-5. Abrir PR de `release/mvp-2026-08-31` para `main`.
-6. Fazer tag `v0.1.0-mvp` após o merge em `main`.
+3. Criar PR da branch de trabalho para `develop`.
+4. Atualizar `mvp` a partir de `develop` para subir a homologação.
+5. Homologar o sistema pela URL de staging.
+6. Abrir PR de `mvp` para `main`.
+7. Fazer tag `v0.1.0-mvp` após o merge em `main`.
 
 ## Checklist antes do merge para main
 
@@ -82,7 +84,8 @@ Configurar no servidor:
 ```bash
 git clone <repo>
 cd permit_web_app
-cp .env.docker.example .env
+git checkout mvp
+cp .env.homologacao.example .env
 docker compose up -d --build
 docker compose ps
 ```

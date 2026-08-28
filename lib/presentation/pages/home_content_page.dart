@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
-import '../../shared/widgets/app_scaffold.dart';
 import '../../core/session_expiration.dart';
+import '../../core/session_store.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class HomeContentPage extends StatefulWidget {
   const HomeContentPage({super.key, required this.userType});
@@ -18,7 +18,6 @@ class HomeContentPage extends StatefulWidget {
 
 class _HomeContentPageState extends State<HomeContentPage> {
   final _api = PermitApiService();
-  final _storage = const FlutterSecureStorage();
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
@@ -63,7 +62,7 @@ class _HomeContentPageState extends State<HomeContentPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final rawUser = await _storage.read(key: 'user');
+      final rawUser = await const SessionStore().readUserJson();
       if (rawUser != null) {
         final user = jsonDecode(rawUser) as Map<String, dynamic>;
         _currentRole = user['role'] as String?;

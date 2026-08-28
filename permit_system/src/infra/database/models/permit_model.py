@@ -152,6 +152,10 @@ class EventCredentialModel(Base):
     issued_at = Column(DateTime(timezone=True), server_default=func.now())
     issued_by = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
+    verified_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    verified_secretaria = Column(String(120), nullable=True)
+    verification_status = Column(String(50), nullable=True)
+    verification_notes = Column(Text, nullable=True)
     verification_count = Column(Integer, default=0, nullable=False)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     revoked_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
@@ -159,6 +163,7 @@ class EventCredentialModel(Base):
 
     permit_request = relationship("PermitRequestModel", back_populates="credentials")
     issuer = relationship("UserModel", foreign_keys=[issued_by])
+    verifier = relationship("UserModel", foreign_keys=[verified_by])
     revoker = relationship("UserModel", foreign_keys=[revoked_by])
 
 

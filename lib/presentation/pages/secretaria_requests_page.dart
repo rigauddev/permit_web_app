@@ -937,7 +937,7 @@ class _RequestDetailsDialog extends StatelessWidget {
                     trailing: TextButton.icon(
                       onPressed: () => onOpenAttachment(attachment),
                       icon: const Icon(Icons.open_in_new, size: 18),
-                      label: const Text('Abrir'),
+                      label: const Text('Ver'),
                     ),
                   ),
                 ),
@@ -1238,23 +1238,60 @@ class _RequirementRow extends StatelessWidget {
           ),
           if (attachments.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children:
-                  attachments
-                      .map(
-                        (attachment) => OutlinedButton.icon(
-                          onPressed: () => onOpenAttachment(attachment),
-                          icon: const Icon(Icons.attach_file, size: 18),
-                          label: Text(
-                            attachment['nome_arquivo']?.toString() ??
-                                'Documento anexado',
-                            overflow: TextOverflow.ellipsis,
+                  attachments.map((attachment) {
+                    final fileName =
+                        attachment['nome_arquivo']?.toString() ??
+                        'Documento anexado';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: Chip(
+                              avatar: const Icon(Icons.attach_file, size: 16),
+                              label: Text(
+                                fileName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
-                        ),
-                      )
-                      .toList(),
+                          OutlinedButton.icon(
+                            onPressed: () => onOpenAttachment(attachment),
+                            icon: const Icon(
+                              Icons.visibility_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('Ver'),
+                          ),
+                          if (canAct) ...[
+                            OutlinedButton.icon(
+                              onPressed: () => onPending(id),
+                              icon: const Icon(
+                                Icons.assignment_late_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Solicitar ajuste'),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () => onApprove(id),
+                              icon: const Icon(
+                                Icons.check_circle_outline,
+                                size: 18,
+                              ),
+                              label: const Text('Aprovar documento'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }).toList(),
             ),
           ],
         ],

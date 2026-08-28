@@ -730,7 +730,9 @@ class _RequestListTile extends StatelessWidget {
                   if (canOpenCredential)
                     IconButton(
                       tooltip:
-                          verified ? 'Evento verificado' : 'Validar evento',
+                          verified
+                              ? 'Ver alvará verificado'
+                              : 'Ver alvará com QR Code',
                       onPressed: () => onOpenCredential(request),
                       icon: const Icon(Icons.qr_code_2),
                     ),
@@ -1076,7 +1078,9 @@ class _RequestDetailsPage extends StatelessWidget {
                           onPressed: () => onOpenCredential(request),
                           icon: const Icon(Icons.qr_code_2),
                           label: Text(
-                            verified ? 'Ver credencial' : 'Validar evento',
+                            verified
+                                ? 'Ver alvará verificado'
+                                : 'Ver alvará com QR Code',
                           ),
                         ),
                       if (!canAttachPayment &&

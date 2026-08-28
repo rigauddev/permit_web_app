@@ -655,6 +655,30 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> inspectEventCredential({
+    required String accessToken,
+    required String publicCode,
+    required String token,
+    required String status,
+    String? notes,
+    bool notifyOwner = true,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/event-credentials/$publicCode/inspect'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'token': token,
+        'status': status,
+        'notes': notes,
+        'notify_owner': notifyOwner,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getAuthorizationTemplate({
     required String accessToken,
   }) async {

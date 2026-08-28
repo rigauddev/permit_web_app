@@ -12,6 +12,7 @@ from src.schemas.permit_schema import (
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
+    EventCredentialInspectionRequest,
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
@@ -311,6 +312,16 @@ def validate_event_credential(
     db: Session = Depends(get_db),
 ):
     return PermitService(db).validate_event_credential(codigo_publico, t)
+
+
+@credential_router.post("/{codigo_publico}/inspect", response_model=EventCredentialValidationResponse)
+def inspect_event_credential(
+    codigo_publico: str,
+    payload: EventCredentialInspectionRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).inspect_event_credential(codigo_publico, payload, current_user)
 
 
 @credential_router.post("/{credential_id}/revoke", response_model=EventCredentialResponse)

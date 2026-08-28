@@ -29,6 +29,7 @@ from src.schemas.permit_schema import (
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
+    EventCredentialInspectionRequest,
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
@@ -715,10 +716,68 @@ class PermitService:
             status_solicitacao=request.status,
             dam_status=request.dam_status,
             verified_at=credential.verified_at,
+            verified_by=credential.verifier.nome if credential.verifier else None,
+            verified_secretaria=credential.verified_secretaria,
+            verification_status=credential.verification_status,
+            verification_notes=credential.verification_notes,
             verification_count=credential.verification_count or 0,
             requirements=[self._requirement_to_response(item) for item in request.requirements],
             dam_attachment=self._attachment_to_response(dam_attachment) if dam_attachment else None,
         )
+
+    def inspect_event_credential(
+        self,
+        codigo_publico: str,
+        payload: EventCredentialInspectionRequest,
+        current_user: UserModel,
+    ) -> EventCredentialValidationResponse:
+        result = self.validate_event_credential(codigo_publico, payload.token)
+        if not result.valid:
+            return result
+
+        credential = (
+            self.db.query(EventCredentialModel)
+            .filter(EventCredentialModel.codigo_publico == codigo_publico)
+            .first()
+        )
+        if not credential:
+            return EventCredentialValidationResponse(valid=False, reason="Credencial não encontrada")
+
+        secretaria_nome = current_user.secretaria.nome if current_user.secretaria else current_user.role.nome
+        credential.verified_by = current_user.id
+        credential.verified_secretaria = secretaria_nome
+        credential.verification_status = payload.status
+        credential.verification_notes = payload.notes
+
+        status_label = {
+            "regular": "evento regular",
+            "irregular": "irregularidade registrada",
+            "multa": "irregularidade com possibilidade de multa",
+            "encerrado": "evento encerrado pela fiscalização",
+        }.get(payload.status, payload.status)
+        message = f"Fiscalização registrou {status_label}."
+        if payload.notes:
+            message = f"{message} Justificativa: {payload.notes}"
+        self._add_comment(
+            credential.permit_request_id,
+            current_user,
+            message,
+        )
+        if payload.status != "regular" and payload.notify_owner:
+            self._notify_citizen_event_irregularity(
+                credential.permit_request,
+                current_user,
+                status_label,
+                payload.notes,
+            )
+        self.db.commit()
+        self.db.refresh(credential)
+        result.verified_by = current_user.nome
+        result.verified_secretaria = secretaria_nome
+        result.verification_status = credential.verification_status
+        result.verification_notes = credential.verification_notes
+        result.verification_count = credential.verification_count or result.verification_count
+        return result
 
     def revoke_event_credential(
         self,
@@ -1555,6 +1614,25 @@ class PermitService:
             ),
         )
 
+    def _notify_citizen_event_irregularity(
+        self,
+        request: PermitRequestModel,
+        actor: UserModel,
+        status_label: str,
+        notes: str | None,
+    ) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=str((request.dados_responsavel or {}).get("email") or request.solicitante.email),
+            assunto="Registro de fiscalização do evento",
+            link=f"{PUBLIC_BASE_URL}/my-requests",
+            mensagem=(
+                f"A fiscalização registrou {status_label} para o evento da solicitação {request.protocolo}. "
+                f"{'Justificativa: ' + notes if notes else 'Acompanhe os detalhes pelo sistema.'}"
+            ),
+        )
+
     def _notify_development_economico_ready_for_final_permit(
         self,
         request: PermitRequestModel,
@@ -1774,6 +1852,10 @@ class PermitService:
             valid_until=credential.valid_until,
             issued_at=credential.issued_at,
             verified_at=credential.verified_at,
+            verified_by=credential.verifier.nome if credential.verifier else None,
+            verified_secretaria=credential.verified_secretaria,
+            verification_status=credential.verification_status,
+            verification_notes=credential.verification_notes,
             verification_count=credential.verification_count or 0,
             validation_url=validation_url,
         )
