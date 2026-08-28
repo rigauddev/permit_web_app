@@ -30,6 +30,7 @@ class AppRoutes {
   static const String secretariaRequests = '/secretaria-requests';
   static const String inspections = '/inspections';
   static const String eventMap = '/event-map';
+  static const String reports = '/reports';
   static const String questions = '/questions';
   static const String userCreate = '/user-create';
   static const String homeContent = '/home-content';
@@ -76,6 +77,11 @@ class AppRoutes {
                 permitType: args['permitType'],
                 questions: args['questions'],
                 forms: args['forms'],
+                eventType: args['eventType'] as Map<String, dynamic>?,
+                eventTypes:
+                    (args['eventTypes'] as List<dynamic>?)
+                        ?.cast<Map<String, dynamic>>() ??
+                    const [],
               ),
         );
       case eventPermit:
@@ -94,6 +100,11 @@ class AppRoutes {
                 userProfile: args['userProfile'],
                 permitType: args['permitType'],
                 questions: args['questions'],
+                eventType: args['eventType'] as Map<String, dynamic>?,
+                eventTypes:
+                    (args['eventTypes'] as List<dynamic>?)
+                        ?.cast<Map<String, dynamic>>() ??
+                    const [],
               ),
         );
       case questions:

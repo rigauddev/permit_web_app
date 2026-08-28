@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
 import '../../features/permit_request/pages/permit_request_page.dart';
 import '../../shared/widgets/app_scaffold.dart';
-import '../../shared/widgets/back_to_services_button.dart';
 import '../../shared/widgets/chat_comentarios.dart';
 import 'event_credential_page.dart';
 
@@ -14,6 +13,8 @@ class PermitDashboardPage extends StatefulWidget {
   final String permitType;
   final List<Map<String, dynamic>> questions;
   final List<Map<String, dynamic>> forms;
+  final Map<String, dynamic>? eventType;
+  final List<Map<String, dynamic>> eventTypes;
 
   const PermitDashboardPage({
     super.key,
@@ -22,6 +23,8 @@ class PermitDashboardPage extends StatefulWidget {
     required this.permitType,
     required this.questions,
     required this.forms,
+    this.eventType,
+    this.eventTypes = const [],
   });
 
   @override
@@ -30,20 +33,30 @@ class PermitDashboardPage extends StatefulWidget {
 
 class _PermitDashboardPageState extends State<PermitDashboardPage> {
   late List<Map<String, dynamic>> _forms;
+  String? _selectedEventTypeKey;
   bool _loadingForms = false;
 
   @override
   void initState() {
     super.initState();
     _forms = List<Map<String, dynamic>>.from(widget.forms);
+    _selectedEventTypeKey = widget.eventType?['key']?.toString();
     _loadForms();
+  }
+
+  Map<String, dynamic>? get _selectedEventType {
+    for (final eventType in widget.eventTypes) {
+      if (eventType['key']?.toString() == _selectedEventTypeKey) {
+        return eventType;
+      }
+    }
+    return widget.eventType;
   }
 
   Future<void> _loadForms() async {
     setState(() => _loadingForms = true);
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -73,16 +86,18 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            BackNavigationButton(
-              route: '/services',
-              label: 'Voltar para Serviços',
-            ),
+            // BackNavigationButton(
+            //   route: '/services',
+            //   label: 'Voltar para Serviços',
+            // ),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 12.0,
                 vertical: 8,
               ),
               child: ExpansionTile(
+                initiallyExpanded: true,
+                maintainState: true,
                 title: Text(
                   'O que preciso para solicitar um alvará para evento?',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -96,14 +111,16 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Solicitar o alvará com pelo menos 15 dias úteis de antecedência!',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
-                            fontStyle: FontStyle.italic,
+                        if (widget.eventTypes.isNotEmpty)
+                          _EventTypeGuidanceCard(
+                            eventTypes: widget.eventTypes,
+                            selectedKey: _selectedEventTypeKey,
+                            onSelected:
+                                (value) => setState(
+                                  () => _selectedEventTypeKey = value,
+                                ),
                           ),
-                        ),
+
                         SizedBox(height: 4),
                         _buildBullet(
                           'Nome do solicitante / Responsável pelo evento',
@@ -115,46 +132,46 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                         _buildBullet('Data, local e horário do evento'),
                         _buildBullet('Expectativa de público'),
                         SizedBox(height: 8),
-                        Text(
-                          'Documentos obrigatórios:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        _buildBullet('Foto ou cópia do RG e CPF'),
-                        _buildBullet('Comprovante de residência'),
-                        _buildBullet('Alvará de funcionamento do local'),
-                        SizedBox(height: 8),
-                        _buildBullet(
-                          'Termo de Responsabilidade Ambiental (Meio Ambiente)',
-                        ),
-                        _buildBullet(
-                          'Vistoria de palco/gerador (Infraestrutura)',
-                        ),
-                        _buildBullet(
-                          'Vistoria de trio elétrico e motorista + mapa do circuito (DMTRAN)',
-                        ),
-                        _buildBullet(
-                          'Autorização para uso/bloqueio de vias públicas (DMTRAN)',
-                        ),
-                        _buildBullet(
-                          'Vistoria da alimentação (Vigilância Sanitária)',
-                        ),
-                        _buildBullet(
-                          'Ofício à Guarda Civil Municipal, se necessário',
-                        ),
-                        _buildBullet('Contratação de brigadista, se exigido'),
-                        SizedBox(height: 8),
-                        Text(
-                          'Após todas as autorizações, realizar o pagamento do DAM na Receita Municipal para emissão da Licença/Alvará.',
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Observação: Eventos beneficentes são isentos do pagamento, mas devem encaminhar uma declaração com a instituição beneficiada.',
-                          style: TextStyle(
-                            fontStyle: FontStyle.italic,
-                            color: Colors.red,
-                          ),
-                        ),
-                        SizedBox(height: 12),
+                        // Text(
+                        //   'Documentos obrigatórios:',
+                        //   style: TextStyle(fontWeight: FontWeight.bold),
+                        // ),
+                        // _buildBullet('Foto ou cópia do RG e CPF'),
+                        // _buildBullet('Comprovante de residência'),
+                        // _buildBullet('Alvará de funcionamento do local'),
+                        // SizedBox(height: 8),
+                        // _buildBullet(
+                        //   'Termo de Responsabilidade Ambiental (Meio Ambiente)',
+                        // ),
+                        // _buildBullet(
+                        //   'Vistoria de palco/gerador (Infraestrutura)',
+                        // ),
+                        // _buildBullet(
+                        //   'Vistoria de trio elétrico e motorista + mapa do circuito (DMTRAN)',
+                        // ),
+                        // _buildBullet(
+                        //   'Autorização para uso/bloqueio de vias públicas (DMTRAN)',
+                        // ),
+                        // _buildBullet(
+                        //   'Vistoria da alimentação (Vigilância Sanitária)',
+                        // ),
+                        // _buildBullet(
+                        //   'Ofício à Guarda Civil Municipal, se necessário',
+                        // ),
+                        // _buildBullet('Contratação de brigadista, se exigido'),
+                        // SizedBox(height: 8),
+                        // Text(
+                        //   'Após todas as autorizações, realizar o pagamento do DAM na Receita Municipal para emissão da Licença/Alvará.',
+                        // ),
+                        // SizedBox(height: 4),
+                        // Text(
+                        //   'Observação: Eventos beneficentes são isentos do pagamento, mas devem encaminhar uma declaração com a instituição beneficiada.',
+                        //   style: TextStyle(
+                        //     fontStyle: FontStyle.italic,
+                        //     color: Colors.red,
+                        //   ),
+                        // ),
+                        // SizedBox(height: 12),
                       ],
                     ),
                   ),
@@ -177,21 +194,27 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                         ),
                       ),
                       ElevatedButton.icon(
-                        onPressed: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (context) => PermitRequestPage(
-                                    userType: widget.userType,
-                                    userProfile: widget.userProfile,
-                                    permitType: widget.permitType,
-                                    questions: widget.questions,
-                                  ),
-                            ),
-                          );
-                          if (mounted) _loadForms();
-                        },
+                        onPressed:
+                            widget.eventTypes.isNotEmpty &&
+                                    _selectedEventType == null
+                                ? null
+                                : () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (context) => PermitRequestPage(
+                                            userType: widget.userType,
+                                            userProfile: widget.userProfile,
+                                            permitType: widget.permitType,
+                                            questions: widget.questions,
+                                            eventType: _selectedEventType,
+                                            eventTypes: widget.eventTypes,
+                                          ),
+                                    ),
+                                  );
+                                  if (mounted) _loadForms();
+                                },
                         icon: Icon(Icons.add),
                         label: Text('Nova Solicitação'),
                         style: ElevatedButton.styleFrom(
@@ -548,6 +571,149 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
         ],
       ),
     );
+  }
+}
+
+class _EventTypeGuidanceCard extends StatelessWidget {
+  const _EventTypeGuidanceCard({
+    required this.eventTypes,
+    required this.selectedKey,
+    required this.onSelected,
+  });
+
+  final List<Map<String, dynamic>> eventTypes;
+  final String? selectedKey;
+  final ValueChanged<String> onSelected;
+
+  Map<String, dynamic>? get selectedEventType {
+    for (final eventType in eventTypes) {
+      if (eventType['key']?.toString() == selectedKey) return eventType;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = selectedEventType;
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8F5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.category_outlined, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Tipo de evento',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Selecione o tipo que melhor representa seu evento para ver exemplos e documentos necessários antes de criar a solicitação.',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                eventTypes.map((eventType) {
+                  final key = eventType['key']?.toString() ?? '';
+                  return ChoiceChip(
+                    label: Text(eventType['name']?.toString() ?? key),
+                    selected: key == selectedKey,
+                    onSelected: (_) => onSelected(key),
+                  );
+                }).toList(),
+          ),
+          if (selected != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFD8E0D8)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Eventos que se enquadram em ${selected['name'] ?? 'este tipo'}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    selected['examples']?.toString() ??
+                        'Exemplos não informados.',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Documentos necessários para este tipo',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            ...List<Map<String, dynamic>>.from(
+              selected['required_documents'] ?? const [],
+            ).map((document) => _DocumentRequirementTile(document)),
+          ] else ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Escolha um tipo de evento para liberar a orientação específica e iniciar a solicitação com os documentos certos.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentRequirementTile extends StatelessWidget {
+  const _DocumentRequirementTile(this.document);
+
+  final Map<String, dynamic> document;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = document['label']?.toString() ?? '';
+    final url = document['url']?.toString() ?? '';
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.check_circle_outline),
+      title: Text(label),
+      trailing:
+          url.trim().isEmpty
+              ? null
+              : IconButton(
+                tooltip: 'Baixar modelo',
+                icon: const Icon(Icons.download_outlined),
+                onPressed: () => _openDocument(url),
+              ),
+    );
+  }
+
+  Future<void> _openDocument(String rawUrl) async {
+    final parsed = Uri.tryParse(rawUrl);
+    final uri =
+        parsed != null && parsed.hasScheme ? parsed : Uri.base.resolve(rawUrl);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 

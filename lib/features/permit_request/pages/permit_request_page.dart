@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth_service.dart';
 import '../../../core/session_expiration.dart';
@@ -18,6 +17,8 @@ class PermitRequestPage extends ConsumerStatefulWidget {
   final String userProfile;
   final String permitType;
   final List<Map<String, dynamic>> questions;
+  final Map<String, dynamic>? eventType;
+  final List<Map<String, dynamic>> eventTypes;
 
   const PermitRequestPage({
     super.key,
@@ -25,6 +26,8 @@ class PermitRequestPage extends ConsumerStatefulWidget {
     required this.userProfile,
     required this.permitType,
     required this.questions,
+    this.eventType,
+    this.eventTypes = const [],
   });
 
   @override
@@ -34,7 +37,6 @@ class PermitRequestPage extends ConsumerStatefulWidget {
 class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
   static const _draftKey = 'event_permit_request_draft_v1';
 
-  final _storage = const FlutterSecureStorage();
   final _authService = AuthService();
   late Future<UserModel?> _profileFuture;
 
@@ -44,7 +46,14 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
     _profileFuture = _loadCurrentUser();
     Future.microtask(() async {
       final controller = ref.read(permitRequestControllerProvider.notifier);
-      controller.initializeQuestions(widget.questions);
+      controller.initializeQuestions(
+        widget.questions,
+        eventTypes: widget.eventTypes,
+      );
+      final eventType = widget.eventType;
+      if (eventType != null) {
+        controller.selectEventType(eventType);
+      }
       await _offerDraftRestore();
     });
   }
@@ -77,7 +86,7 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
   }
 
   Future<UserModel?> _loadCurrentUser() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return null;
@@ -291,6 +300,8 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                                                         widget.permitType,
                                                     questions: widget.questions,
                                                     forms: const [],
+                                                    eventTypes:
+                                                        widget.eventTypes,
                                                   ),
                                             ),
                                           );

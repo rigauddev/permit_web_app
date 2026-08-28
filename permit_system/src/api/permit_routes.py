@@ -17,6 +17,8 @@ from src.schemas.permit_schema import (
     EventCredentialValidationResponse,
     EventPublicRangeRequest,
     EventPublicRangeResponse,
+    EventTypeRequest,
+    EventTypeResponse,
     InspectionCompleteRequest,
     InspectionScheduleRequest,
     PermitCancelRequest,
@@ -75,6 +77,33 @@ def list_question_definitions(
     _: UserModel = Depends(get_current_user),
 ):
     return PermitService(db).list_question_definitions()
+
+
+@router.get("/event-types", response_model=list[EventTypeResponse])
+def list_event_types(
+    db: Session = Depends(get_db),
+    _: UserModel = Depends(get_current_user),
+):
+    return PermitService(db).list_event_types()
+
+
+@router.post("/event-types", response_model=EventTypeResponse)
+def create_event_type(
+    payload: EventTypeRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).create_event_type(payload, current_user)
+
+
+@router.put("/event-types/{event_type_id}", response_model=EventTypeResponse)
+def update_event_type(
+    event_type_id: int,
+    payload: EventTypeRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).update_event_type(event_type_id, payload, current_user)
 
 
 @router.get("/public-ranges", response_model=list[EventPublicRangeResponse])
@@ -264,6 +293,15 @@ def complete_requirement_inspection(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
 ):
     return PermitService(db).complete_inspection(requirement_id, payload, current_user)
+
+
+@router.patch("/requirements/{requirement_id}/inspection-confirm", response_model=RequirementResponse)
+def confirm_requirement_inspection(
+    requirement_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).confirm_inspection(requirement_id, current_user)
 
 
 @credential_router.get("/{codigo_publico}/validate", response_model=EventCredentialValidationResponse)

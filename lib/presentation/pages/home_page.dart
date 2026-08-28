@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/permit_api_service.dart';
+import '../../core/session_expiration.dart';
 import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
 import '../../shared/widgets/app_scaffold.dart';
@@ -18,7 +18,6 @@ class UserHomePage extends ConsumerStatefulWidget {
 }
 
 class _UserHomePageState extends ConsumerState<UserHomePage> {
-  final _storage = const FlutterSecureStorage();
   final _api = PermitApiService();
   late Future<List<Map<String, dynamic>>> _contentFuture;
 
@@ -29,7 +28,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
   }
 
   Future<List<Map<String, dynamic>>> _loadContent() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) return _fallbackCards;
     try {
       final cards = await _api.listHomeContent(token);
@@ -211,6 +210,8 @@ class _InternalHome extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
+              const _InternalOperationsPreview(),
+              const SizedBox(height: 24),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final crossAxisCount =
@@ -247,6 +248,13 @@ class _InternalHome extends StatelessWidget {
                         description:
                             'Visualize eventos autorizados por período e abra o endereço no Google Maps.',
                         route: '/event-map',
+                      ),
+                      const _HomeActionCard(
+                        icon: Icons.analytics_outlined,
+                        title: 'Relatórios',
+                        description:
+                            'Analise eventos por período, ano, tipo, secretaria e frequência mensal.',
+                        route: '/reports',
                       ),
                       if (_canManageUsers)
                         const _HomeActionCard(
@@ -319,6 +327,113 @@ class _InternalHome extends StatelessWidget {
       default:
         return slug ?? 'Sem secretaria vinculada';
     }
+  }
+}
+
+class _InternalOperationsPreview extends StatelessWidget {
+  const _InternalOperationsPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 760;
+        final children = [
+          const Expanded(child: _CityDatesPanel()),
+          Expanded(
+            child: _HomeActionCard(
+              icon: Icons.map_outlined,
+              title: 'Mapa de eventos autorizados',
+              description:
+                  'Consulte pins dos eventos autorizados por data e acompanhe a operação do dia.',
+              route: '/event-map',
+            ),
+          ),
+        ];
+        if (isNarrow) {
+          return const Column(
+            children: [
+              _CityDatesPanel(),
+              SizedBox(height: 12),
+              _HomeActionCard(
+                icon: Icons.map_outlined,
+                title: 'Mapa de eventos autorizados',
+                description:
+                    'Consulte pins dos eventos autorizados por data e acompanhe a operação do dia.',
+                route: '/event-map',
+              ),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [children.first, const SizedBox(width: 16), children.last],
+        );
+      },
+    );
+  }
+}
+
+class _CityDatesPanel extends StatelessWidget {
+  const _CityDatesPanel();
+
+  static const _dates = [
+    ('02/02', 'Yemanjá'),
+    ('19/03', 'Dia do Artesão'),
+    ('24/06', 'São João'),
+    ('29/06', 'São Pedro'),
+    ('12/10', 'Dia das Crianças'),
+    ('10/11', 'Aniversário da Cidade'),
+    ('08/11', 'Lavagem do Amparo'),
+    ('25/11', 'Dia das Baianas de Acarajé'),
+    ('25/12', 'Natal'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.event_note_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Calendário comemorativo da cidade',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ..._dates.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        item.$1,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Expanded(child: Text(item.$2)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

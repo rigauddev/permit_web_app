@@ -97,7 +97,7 @@ class PermitApiService {
     {
       'id': 8,
       'key': 'bloqueia_via',
-      'pergunta': 'O evento usará ou bloqueará vias/ruas municipais?',
+      'pergunta': 'Vai fechar rua ou desviar o trânsito?',
       'secretaria': 'DMTRAN',
       'tipos_resposta': ['Sim/Não', 'Texto'],
       'exigencias': [
@@ -137,6 +137,43 @@ class PermitApiService {
       'secretaria': 'Responsável pelo evento',
       'tipos_resposta': ['Sim/Não', 'Texto'],
       'exigencias': ['Contratação de brigadista pelo responsável'],
+    },
+  ];
+
+  static const List<Map<String, dynamic>> eventTypesFallback = [
+    {
+      'key': 'cultural',
+      'name': 'Cultural',
+      'examples':
+          'Festival cultural, teatro, dança, exposição e manifestações populares',
+      'required_documents': [
+        {'label': 'Ofício ou ficha de solicitação de autorização', 'url': ''},
+        {'label': 'Foto ou cópia do RG e CPF', 'url': ''},
+        {'label': 'Comprovante de residência', 'url': ''},
+        {'label': 'Alvará de funcionamento do local, quando houver', 'url': ''},
+      ],
+    },
+    {
+      'key': 'musical_entretenimento',
+      'name': 'Musical / Entretenimento',
+      'examples': 'Shows, festivais musicais, apresentações e festas',
+      'required_documents': [
+        {'label': 'Ofício ou ficha de solicitação de autorização', 'url': ''},
+        {'label': 'Foto ou cópia do RG e CPF', 'url': ''},
+        {'label': 'Comprovante de residência', 'url': ''},
+        {'label': 'Alvará de funcionamento do local, quando houver', 'url': ''},
+      ],
+    },
+    {
+      'key': 'esportivo',
+      'name': 'Esportivo',
+      'examples': 'Corrida, ciclismo, futebol, campeonato e torneio',
+      'required_documents': [
+        {'label': 'Ofício ou ficha de solicitação de autorização', 'url': ''},
+        {'label': 'Foto ou cópia do RG e CPF', 'url': ''},
+        {'label': 'Comprovante de residência', 'url': ''},
+        {'label': 'Alvará de funcionamento do local, quando houver', 'url': ''},
+      ],
     },
   ];
 
@@ -228,6 +265,7 @@ class PermitApiService {
     required String accessToken,
     required int requirementId,
     required String scheduledFor,
+    String? scheduledTime,
   }) async {
     final response = await _client.patch(
       Uri.parse(
@@ -237,7 +275,26 @@ class PermitApiService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $accessToken',
       },
-      body: jsonEncode({'scheduled_for': scheduledFor}),
+      body: jsonEncode({
+        'scheduled_for': scheduledFor,
+        'scheduled_time': scheduledTime,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> confirmInspection({
+    required String accessToken,
+    required int requirementId,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse(
+        '$_baseUrl/permit-requests/requirements/$requirementId/inspection-confirm',
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
     );
     return _decodeResponse(response) as Map<String, dynamic>;
   }
@@ -635,6 +692,48 @@ class PermitApiService {
     return decoded.cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> listEventTypes({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/event-types'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createEventType({
+    required String accessToken,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/event-types'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateEventType({
+    required String accessToken,
+    required int eventTypeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/permit-requests/event-types/$eventTypeId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> createQuestionDefinition({
     required String accessToken,
     required Map<String, dynamic> payload,
@@ -914,6 +1013,9 @@ class PermitApiService {
       'horario_termino': evento['horario_termino'] ?? '',
       'status': item['status'] ?? 'enviada',
       'dam_status': item['dam_status'] ?? '',
+      'respostas': item['respostas'] ?? const <String, dynamic>{},
+      'dados_responsavel': responsavel,
+      'dados_evento': evento,
       'attachments': attachments.cast<Map<String, dynamic>>(),
       'comments': comments.cast<Map<String, dynamic>>(),
       'credentials': item['credentials'] ?? const <dynamic>[],
@@ -944,6 +1046,7 @@ class PermitApiService {
               'inspection_requires_photo':
                   data['inspection_requires_photo'] ?? false,
               'inspection_scheduled_for': data['inspection_scheduled_for'],
+              'inspection_scheduled_time': data['inspection_scheduled_time'],
               'inspection_status': data['inspection_status'] ?? 'nao_agendada',
               'inspection_result': data['inspection_result'],
             };
@@ -963,6 +1066,8 @@ class PermitApiService {
         return 'DMTRAN';
       case 'vigilancia_sanitaria':
         return 'Vigilância Sanitária';
+      case 'secretaria_saude':
+        return 'Secretaria de Saúde';
       case 'guarda_civil':
         return 'Guarda Civil Municipal';
       case 'receita_municipal':

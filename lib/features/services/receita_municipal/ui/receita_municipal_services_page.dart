@@ -1,11 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../../../core/permit_api_service.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/session_store.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
 import '../../../../core/session_expiration.dart';
 
@@ -13,8 +12,7 @@ const favoriteEventPermitServiceKey = 'alvara_evento';
 const _favoriteServicesStorageKey = 'favorite_services';
 
 Future<String> _favoriteServicesKey() async {
-  const storage = FlutterSecureStorage();
-  final userJson = await storage.read(key: 'user');
+  final userJson = await const SessionStore().readUserJson();
   if (userJson == null || userJson.isEmpty) {
     return _favoriteServicesStorageKey;
   }
@@ -58,11 +56,35 @@ class _ReceitaMunicipalServicesPageState
   bool _loading = false;
   bool _favoriteLoading = true;
   Set<String> _favoriteServices = {};
+  List<Map<String, dynamic>> _eventTypes = [];
 
   @override
   void initState() {
     super.initState();
     _loadFavorites();
+    _loadEventTypes();
+  }
+
+  Future<void> _loadEventTypes() async {
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) return;
+      final eventTypes = await PermitApiService().listEventTypes(
+        accessToken: token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _eventTypes =
+            eventTypes.isEmpty
+                ? PermitApiService.eventTypesFallback
+                : eventTypes;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _eventTypes = PermitApiService.eventTypesFallback;
+      });
+    }
   }
 
   Future<void> _loadFavorites() async {
@@ -188,8 +210,7 @@ class _ReceitaMunicipalServicesPageState
   Future<void> _openEventPermit() async {
     setState(() => _loading = true);
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (!mounted) return;
         await SessionExpiration.logout(context);
@@ -198,6 +219,9 @@ class _ReceitaMunicipalServicesPageState
 
       final forms = await PermitApiService().listRequests(token);
       final definitions = await PermitApiService().listQuestionDefinitions(
+        accessToken: token,
+      );
+      final eventTypes = await PermitApiService().listEventTypes(
         accessToken: token,
       );
       final eventQuestions =
@@ -219,6 +243,12 @@ class _ReceitaMunicipalServicesPageState
           'userName': widget.userName ?? '',
           'questions': questions,
           'forms': forms,
+          'eventTypes':
+              eventTypes.isEmpty
+                  ? _eventTypes.isEmpty
+                      ? PermitApiService.eventTypesFallback
+                      : _eventTypes
+                  : eventTypes,
         },
       );
     } on PermitApiException catch (error) {
@@ -588,8 +618,7 @@ class _FavoriteServicesPageState extends State<FavoriteServicesPage> {
   Future<void> _openEventPermit() async {
     setState(() => _opening = true);
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (!mounted) return;
         await SessionExpiration.logout(context);
@@ -597,6 +626,9 @@ class _FavoriteServicesPageState extends State<FavoriteServicesPage> {
       }
       final forms = await PermitApiService().listRequests(token);
       final definitions = await PermitApiService().listQuestionDefinitions(
+        accessToken: token,
+      );
+      final eventTypes = await PermitApiService().listEventTypes(
         accessToken: token,
       );
       final eventQuestions =
@@ -618,6 +650,10 @@ class _FavoriteServicesPageState extends State<FavoriteServicesPage> {
           'userName': widget.userName ?? '',
           'questions': questions,
           'forms': forms,
+          'eventTypes':
+              eventTypes.isEmpty
+                  ? PermitApiService.eventTypesFallback
+                  : eventTypes,
         },
       );
     } on PermitApiException catch (error) {

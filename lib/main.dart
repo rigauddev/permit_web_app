@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permit_web_app/core/routes/app_routes.dart';
 import 'package:permit_web_app/core/session_store.dart';
@@ -17,6 +18,7 @@ import 'presentation/pages/my_requests_page.dart';
 import 'presentation/pages/permissions_page.dart';
 import 'presentation/pages/inspection_schedule_page.dart';
 import 'presentation/pages/recovery_password.dart';
+import 'presentation/pages/reports_page.dart';
 import 'presentation/pages/secretaria_requests_page.dart';
 import 'presentation/pages/user_profile.dart';
 import 'presentation/pages/users_list.dart';
@@ -51,6 +53,18 @@ class _AppRouter extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Sistema de Serviços da Prefeitura',
       theme: customTheme,
+      locale: const Locale('pt', 'BR'),
+      supportedLocales: const [Locale('pt', 'BR')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      builder:
+          (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+            child: child ?? const SizedBox.shrink(),
+          ),
       initialRoute: user == null ? AppRoutes.login : null,
       routes: {
         AppRoutes.login: (context) => const LoginPage(),
@@ -167,6 +181,16 @@ class _AppRouter extends StatelessWidget {
                 'operador_secretaria',
               },
               child: EventMapPage(userType: user?.userType ?? ''),
+            ),
+        AppRoutes.reports:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+              },
+              child: ReportsPage(userType: user?.userType ?? ''),
             ),
         AppRoutes.questions:
             (context) => _GuardedRoute(

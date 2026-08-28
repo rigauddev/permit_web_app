@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/permit_api_service.dart';
+import '../../../core/session_expiration.dart';
 import '../../../data/providers/user_provider.dart';
 import '../controller/permit_request_controller.dart';
 import '../models/permit_request_state.dart';
@@ -104,8 +104,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
   }
 
   Future<List<Map<String, dynamic>>> _loadPublicRanges() async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) return const [];
     try {
       return await PermitApiService().listPublicRanges(accessToken: token);
@@ -286,9 +285,58 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
 
     if (state.currentStep == 2) {
       final isBeneficente = state.eventData['is_beneficente'] == 'true';
+      final eventTypes = state.eventTypes;
+      final selectedEventType = _selectedEventType(state);
       return ListView(
         children: [
           const _StepTitle('Dados do evento'),
+          DropdownButtonFormField<String>(
+            initialValue:
+                (state.eventData['tipo_evento'] ?? '').isEmpty
+                    ? null
+                    : state.eventData['tipo_evento'],
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Tipo de evento',
+              helperText:
+                  'A seleção define quais perguntas e documentos serão exibidos.',
+            ),
+            items:
+                eventTypes
+                    .map(
+                      (eventType) => DropdownMenuItem<String>(
+                        value: eventType['key']?.toString() ?? '',
+                        child: Text(eventType['name']?.toString() ?? ''),
+                      ),
+                    )
+                    .toList(),
+            onChanged: (value) {
+              if (value == null || value.isEmpty) return;
+              final eventType = eventTypes.firstWhere(
+                (item) => item['key']?.toString() == value,
+              );
+              controller.selectEventType(eventType);
+            },
+          ),
+          if (selectedEventType != null) ...[
+            const SizedBox(height: 12),
+            _EventTypeRequirementsCard(eventType: selectedEventType),
+            const SizedBox(height: 12),
+          ] else ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBF0),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE8D9A8)),
+              ),
+              child: const Text(
+                'Selecione o tipo de evento para carregar a lista de documentos e as perguntas pertinentes.',
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           TextFormField(
             controller: eventNameController,
             decoration: const InputDecoration(labelText: 'Nome do evento'),
@@ -462,6 +510,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       return QuestionFieldWidget(
         key: ValueKey(questionKey),
         questionId: question['id'] as int,
+        questionKey: questionKey,
         questionText: question['pergunta'] as String,
         descricao: question['descricao'] as String?,
         tiposResposta: List<String>.from(question['tipos_resposta'] ?? []),
@@ -601,6 +650,21 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     return const SizedBox();
   }
 
+  Map<String, dynamic>? _selectedEventType(PermitRequestState state) {
+    final selectedKey = state.eventData['tipo_evento'];
+    if (selectedKey == null || selectedKey.isEmpty) return null;
+    for (final eventType in state.eventTypes) {
+      if (eventType['key']?.toString() == selectedKey) {
+        return eventType;
+      }
+    }
+    return {
+      'key': selectedKey,
+      'name': state.eventData['tipo_evento_nome'] ?? selectedKey,
+      'required_documents': const [],
+    };
+  }
+
   Future<void> _openResponsibilityTerm({
     required VoidCallback onAccepted,
     required VoidCallback onRefused,
@@ -730,8 +794,16 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     final selected = await showDatePicker(
       context: context,
       initialDate: firstValidDate,
-      firstDate: DateTime.now(),
+      firstDate: firstValidDate,
       lastDate: DateTime.now().add(const Duration(days: 730)),
+      helpText: 'Selecione a data do evento',
+      selectableDayPredicate:
+          (date) =>
+              !DateTime(
+                date.year,
+                date.month,
+                date.day,
+              ).isBefore(firstValidDate),
     );
     if (selected == null || !mounted) return;
     final value =
@@ -827,6 +899,79 @@ class _TermStatus extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _EventTypeRequirementsCard extends StatelessWidget {
+  const _EventTypeRequirementsCard({required this.eventType});
+
+  final Map<String, dynamic> eventType;
+
+  @override
+  Widget build(BuildContext context) {
+    final documents = List<Map<String, dynamic>>.from(
+      eventType['required_documents'] ?? const [],
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8F5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            eventType['name']?.toString() ?? 'Tipo de evento',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F6B43),
+            ),
+          ),
+          if ((eventType['examples']?.toString() ?? '').isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(eventType['examples'].toString()),
+          ],
+          const SizedBox(height: 8),
+          const Text(
+            'Documentos e informações necessárias',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          if (documents.isEmpty)
+            const Text('Documentos gerais do alvará de evento.')
+          else
+            ...documents.map((document) {
+              final url = document['url']?.toString() ?? '';
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.check_circle_outline),
+                title: Text(document['label']?.toString() ?? ''),
+                trailing:
+                    url.trim().isEmpty
+                        ? null
+                        : IconButton(
+                          tooltip: 'Baixar modelo',
+                          icon: const Icon(Icons.download_outlined),
+                          onPressed: () => _openDocument(url),
+                        ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openDocument(String rawReference) async {
+    final parsed = Uri.tryParse(rawReference);
+    final uri =
+        parsed != null && parsed.hasScheme
+            ? parsed
+            : Uri.base.resolve(rawReference);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 

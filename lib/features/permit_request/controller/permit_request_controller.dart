@@ -1,8 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/permit_api_service.dart';
+import '../../../core/session_store.dart';
 import '../../permit_request/models/permit_request_state.dart';
 
 final permitRequestControllerProvider =
@@ -13,13 +13,58 @@ final permitRequestControllerProvider =
 class PermitRequestController extends StateNotifier<PermitRequestState> {
   PermitRequestController() : super(PermitRequestState.initial());
 
-  void initializeQuestions(List<Map<String, dynamic>> newQuestions) {
+  void initializeQuestions(
+    List<Map<String, dynamic>> newQuestions, {
+    List<Map<String, dynamic>> eventTypes = const [],
+  }) {
     state = state.copyWith(
+      allQuestions: newQuestions,
       questions: newQuestions,
+      eventTypes: eventTypes,
       totalSteps: 4 + newQuestions.length,
       currentStep: 0,
       submittedProtocol: null,
     );
+  }
+
+  void selectEventType(Map<String, dynamic> eventType) {
+    final key = eventType['key']?.toString() ?? '';
+    final name = eventType['name']?.toString() ?? '';
+    final filteredQuestions = _questionsForEventType(key);
+    final allowedKeys =
+        filteredQuestions
+            .map((question) => question['key']?.toString() ?? '')
+            .where((questionKey) => questionKey.isNotEmpty)
+            .toSet();
+    final updatedEventData =
+        Map<String, String>.from(state.eventData)
+          ..['tipo_evento'] = key
+          ..['tipo_evento_nome'] = name;
+    state = state.copyWith(
+      eventData: updatedEventData,
+      questions: filteredQuestions,
+      answers: {
+        for (final entry in state.answers.entries)
+          if (allowedKeys.contains(entry.key)) entry.key: entry.value,
+      },
+      answerDetails: {
+        for (final entry in state.answerDetails.entries)
+          if (allowedKeys.contains(entry.key)) entry.key: entry.value,
+      },
+      totalSteps: 4 + filteredQuestions.length,
+      currentStep:
+          state.currentStep > 2
+              ? 2
+              : state.currentStep.clamp(0, 3 + filteredQuestions.length),
+    );
+  }
+
+  List<Map<String, dynamic>> _questionsForEventType(String eventTypeKey) {
+    if (eventTypeKey.isEmpty) return state.allQuestions;
+    return state.allQuestions.where((question) {
+      final keys = List<String>.from(question['event_type_keys'] ?? const []);
+      return keys.isEmpty || keys.contains(eventTypeKey);
+    }).toList();
   }
 
   Map<String, dynamic> toDraftJson() {
@@ -48,6 +93,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       attachments: const [],
       submittedProtocol: null,
     );
+    final eventTypeKey = state.eventData['tipo_evento'];
+    if (eventTypeKey != null && eventTypeKey.isNotEmpty) {
+      final eventType = state.eventTypes.firstWhere(
+        (item) => item['key']?.toString() == eventTypeKey,
+        orElse:
+            () => {
+              'key': eventTypeKey,
+              'name': state.eventData['tipo_evento_nome'] ?? eventTypeKey,
+            },
+      );
+      selectEventType(eventType);
+    }
   }
 
   void updateAnswer(String questionKey, dynamic answer) {
@@ -91,6 +148,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? deadlineBusinessDays,
     String? eventLatitude,
     String? eventLongitude,
+    String? eventTypeKey,
+    String? eventTypeName,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -113,6 +172,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     }
     if (eventLatitude != null) updated['latitude_evento'] = eventLatitude;
     if (eventLongitude != null) updated['longitude_evento'] = eventLongitude;
+    if (eventTypeKey != null) updated['tipo_evento'] = eventTypeKey;
+    if (eventTypeName != null) updated['tipo_evento_nome'] = eventTypeName;
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
     }
@@ -200,6 +261,9 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     }
 
     if (state.currentStep == 2) {
+      if ((state.eventData['tipo_evento'] ?? '').trim().isEmpty) {
+        return 'Selecione o tipo de evento.';
+      }
       for (final field in [
         'nome_evento',
         'data_evento',
@@ -273,8 +337,9 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     if (state.isSubmitting) return null;
     state = state.copyWith(isSubmitting: true);
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
+      final token = await const SessionStore().read().then(
+        (s) => s?.accessToken,
+      );
       if (token == null || token.isEmpty) {
         throw PermitApiException('Sessão expirada. Faça login novamente.');
       }
@@ -335,6 +400,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         return 'data';
       case 'Anexar Documento':
         return 'arquivo';
+      case 'Rota do Evento':
+        return 'percurso_ruas';
       case 'Assinatura impressa':
       case 'Assinatura gov.br':
         return 'assinatura';

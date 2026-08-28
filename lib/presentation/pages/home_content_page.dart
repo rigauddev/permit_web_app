@@ -72,7 +72,7 @@ class _HomeContentPageState extends State<HomeContentPage> {
           _selectedScope = _currentSecretaria!;
         }
       }
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null) {
         if (!mounted) return;
         await SessionExpiration.logout(context);
@@ -98,7 +98,7 @@ class _HomeContentPageState extends State<HomeContentPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null) {
       if (!mounted) return;
       await SessionExpiration.logout(context);

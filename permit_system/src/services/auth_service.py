@@ -1,3 +1,4 @@
+import re
 import random
 from datetime import datetime, timedelta, timezone
 
@@ -29,8 +30,28 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
 
-    def start_login(self, email: str, senha: str, access_type: str | None = None) -> LoginStartResponse:
-        user = self.db.query(UserModel).filter(UserModel.email == email, UserModel.is_active.is_(True)).first()
+    def start_login(self, identifier: str, senha: str, access_type: str | None = None, client_type: str = "web") -> LoginStartResponse:
+        identifier = (identifier or "").strip()
+        if access_type == "cidadao":
+            document = self._only_digits(identifier)
+            if not (self._is_valid_cpf(document) or self._is_valid_cnpj(document)):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="CPF/CNPJ informado está incorreto.",
+                )
+            user = (
+                self.db.query(UserModel)
+                .filter(UserModel.cpf_cnpj == document, UserModel.is_active.is_(True))
+                .first()
+            )
+        else:
+            if "@" not in identifier:
+                self._invalid_credentials()
+            user = (
+                self.db.query(UserModel)
+                .filter(UserModel.email == identifier, UserModel.is_active.is_(True))
+                .first()
+            )
         if not user or not verify_password(senha, user.senha_hash):
             self._invalid_credentials()
         if access_type == "cidadao" and user.role.slug != "cidadao":
@@ -40,8 +61,14 @@ class AuthService:
 
         methods = self._available_mfa_methods(user)
         if not methods:
-            methods = ["email"]
+            token = self._create_session_token(user, client_type)
+            return LoginStartResponse(
+                mfa_required=False,
+                access_token=token.access_token,
+                user=token.user,
+            )
         return LoginStartResponse(
+            mfa_required=True,
             challenge_token=create_mfa_challenge_token(str(user.id)),
             available_methods=methods,
             default_method=methods[0],
@@ -58,6 +85,8 @@ class AuthService:
         user.mfa_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         self.db.commit()
         if method == "email":
+            if not user.email:
+                self._invalid_credentials()
             status_message = send_email(
                 user.email,
                 "Código de acesso ao sistema da Prefeitura",
@@ -91,18 +120,7 @@ class AuthService:
         user.mfa_code_expires_at = None
         self.db.commit()
 
-        session = self._to_session(user)
-        expires_delta = timedelta(days=5) if client_type == "app" else timedelta(minutes=30)
-        token = create_access_token(
-            subject=str(user.id),
-            claims={
-                "role": session.role,
-                "secretaria": session.secretaria,
-                "client_type": client_type,
-            },
-            expires_delta=expires_delta,
-        )
-        return TokenResponse(access_token=token, user=session)
+        return self._create_session_token(user, client_type)
 
     def start_email_verification(self, email: str, purpose: str = "register") -> EmailVerificationStartResponse:
         existing_user = self.db.query(UserModel).filter(UserModel.email == email).first()
@@ -169,23 +187,38 @@ class AuthService:
         force_secretaria: str | None = None,
         require_email_verification: bool = False,
     ) -> UserResponse:
-        if require_email_verification:
+        if require_email_verification and payload.email:
             self._validate_email_verification_token(payload.email, payload.email_verification_token)
 
         role_slug = force_role or payload.role
-        if require_email_verification and role_slug == "cidadao" and not payload.termo_responsabilidade_aceito:
+        if role_slug == "cidadao" and not payload.termo_responsabilidade_aceito:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Aceite o termo de responsabilidade para criar a conta",
             )
-
-        existing = (
-            self.db.query(UserModel)
-            .filter((UserModel.email == payload.email) | (UserModel.cpf_cnpj == payload.cpf_cnpj))
-            .first()
-        )
-        if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Usuário já cadastrado")
+        email = (payload.email or "").strip() or None
+        if email and "@" not in email:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="E-mail inválido")
+        if role_slug == "cidadao":
+            document = self._validate_document(payload.cpf_cnpj, payload.tipo_pessoa)
+            self._validate_citizen_registration_files(payload)
+            existing = (
+                self.db.query(UserModel)
+                .filter(UserModel.cpf_cnpj == document)
+                .first()
+            )
+            if existing:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CPF/CNPJ já cadastrado")
+        elif not email:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="E-mail é obrigatório para usuários internos.",
+            )
+        else:
+            document = None
+            existing = self.db.query(UserModel).filter(UserModel.email == email).first()
+            if existing:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já cadastrado")
 
         secretaria_slug = force_secretaria if force_secretaria is not None else payload.secretaria
 
@@ -204,19 +237,41 @@ class AuthService:
             nome=payload.nome,
             sobrenome=payload.sobrenome,
             razao_social=payload.razao_social,
-            cpf_cnpj=payload.cpf_cnpj,
-            email=str(payload.email),
+            cpf_cnpj=document,
+            email=email,
             senha_hash=hash_password(payload.senha),
             telefone=payload.telefone,
             endereco=payload.endereco,
+            foto_usuario_nome=payload.foto_usuario_nome,
+            foto_usuario_url=payload.foto_usuario_url,
+            comprovante_residencia_nome=payload.comprovante_residencia_nome,
+            comprovante_residencia_url=payload.comprovante_residencia_url,
+            comprovante_residencia_tipo=payload.comprovante_residencia_tipo,
+            comprovante_residencia_status=self._residence_proof_status(payload),
+            comprovante_residencia_observacao=self._residence_proof_observation(payload),
             role_id=role.id,
             secretaria_id=secretaria.id if secretaria else None,
-            mfa_email_enabled=True,
+            mfa_email_enabled=bool(payload.mfa_email_enabled and email),
         )
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
         return self.to_response(user)
+
+    @staticmethod
+    def _create_session_token(user: UserModel, client_type: str = "web") -> TokenResponse:
+        session = AuthService._to_session(user)
+        expires_delta = timedelta(days=5) if client_type == "app" else timedelta(hours=3)
+        token = create_access_token(
+            subject=str(user.id),
+            claims={
+                "role": session.role,
+                "secretaria": session.secretaria,
+                "client_type": client_type,
+            },
+            expires_delta=expires_delta,
+        )
+        return TokenResponse(access_token=token, user=session)
 
     def update_current_user(self, user: UserModel, payload: UserSelfUpdateRequest) -> UserResponse:
         for field in ["nome", "sobrenome", "telefone", "endereco"]:
@@ -323,6 +378,8 @@ class AuthService:
     def _mask_delivery(user: UserModel, method: str) -> str:
         if method != "email":
             return method
+        if not user.email:
+            return "E-mail não informado"
         return AuthService._mask_email(user.email)
 
     @staticmethod
@@ -330,6 +387,86 @@ class AuthService:
         name, _, domain = email.partition("@")
         visible = name[:2] if len(name) > 2 else name[:1]
         return f"{visible}***@{domain}"
+
+    @staticmethod
+    def _only_digits(value: str | None) -> str:
+        return re.sub(r"\D", "", value or "")
+
+    @classmethod
+    def _validate_document(cls, value: str | None, person_type: str) -> str:
+        digits = cls._only_digits(value)
+        is_valid = cls._is_valid_cnpj(digits) if person_type == "PJ" else cls._is_valid_cpf(digits)
+        if not is_valid:
+            label = "CNPJ" if person_type == "PJ" else "CPF"
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{label} informado está incorreto.")
+        return digits
+
+    @staticmethod
+    def _is_valid_cpf(value: str) -> bool:
+        if len(value) != 11 or value == value[0] * 11:
+            return False
+        numbers = [int(digit) for digit in value]
+        for size in (9, 10):
+            total = sum(numbers[index] * (size + 1 - index) for index in range(size))
+            digit = (total * 10) % 11
+            if digit == 10:
+                digit = 0
+            if digit != numbers[size]:
+                return False
+        return True
+
+    @staticmethod
+    def _is_valid_cnpj(value: str) -> bool:
+        if len(value) != 14 or value == value[0] * 14:
+            return False
+        numbers = [int(digit) for digit in value]
+        weights = ([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+        for offset, current_weights in enumerate(weights):
+            total = sum(numbers[index] * current_weights[index] for index in range(len(current_weights)))
+            digit = 11 - (total % 11)
+            if digit >= 10:
+                digit = 0
+            if digit != numbers[12 + offset]:
+                return False
+        return True
+
+    @staticmethod
+    def _validate_citizen_registration_files(payload: UserCreateRequest) -> None:
+        if not (payload.foto_usuario_nome or payload.foto_usuario_url):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Inclua uma foto do usuário para concluir o cadastro.",
+            )
+        if not (payload.comprovante_residencia_nome or payload.comprovante_residencia_url):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Inclua comprovante de residência em nome do usuário, pai ou mãe.",
+            )
+        proof_type = (payload.comprovante_residencia_tipo or "").strip().lower()
+        if proof_type not in {"agua", "luz"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Serão aceitas somente contas de água ou luz como comprovante de residência.",
+            )
+
+    @staticmethod
+    def _residence_proof_status(payload: UserCreateRequest) -> str:
+        name = (payload.comprovante_residencia_nome or "").lower()
+        proof_type = (payload.comprovante_residencia_tipo or "").lower()
+        if any(term in name for term in ["agua", "água", "embasa"]) or any(term in name for term in ["luz", "energia", "coelba", "neoenergia"]):
+            return "pre_validado"
+        if proof_type in {"agua", "luz"}:
+            return "pendente_validacao"
+        return "recusado"
+
+    @staticmethod
+    def _residence_proof_observation(payload: UserCreateRequest) -> str | None:
+        status_value = AuthService._residence_proof_status(payload)
+        if status_value == "pre_validado":
+            return "Nome do arquivo indica conta de água/luz. A validação final depende da leitura do documento."
+        if status_value == "pendente_validacao":
+            return "Documento aceito para análise. Leitura automática do conteúdo será integrada na etapa de OCR."
+        return "Tipo de comprovante não permitido."
 
     @staticmethod
     def _validate_email_verification_token(email: str, verification_token: str | None) -> None:
@@ -354,6 +491,9 @@ class AuthService:
             email=user.email,
             telefone=user.telefone,
             endereco=user.endereco,
+            foto_usuario_url=user.foto_usuario_url,
+            comprovante_residencia_url=user.comprovante_residencia_url,
+            comprovante_residencia_status=user.comprovante_residencia_status,
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
             permissions=AuthService._permission_slugs(user),
