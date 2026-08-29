@@ -13,6 +13,7 @@ from src.infra.database.models import (
     AuthorizationTemplateModel,
     EventCredentialModel,
     EventPublicRangeModel,
+    EventTypeModel,
     PermitCommentModel,
     PermitRequestModel,
     PermitRequirementModel,
@@ -33,6 +34,8 @@ from src.schemas.permit_schema import (
     EventCredentialValidationResponse,
     EventPublicRangeRequest,
     EventPublicRangeResponse,
+    EventTypeRequest,
+    EventTypeResponse,
     InspectionCompleteRequest,
     InspectionScheduleRequest,
     PermitCancelRequest,
@@ -245,6 +248,7 @@ class PermitService:
         if not requirement:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
         self._ensure_can_manage_requirement(requirement, current_user)
+        self._ensure_request_not_cancelled(requirement.permit_request)
 
         new_status = payload.status.strip()
         if new_status not in REQUIREMENT_STATUSES:
@@ -288,18 +292,60 @@ class PermitService:
         if not requirement:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
         self._ensure_can_manage_requirement(requirement, current_user)
+        self._ensure_request_not_cancelled(requirement.permit_request)
         if not requirement.requires_inspection:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta exigência não requer vistoria")
         requirement.inspection_scheduled_for = payload.scheduled_for
-        requirement.inspection_status = "agendada"
+        requirement.inspection_scheduled_time = payload.scheduled_time
+        requirement.inspection_status = "vistoria_agendada"
         requirement.status = "aguardando_vistoria"
+        schedule_label = self._format_date_br(payload.scheduled_for)
+        if payload.scheduled_time:
+            schedule_label = f"{schedule_label} às {payload.scheduled_time}"
         self._add_comment(
             requirement.permit_request_id,
             current_user,
-            f"Vistoria agendada para {payload.scheduled_for.isoformat()}.",
+            f"Vistoria agendada para {schedule_label}.",
             requirement_id=requirement.id,
         )
+        self._notify_citizen_inspection_scheduled(requirement.permit_request, requirement, current_user, schedule_label)
         self._recalculate_request_status(requirement.permit_request)
+        self.db.commit()
+        self.db.refresh(requirement)
+        return self._requirement_to_response(requirement)
+
+    def confirm_inspection(
+        self,
+        requirement_id: int,
+        current_user: UserModel,
+    ) -> RequirementResponse:
+        requirement = (
+            self.db.query(PermitRequirementModel).filter(PermitRequirementModel.id == requirement_id).first()
+        )
+        if not requirement:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
+        self._ensure_can_manage_requirement(requirement, current_user)
+        self._ensure_request_not_cancelled(requirement.permit_request)
+        if not requirement.requires_inspection:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta exigência não requer vistoria")
+        if not requirement.inspection_scheduled_for:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agende a vistoria antes de confirmar")
+        requirement.inspection_status = "vistoria_confirmada"
+        schedule_label = self._format_date_br(requirement.inspection_scheduled_for)
+        if requirement.inspection_scheduled_time:
+            schedule_label = f"{schedule_label} às {requirement.inspection_scheduled_time}"
+        self._add_comment(
+            requirement.permit_request_id,
+            current_user,
+            f"Vistoria confirmada pela secretaria responsável para {schedule_label}.",
+            requirement_id=requirement.id,
+        )
+        self._notify_citizen_inspection_confirmed(
+            requirement.permit_request,
+            requirement,
+            current_user,
+            schedule_label,
+        )
         self.db.commit()
         self.db.refresh(requirement)
         return self._requirement_to_response(requirement)
@@ -316,6 +362,7 @@ class PermitService:
         if not requirement:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
         self._ensure_can_manage_requirement(requirement, current_user)
+        self._ensure_request_not_cancelled(requirement.permit_request)
         if not requirement.requires_inspection:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta exigência não requer vistoria")
         if payload.approved:
@@ -335,7 +382,7 @@ class PermitService:
                     detail="Registre ao menos uma imagem para concluir esta vistoria.",
                 )
 
-        result_status = "aprovada" if payload.approved else "reprovada"
+        result_status = "vistoria_concluida" if payload.approved else "vistoria_reprovada"
         requirement.inspection_status = result_status
         requirement.inspection_result = {
             "approved": payload.approved,
@@ -349,7 +396,7 @@ class PermitService:
         requirement.status = "aprovada" if payload.approved else "pendente_documento"
         if not payload.approved and payload.nova_data:
             requirement.inspection_scheduled_for = payload.nova_data
-            requirement.inspection_status = "reagendada"
+            requirement.inspection_status = "vistoria_agendada"
         if payload.observacoes:
             self._add_comment(
                 requirement.permit_request_id,
@@ -483,6 +530,7 @@ class PermitService:
         )
         if not requirement:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exigência não encontrada")
+        self._ensure_request_not_cancelled(request)
         if current_user.role.slug == "cidadao":
             if request.solicitante_id != current_user.id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
@@ -698,6 +746,59 @@ class PermitService:
         )
         return [self._question_to_response(item) for item in definitions]
 
+    def list_event_types(self) -> list[EventTypeResponse]:
+        event_types = (
+            self.db.query(EventTypeModel)
+            .filter(EventTypeModel.is_active.is_(True))
+            .order_by(EventTypeModel.display_order.asc(), EventTypeModel.id.asc())
+            .all()
+        )
+        return [self._event_type_to_response(item) for item in event_types]
+
+    def create_event_type(
+        self,
+        payload: EventTypeRequest,
+        current_user: UserModel,
+    ) -> EventTypeResponse:
+        self._ensure_can_manage_service_rules(current_user)
+        existing = self.db.query(EventTypeModel).filter(EventTypeModel.key == payload.key).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Já existe uma categoria com esta chave.",
+            )
+        item = EventTypeModel(**payload.model_dump())
+        self.db.add(item)
+        self.db.commit()
+        self.db.refresh(item)
+        return self._event_type_to_response(item)
+
+    def update_event_type(
+        self,
+        event_type_id: int,
+        payload: EventTypeRequest,
+        current_user: UserModel,
+    ) -> EventTypeResponse:
+        self._ensure_can_manage_service_rules(current_user)
+        item = self.db.query(EventTypeModel).filter(EventTypeModel.id == event_type_id).first()
+        if not item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada")
+        existing = (
+            self.db.query(EventTypeModel)
+            .filter(EventTypeModel.key == payload.key, EventTypeModel.id != event_type_id)
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Já existe uma categoria com esta chave.",
+            )
+        for field, value in payload.model_dump().items():
+            setattr(item, field, value)
+        self.db.commit()
+        self.db.refresh(item)
+        return self._event_type_to_response(item)
+
     def list_public_ranges(self, include_inactive: bool = False) -> list[EventPublicRangeResponse]:
         query = self.db.query(EventPublicRangeModel)
         if not include_inactive:
@@ -768,6 +869,7 @@ class PermitService:
             prazo_resposta_dias_uteis=payload.prazo_resposta_dias_uteis,
             display_order=payload.display_order,
             vistoria_exige_foto=payload.vistoria_exige_foto,
+            event_type_keys=payload.event_type_keys or [],
         )
         self.db.add(question)
         self.db.commit()
@@ -806,6 +908,8 @@ class PermitService:
         question.prazo_resposta_dias_uteis = payload.prazo_resposta_dias_uteis
         question.display_order = payload.display_order
         question.vistoria_exige_foto = payload.vistoria_exige_foto
+        if payload.event_type_keys is not None:
+            question.event_type_keys = payload.event_type_keys
         self.db.commit()
         self.db.refresh(question)
         return self._question_to_response(question)
@@ -837,8 +941,22 @@ class PermitService:
             prazo_resposta_dias_uteis=question.prazo_resposta_dias_uteis or 2,
             display_order=question.display_order or 0,
             vistoria_exige_foto=question.vistoria_exige_foto,
+            event_type_keys=question.event_type_keys or [],
             created_at=question.created_at,
             updated_at=question.updated_at,
+        )
+
+    @staticmethod
+    def _event_type_to_response(event_type: EventTypeModel) -> EventTypeResponse:
+        return EventTypeResponse(
+            id=event_type.id,
+            key=event_type.key,
+            name=event_type.name,
+            description=event_type.description,
+            examples=event_type.examples,
+            required_documents=event_type.required_documents or [],
+            display_order=event_type.display_order or 0,
+            is_active=event_type.is_active,
         )
 
     @staticmethod
@@ -1266,6 +1384,14 @@ class PermitService:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente para atuar nesta exigência")
 
     @staticmethod
+    def _ensure_request_not_cancelled(request: PermitRequestModel) -> None:
+        if request.status == STATUS_CANCELADA:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solicitação cancelada. As ações ficam disponíveis apenas para visualização.",
+            )
+
+    @staticmethod
     def _recalculate_request_status(request: PermitRequestModel) -> None:
         if request.status == STATUS_CANCELADA:
             return
@@ -1388,6 +1514,44 @@ class PermitService:
             mensagem=(
                 f"A secretaria solicitou correção na exigência '{requirement.tipo_exigencia}'. "
                 "Acesse o sistema, abra Minhas solicitações e consulte as mensagens da exigência."
+            ),
+        )
+
+    def _notify_citizen_inspection_scheduled(
+        self,
+        request: PermitRequestModel,
+        requirement: PermitRequirementModel,
+        actor: UserModel,
+        schedule_label: str,
+    ) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=str((request.dados_responsavel or {}).get("email") or request.solicitante.email),
+            assunto="Vistoria agendada para sua solicitação de alvará",
+            link=f"{PUBLIC_BASE_URL}/my-requests?status=em_analise",
+            mensagem=(
+                f"A vistoria da exigência '{requirement.tipo_exigencia}' foi agendada para {schedule_label}. "
+                "Acompanhe a solicitação pelo sistema."
+            ),
+        )
+
+    def _notify_citizen_inspection_confirmed(
+        self,
+        request: PermitRequestModel,
+        requirement: PermitRequirementModel,
+        actor: UserModel,
+        schedule_label: str,
+    ) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=str((request.dados_responsavel or {}).get("email") or request.solicitante.email),
+            assunto="Vistoria confirmada para sua solicitação de alvará",
+            link=f"{PUBLIC_BASE_URL}/my-requests?status=em_analise",
+            mensagem=(
+                f"A vistoria da exigência '{requirement.tipo_exigencia}' foi confirmada para {schedule_label}. "
+                "Acompanhe a solicitação pelo sistema."
             ),
         )
 
@@ -1528,6 +1692,10 @@ class PermitService:
         return current_date
 
     @staticmethod
+    def _format_date_br(value: date) -> str:
+        return value.strftime("%d/%m/%Y")
+
+    @staticmethod
     def to_response(request: PermitRequestModel) -> PermitResponse:
         return PermitResponse(
             id=request.id,
@@ -1561,6 +1729,7 @@ class PermitService:
             inspection_checklist=requirement.inspection_checklist or [],
             inspection_requires_photo=requirement.inspection_requires_photo,
             inspection_scheduled_for=requirement.inspection_scheduled_for,
+            inspection_scheduled_time=requirement.inspection_scheduled_time,
             inspection_status=requirement.inspection_status,
             inspection_result=requirement.inspection_result,
             due_date=requirement.due_date,

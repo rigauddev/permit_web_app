@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -37,7 +36,6 @@ class EventCredentialPage extends StatefulWidget {
 
 class _EventCredentialPageState extends State<EventCredentialPage> {
   final _api = PermitApiService();
-  final _storage = const FlutterSecureStorage();
   late final TextEditingController _publicCodeController;
   late final TextEditingController _tokenController;
 
@@ -198,7 +196,7 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   }
 
   Future<String> _readAccessToken() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       throw PermitApiException(
         'Sessão expirada. Faça login novamente.',

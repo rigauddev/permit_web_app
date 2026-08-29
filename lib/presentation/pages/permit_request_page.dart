@@ -9,6 +9,7 @@ class PermitRequestPage extends ConsumerStatefulWidget {
   final String userProfile;
   final String permitType;
   final List<Map<String, dynamic>> questions;
+  final Map<String, dynamic>? eventType;
 
   const PermitRequestPage({
     super.key,
@@ -16,6 +17,7 @@ class PermitRequestPage extends ConsumerStatefulWidget {
     required this.userProfile,
     required this.permitType,
     required this.questions,
+    this.eventType,
   });
 
   @override
@@ -32,6 +34,15 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
       ref
           .read(permitRequestControllerProvider.notifier)
           .initializeQuestions(widget.questions);
+      final eventType = widget.eventType;
+      if (eventType != null) {
+        ref
+            .read(permitRequestControllerProvider.notifier)
+            .updateEventInfo(
+              eventTypeKey: eventType['key']?.toString(),
+              eventTypeName: eventType['name']?.toString(),
+            );
+      }
     });
   }
 

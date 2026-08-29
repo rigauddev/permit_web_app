@@ -25,7 +25,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=LoginStartResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    return AuthService(db).start_login(str(payload.email), payload.senha, payload.access_type)
+    identifier = payload.identifier or payload.email or ""
+    return AuthService(db).start_login(identifier, payload.senha, payload.access_type, payload.client_type)
 
 
 @router.post("/mfa/generate", response_model=MfaGenerateResponse)
@@ -54,7 +55,7 @@ def register(payload: UserCreateRequest, db: Session = Depends(get_db)):
         payload,
         force_role="cidadao",
         force_secretaria=None,
-        require_email_verification=True,
+        require_email_verification=False,
     )
 
 

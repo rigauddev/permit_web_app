@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/auth_service.dart';
@@ -26,7 +27,6 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
   final _addressController = TextEditingController();
   final _cpfCnpjController = TextEditingController();
   final _emailController = TextEditingController();
-  final _emailCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -35,10 +35,11 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   bool _acceptedResponsibilityTerm = false;
+  bool _mfaEmailEnabled = false;
   String _personType = 'PF';
-  String? _emailDelivery;
-  String? _emailDevCode;
-  String? _emailVerificationToken;
+  String _residenceProofType = 'luz';
+  PlatformFile? _userPhoto;
+  PlatformFile? _residenceProof;
 
   @override
   void dispose() {
@@ -49,7 +50,6 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
     _addressController.dispose();
     _cpfCnpjController.dispose();
     _emailController.dispose();
-    _emailCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -57,8 +57,12 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
 
   Future<void> _registerUser() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_emailVerificationToken == null) {
-      _showError('Valide seu e-mail antes de concluir o cadastro');
+    if (_userPhoto == null) {
+      _showError('Inclua uma foto do usuário para concluir o cadastro.');
+      return;
+    }
+    if (_residenceProof == null) {
+      _showError('Inclua um comprovante de residência de água ou luz.');
       return;
     }
     if (!_acceptedResponsibilityTerm) {
@@ -70,21 +74,31 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
     try {
       await _authService.registerCitizen(
         tipoPessoa: _personType,
-        nome: _nameController.text,
-        sobrenome: _surnameController.text,
-        razaoSocial: _personType == 'PJ' ? _businessNameController.text : null,
-        cpfCnpj: _cpfCnpjController.text,
-        email: _emailController.text,
+        nome: _nameController.text.trim(),
+        sobrenome: _surnameController.text.trim(),
+        razaoSocial:
+            _personType == 'PJ' ? _businessNameController.text.trim() : null,
+        cpfCnpj: _onlyDigits(_cpfCnpjController.text),
+        email:
+            _emailController.text.trim().isEmpty
+                ? null
+                : _emailController.text.trim(),
         senha: _passwordController.text,
-        telefone: _phoneController.text,
-        endereco: _addressController.text,
-        emailVerificationToken: _emailVerificationToken!,
+        telefone: _phoneController.text.trim(),
+        endereco: _addressController.text.trim(),
         responsibilityTermAccepted: _acceptedResponsibilityTerm,
+        userPhotoName: _userPhoto!.name,
+        userPhotoUrl: _userPhoto!.path,
+        residenceProofName: _residenceProof!.name,
+        residenceProofUrl: _residenceProof!.path,
+        residenceProofType: _residenceProofType,
+        mfaEmailEnabled:
+            _mfaEmailEnabled && _emailController.text.trim().isNotEmpty,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cadastro realizado. Entre com seu e-mail e senha.'),
+          content: Text('Cadastro realizado. Entre com seu CPF/CNPJ e senha.'),
         ),
       );
       Navigator.pop(context);
@@ -97,56 +111,25 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
     }
   }
 
-  Future<void> _sendEmailCode() async {
-    final email = _emailController.text.trim();
-    if (!email.contains('@')) {
-      _showError('Informe um e-mail válido');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final result = await _authService.startRegistrationEmailVerification(
-        email,
-      );
-      setState(() {
-        _emailDelivery = result.delivery;
-        _emailDevCode = result.devCode;
-        _emailVerificationToken = null;
-        _emailCodeController.clear();
-      });
-    } on AuthException catch (error) {
-      _showError(error.message);
-    } catch (_) {
-      _showError('Não foi possível enviar o código de validação');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  Future<void> _pickUserPhoto() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    setState(() => _userPhoto = result.files.single);
   }
 
-  Future<void> _confirmEmailCode() async {
-    final email = _emailController.text.trim();
-    if (_emailCodeController.text.length != 6) {
-      _showError('Informe o código de 6 dígitos');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final result = await _authService.confirmRegistrationEmailVerification(
-        email,
-        _emailCodeController.text,
-      );
-      setState(() {
-        _emailVerificationToken = result.verificationToken;
-      });
-    } on AuthException catch (error) {
-      _showError(error.message);
-    } catch (_) {
-      _showError('Não foi possível validar o e-mail');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  Future<void> _pickResidenceProof() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+      allowMultiple: false,
+      withData: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    setState(() => _residenceProof = result.files.single);
   }
 
   void _showError(String message) {
@@ -161,6 +144,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
 
   @override
   Widget build(BuildContext context) {
+    final emailFilled = _emailController.text.trim().isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: const Text('Criar conta de cidadão')),
       body: Center(
@@ -179,87 +163,11 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            'Validação de e-mail',
+                            'Dados de identificação',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _emailController,
-                            enabled: _emailVerificationToken == null,
-                            decoration: const InputDecoration(
-                              labelText: 'E-mail',
-                              prefixIcon: Icon(Icons.email_outlined),
-                            ),
-                            keyboardType: TextInputType.emailAddress,
-                            validator:
-                                (value) =>
-                                    value!.isEmpty ? 'Informe o e-mail' : null,
-                          ),
-                          const SizedBox(height: 12),
-                          if (_emailVerificationToken == null) ...[
-                            ElevatedButton.icon(
-                              onPressed: _isLoading ? null : _sendEmailCode,
-                              icon: const Icon(Icons.mark_email_read_outlined),
-                              label: const Text('Enviar código'),
-                            ),
-                            if (_emailDelivery != null) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                'Código enviado para $_emailDelivery',
-                                textAlign: TextAlign.center,
-                              ),
-                              if (_emailDevCode != null)
-                                Text(
-                                  'Código de teste: $_emailDevCode',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: _emailCodeController,
-                                maxLength: 6,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: 'Código recebido',
-                                  counterText: '',
-                                  prefixIcon: Icon(Icons.verified_outlined),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              OutlinedButton.icon(
-                                onPressed:
-                                    _isLoading ? null : _confirmEmailCode,
-                                icon: const Icon(Icons.check_circle_outline),
-                                label: const Text('Validar e-mail'),
-                              ),
-                            ],
-                          ] else
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(child: Text('E-mail validado')),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  AbsorbPointer(
-                    absorbing: _emailVerificationToken == null,
-                    child: Opacity(
-                      opacity: _emailVerificationToken == null ? 0.55 : 1,
-                      child: Column(
-                        children: [
                           SegmentedButton<String>(
                             segments: const [
                               ButtonSegment(
@@ -287,7 +195,8 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                               ),
                               validator:
                                   (value) =>
-                                      _personType == 'PJ' && value!.isEmpty
+                                      _personType == 'PJ' &&
+                                              (value ?? '').trim().isEmpty
                                           ? 'Informe a razão social'
                                           : null,
                             ),
@@ -303,7 +212,9 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                             ),
                             validator:
                                 (value) =>
-                                    value!.isEmpty ? 'Informe o nome' : null,
+                                    (value ?? '').trim().isEmpty
+                                        ? 'Informe o nome'
+                                        : null,
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
@@ -319,11 +230,17 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                               labelText: _personType == 'PJ' ? 'CNPJ' : 'CPF',
                             ),
                             keyboardType: TextInputType.number,
-                            validator:
-                                (value) =>
-                                    value!.isEmpty
-                                        ? 'Informe o documento'
-                                        : null,
+                            validator: (value) {
+                              final digits = _onlyDigits(value ?? '');
+                              if (digits.isEmpty) return 'Informe o documento';
+                              final valid =
+                                  _personType == 'PJ'
+                                      ? _isValidCnpj(digits)
+                                      : _isValidCpf(digits);
+                              return valid
+                                  ? null
+                                  : '${_personType == 'PJ' ? 'CNPJ' : 'CPF'} informado está incorreto';
+                            },
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
@@ -334,7 +251,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                             ),
                             validator:
                                 (value) =>
-                                    value!.isEmpty
+                                    (value ?? '').trim().isEmpty
                                         ? 'Informe o telefone'
                                         : null,
                           ),
@@ -346,11 +263,122 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                             ),
                             validator:
                                 (value) =>
-                                    value!.isEmpty
+                                    (value ?? '').trim().isEmpty
                                         ? 'Informe o endereço'
                                         : null,
                           ),
                           const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _emailController,
+                            decoration: const InputDecoration(
+                              labelText: 'E-mail (opcional)',
+                              helperText:
+                                  'Informe e-mail somente se quiser receber notificações ou ativar MFA por e-mail.',
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                            onChanged: (_) => setState(() {}),
+                            validator: (value) {
+                              final email = (value ?? '').trim();
+                              if (email.isEmpty) return null;
+                              return email.contains('@')
+                                  ? null
+                                  : 'Informe um e-mail válido';
+                            },
+                          ),
+                          if (emailFilled)
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              value: _mfaEmailEnabled,
+                              onChanged:
+                                  (value) => setState(
+                                    () => _mfaEmailEnabled = value ?? false,
+                                  ),
+                              title: const Text(
+                                'Ativar MFA por e-mail nesta conta',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Foto e comprovante de residência',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Inclua uma foto do usuário. Em celulares, você pode tirar uma nova foto ou selecionar uma imagem existente conforme as opções do aparelho.',
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _isLoading ? null : _pickUserPhoto,
+                            icon: const Icon(Icons.photo_camera_outlined),
+                            label: Text(
+                              _userPhoto == null
+                                  ? 'Tirar ou anexar foto'
+                                  : _userPhoto!.name,
+                            ),
+                          ),
+                          const Divider(height: 28),
+                          const Text(
+                            'Comprovante obrigatório em nome do usuário, pai ou mãe. Serão aceitas somente contas de água ou luz.',
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _residenceProofType,
+                            decoration: const InputDecoration(
+                              labelText: 'Tipo de comprovante',
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'luz',
+                                child: Text('Conta de luz'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'agua',
+                                child: Text('Conta de água'),
+                              ),
+                            ],
+                            onChanged:
+                                (value) => setState(
+                                  () => _residenceProofType = value ?? 'luz',
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _isLoading ? null : _pickResidenceProof,
+                            icon: const Icon(Icons.upload_file_outlined),
+                            label: Text(
+                              _residenceProof == null
+                                  ? 'Anexar comprovante'
+                                  : _residenceProof!.name,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'A pré-validação confere o tipo informado e indícios no nome do arquivo. A leitura automática do conteúdo do comprovante será conectada na etapa de OCR.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
@@ -371,7 +399,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                             ),
                             validator:
                                 (value) =>
-                                    value!.length < 6
+                                    (value ?? '').length < 6
                                         ? 'A senha deve ter pelo menos 6 caracteres'
                                         : null,
                           ),
@@ -401,61 +429,56 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                                         ? 'As senhas devem ser iguais'
                                         : null,
                           ),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF6F8F5),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: const Color(0xFFD8E0D8),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Termo de responsabilidade do cadastro',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(_responsibilityTerm),
-                                const Divider(height: 20),
-                                CheckboxListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                  value: _acceptedResponsibilityTerm,
-                                  onChanged:
-                                      (value) => setState(
-                                        () =>
-                                            _acceptedResponsibilityTerm =
-                                                value ?? false,
-                                      ),
-                                  title: const Text(
-                                    'Li e aceito o termo de responsabilidade pelas informações cadastradas.',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: _isLoading ? null : _registerUser,
-                            child:
-                                _isLoading
-                                    ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                    : const Text('Cadastrar'),
-                          ),
                         ],
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6F8F5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFD8E0D8)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Termo de responsabilidade do cadastro',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(_responsibilityTerm),
+                        const Divider(height: 20),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: _acceptedResponsibilityTerm,
+                          onChanged:
+                              (value) => setState(
+                                () =>
+                                    _acceptedResponsibilityTerm =
+                                        value ?? false,
+                              ),
+                          title: const Text(
+                            'Li e aceito o termo de responsabilidade pelas informações cadastradas.',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _registerUser,
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Cadastrar'),
                   ),
                 ],
               ),
@@ -465,4 +488,44 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
       ),
     );
   }
+}
+
+String _onlyDigits(String value) => value.replaceAll(RegExp(r'\D'), '');
+
+bool _isValidCpf(String value) {
+  if (value.length != 11 || RegExp(r'^(\d)\1+$').hasMatch(value)) {
+    return false;
+  }
+  final numbers = value.split('').map(int.parse).toList();
+  for (final size in [9, 10]) {
+    var total = 0;
+    for (var index = 0; index < size; index++) {
+      total += numbers[index] * (size + 1 - index);
+    }
+    var digit = (total * 10) % 11;
+    if (digit == 10) digit = 0;
+    if (digit != numbers[size]) return false;
+  }
+  return true;
+}
+
+bool _isValidCnpj(String value) {
+  if (value.length != 14 || RegExp(r'^(\d)\1+$').hasMatch(value)) {
+    return false;
+  }
+  final numbers = value.split('').map(int.parse).toList();
+  const weights = [
+    [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+    [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+  ];
+  for (var step = 0; step < weights.length; step++) {
+    var total = 0;
+    for (var index = 0; index < weights[step].length; index++) {
+      total += numbers[index] * weights[step][index];
+    }
+    var digit = 11 - (total % 11);
+    if (digit >= 10) digit = 0;
+    if (digit != numbers[12 + step]) return false;
+  }
+  return true;
 }

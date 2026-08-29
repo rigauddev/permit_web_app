@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
 import '../../core/session_expiration.dart';
@@ -18,7 +17,6 @@ class UsersListPage extends StatefulWidget {
 
 class _UsersListPageState extends State<UsersListPage> {
   final _authService = AuthService();
-  final _secureStorage = const FlutterSecureStorage();
   late Future<List<UserModel>> _usersFuture;
 
   static const _secretariaLabels = {
@@ -45,7 +43,7 @@ class _UsersListPageState extends State<UsersListPage> {
   }
 
   Future<List<UserModel>> _loadUsers() async {
-    final token = await _secureStorage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null) {
       if (mounted) await SessionExpiration.logout(context);
       return const [];
@@ -222,7 +220,7 @@ class _UsersListPageState extends State<UsersListPage> {
   }
 
   Future<void> _editUser(UserModel user) async {
-    final token = await _secureStorage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return;

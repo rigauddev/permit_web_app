@@ -5,23 +5,35 @@ import 'package:http/http.dart' as http;
 import '../data/models/user_model.dart';
 
 class LoginChallenge {
+  final bool mfaRequired;
   final String challengeToken;
   final List<String> availableMethods;
   final String defaultMethod;
+  final String? accessToken;
+  final UserModel? user;
 
   LoginChallenge({
+    required this.mfaRequired,
     required this.challengeToken,
     required this.availableMethods,
     required this.defaultMethod,
+    this.accessToken,
+    this.user,
   });
 
   factory LoginChallenge.fromJson(Map<String, dynamic> json) {
     return LoginChallenge(
-      challengeToken: json['challenge_token'] as String,
+      mfaRequired: json['mfa_required'] as bool? ?? true,
+      challengeToken: json['challenge_token'] as String? ?? '',
       availableMethods: List<String>.from(
-        json['available_methods'] as List<dynamic>,
+        json['available_methods'] as List<dynamic>? ?? const [],
       ),
       defaultMethod: json['default_method'] as String? ?? 'email',
+      accessToken: json['access_token'] as String?,
+      user:
+          json['user'] is Map<String, dynamic>
+              ? UserModel.fromApiSession(json['user'] as Map<String, dynamic>)
+              : null,
     );
   }
 }
@@ -96,14 +108,16 @@ class AuthService {
   final String _baseUrl;
 
   Future<LoginChallenge> startLogin(
-    String email,
+    String identifier,
     String password, {
     required String accessType,
+    required String clientType,
   }) async {
     final response = await _post('/auth/login', {
-      'email': email.trim(),
+      'identifier': identifier.trim(),
       'senha': password,
       'access_type': accessType,
+      'client_type': clientType,
     });
     return LoginChallenge.fromJson(response);
   }
@@ -140,12 +154,18 @@ class AuthService {
     String? sobrenome,
     String? razaoSocial,
     required String cpfCnpj,
-    required String email,
+    String? email,
     required String senha,
     String? telefone,
     String? endereco,
-    required String emailVerificationToken,
+    String? emailVerificationToken,
     required bool responsibilityTermAccepted,
+    required String userPhotoName,
+    required String residenceProofName,
+    required String residenceProofType,
+    String? userPhotoUrl,
+    String? residenceProofUrl,
+    bool mfaEmailEnabled = false,
   }) async {
     final response = await _post('/auth/register', {
       'tipo_pessoa': tipoPessoa,
@@ -153,13 +173,19 @@ class AuthService {
       'sobrenome': sobrenome,
       'razao_social': razaoSocial,
       'cpf_cnpj': cpfCnpj,
-      'email': email,
+      'email': email?.trim().isEmpty == true ? null : email?.trim(),
       'senha': senha,
       'telefone': telefone,
       'endereco': endereco,
       'role': 'cidadao',
       'email_verification_token': emailVerificationToken,
       'termo_responsabilidade_aceito': responsibilityTermAccepted,
+      'foto_usuario_nome': userPhotoName,
+      'foto_usuario_url': userPhotoUrl,
+      'comprovante_residencia_nome': residenceProofName,
+      'comprovante_residencia_url': residenceProofUrl,
+      'comprovante_residencia_tipo': residenceProofType,
+      'mfa_email_enabled': mfaEmailEnabled,
     });
     return UserModel.fromApiUser(response);
   }
@@ -190,7 +216,7 @@ class AuthService {
     required String accessToken,
     required String nome,
     String? sobrenome,
-    required String cpfCnpj,
+    String? cpfCnpj,
     required String email,
     required String senha,
     required String role,
@@ -201,8 +227,8 @@ class AuthService {
       'tipo_pessoa': 'PF',
       'nome': nome,
       'sobrenome': sobrenome,
-      'cpf_cnpj': cpfCnpj,
-      'email': email,
+      'cpf_cnpj': cpfCnpj?.trim().isEmpty == true ? null : cpfCnpj,
+      'email': email.trim(),
       'senha': senha,
       'telefone': telefone,
       'role': role,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/permit_api_service.dart';
@@ -19,7 +18,6 @@ class MyRequestsPage extends StatefulWidget {
 }
 
 class _MyRequestsPageState extends State<MyRequestsPage> {
-  final _storage = const FlutterSecureStorage();
   final _api = PermitApiService();
   late Future<List<Map<String, dynamic>>> _requestsFuture;
 
@@ -30,7 +28,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
   }
 
   Future<List<Map<String, dynamic>>> _loadRequests() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return const [];
@@ -195,7 +193,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     );
     if (attachment == null) return;
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -270,7 +268,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     );
     if (confirmed != true) return;
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -304,7 +302,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     required Map<String, dynamic> requirement,
     required String message,
   }) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return;
@@ -343,7 +341,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
     );
     if (attachment == null) return;
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return;

@@ -6,8 +6,8 @@ class UserCreateRequest(BaseModel):
     nome: str = Field(..., min_length=2)
     sobrenome: str | None = None
     razao_social: str | None = None
-    cpf_cnpj: str = Field(..., min_length=11, max_length=18)
-    email: str
+    cpf_cnpj: str | None = Field(default=None, min_length=11, max_length=18)
+    email: str | None = None
     senha: str = Field(..., min_length=6)
     telefone: str | None = None
     endereco: str | None = None
@@ -15,6 +15,12 @@ class UserCreateRequest(BaseModel):
     secretaria: str | None = None
     email_verification_token: str | None = None
     termo_responsabilidade_aceito: bool = False
+    foto_usuario_nome: str | None = None
+    foto_usuario_url: str | None = None
+    comprovante_residencia_nome: str | None = None
+    comprovante_residencia_url: str | None = None
+    comprovante_residencia_tipo: str | None = None
+    mfa_email_enabled: bool = False
 
 
 class UserSelfUpdateRequest(BaseModel):
@@ -37,10 +43,13 @@ class UserResponse(BaseModel):
     nome: str
     sobrenome: str | None = None
     razao_social: str | None = None
-    cpf_cnpj: str
-    email: str
+    cpf_cnpj: str | None = None
+    email: str | None = None
     telefone: str | None = None
     endereco: str | None = None
+    foto_usuario_url: str | None = None
+    comprovante_residencia_url: str | None = None
+    comprovante_residencia_status: str | None = None
     role: str
     secretaria: str | None = None
     permissions: list[str] = Field(default_factory=list)

@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
 import '../../core/session_expiration.dart';
+import '../../core/session_store.dart';
 import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
 import '../../shared/widgets/app_scaffold.dart';
@@ -21,7 +21,6 @@ class ProfilePage extends ConsumerStatefulWidget {
 }
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
-  final _storage = const FlutterSecureStorage();
   final _authService = AuthService();
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -57,7 +56,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   Future<void> _loadProfile() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return;
@@ -81,7 +80,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return;
@@ -95,7 +94,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         telefone: _phoneController.text.trim(),
         endereco: _addressController.text.trim(),
       );
-      await _storage.write(key: 'user', value: jsonEncode(updated.toJson()));
+      await const SessionStore().updateUserJson(jsonEncode(updated.toJson()));
       ref.read(userProvider.notifier).setUser(updated);
       if (!mounted) return;
       ScaffoldMessenger.of(

@@ -13,6 +13,7 @@ from src.infra.database.models import (
     Base,
     EventCredentialModel,
     EventPublicRangeModel,
+    EventTypeModel,
     HomeContentCardModel,
     PermissionModel,
     PermitRequestModel,
@@ -40,6 +41,7 @@ PERMISSIONS = [
     ("requests.own.view", "Visualizar solicitações próprias", "Solicitações", "Consulta apenas solicitações criadas pelo próprio usuário."),
     ("requests.secretaria.view", "Visualizar central da secretaria", "Atendimento", "Consulta solicitações vinculadas à secretaria do usuário."),
     ("requests.secretaria.analyze", "Analisar solicitações da secretaria", "Atendimento", "Aprova, recusa, comenta ou pede correção em exigências da secretaria."),
+    ("reports.view", "Visualizar relatórios", "Relatórios", "Consulta indicadores e gráficos de eventos por período, ano, tipo e secretaria."),
     ("inspections.view", "Visualizar vistorias", "Vistorias", "Consulta vistorias agendadas da secretaria."),
     ("inspections.manage", "Gerenciar vistorias", "Vistorias", "Agenda, executa e registra checklist/laudo de vistoria."),
     ("events.map.view", "Visualizar mapa de eventos", "Atendimento", "Consulta eventos autorizados por período e endereço."),
@@ -70,6 +72,7 @@ ROLE_PERMISSIONS = {
         "dashboard.view",
         "requests.secretaria.view",
         "requests.secretaria.analyze",
+        "reports.view",
         "inspections.view",
         "inspections.manage",
         "events.map.view",
@@ -79,6 +82,7 @@ ROLE_PERMISSIONS = {
         "dashboard.view",
         "requests.secretaria.view",
         "requests.secretaria.analyze",
+        "reports.view",
         "inspections.view",
         "inspections.manage",
         "events.map.view",
@@ -98,9 +102,62 @@ SECRETARIAS = [
     ("infraestrutura", "Secretaria de Infraestrutura", "infraestrutura@valenca.ba.gov.br", "Análise técnica de estruturas"),
     ("dmtran", "DMTRAN", "dmtran@valenca.ba.gov.br", "Mobilidade, trânsito e vias públicas"),
     ("vigilancia_sanitaria", "Vigilância Sanitária", "visa@valenca.ba.gov.br", "Saúde, alimentação e apoio sanitário"),
+    ("secretaria_saude", "Secretaria de Saúde", "saude@valenca.ba.gov.br", "Saúde e bem-estar"),
     ("guarda_civil", "Guarda Civil Municipal", "gcm@valenca.ba.gov.br", "Ordem pública e apoio operacional"),
     ("receita_municipal", "Receita Municipal", "receita@valenca.ba.gov.br", "DAM e arrecadação municipal"),
 ]
+
+BASE_EVENT_DOCUMENTS = [
+    {
+        "label": "Ofício ou ficha de solicitação de autorização",
+        "url": "assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf",
+    },
+    {"label": "Foto ou cópia do RG e CPF", "url": ""},
+    {"label": "Comprovante de residência", "url": ""},
+    {"label": "Alvará de funcionamento do local, quando houver", "url": ""},
+]
+
+EVENT_TYPES = [
+    ("cultural", "Cultural", "Festival cultural, teatro, dança, exposição, capoeira e manifestações populares"),
+    ("musical_entretenimento", "Musical / Entretenimento", "Shows, festivais musicais, apresentações e festas"),
+    ("esportivo", "Esportivo", "Corrida, ciclismo, futebol, campeonato, torneio e artes marciais"),
+    ("religioso", "Religioso", "Festa de padroeiro, procissão, congresso religioso e marcha"),
+    ("gastronomico", "Gastronômico", "Festival gastronômico, acarajé, feira culinária e rota gastronômica"),
+    ("festa_popular_tradicional", "Festa Popular / Tradicional", "Carnaval, São João, São Pedro, Réveillon e festas tradicionais"),
+    ("comercial_empresarial", "Comercial / Empresarial", "Feira de negócios, exposição comercial, lançamento e encontro empresarial"),
+    ("educacional_capacitacao", "Educacional / Capacitação", "Curso, palestra, seminário, workshop e congresso"),
+    ("institucional_governamental", "Institucional / Governamental", "Audiência pública, conferência, inauguração e ação da Prefeitura"),
+    ("social_comunitario", "Social / Comunitário", "Ação social, evento beneficente, associação comunitária e campanha"),
+    ("turistico", "Turístico", "Evento de promoção turística, receptivo, roteiro e encontro turístico"),
+    ("rural_agropecuario", "Rural / Agropecuário", "Feira agrícola, exposição, agricultura familiar e encontro de produtores"),
+    ("ambiental", "Ambiental", "Mutirão ambiental, educação ambiental e sustentabilidade"),
+    ("automotivo_motociclistico", "Automotivo / Motociclístico", "Moto Fest, encontro de carros e exposição automotiva"),
+    ("infantil_familiar", "Infantil / Familiar", "Dia das Crianças, recreação e atividades para famílias"),
+    ("saude_bem_estar", "Saúde / Bem-estar", "Feira de saúde, campanha preventiva e atividade de qualidade de vida"),
+    ("outros", "Outros", "Eventos que não se enquadrem nas categorias anteriores"),
+]
+
+ALL_EVENT_TYPE_KEYS = [item[0] for item in EVENT_TYPES]
+
+EVENT_TYPE_DESCRIPTIONS = {
+    "cultural": "Eventos voltados à produção artística e às manifestações culturais locais, incluindo apresentações, rodas, exposições e atividades de valorização da cultura popular.",
+    "musical_entretenimento": "Eventos com atração musical, sonorização, festas, apresentações ou concentração de público para entretenimento, normalmente exigindo atenção a som, horário e segurança.",
+    "esportivo": "Eventos de prática ou competição esportiva em espaços públicos ou privados, como corridas, torneios, campeonatos e artes marciais, com possível impacto em trânsito e apoio operacional.",
+    "religioso": "Celebrações, procissões, congressos e encontros promovidos por instituições religiosas, podendo exigir uso de via pública, apoio da Guarda ou organização de percurso.",
+    "gastronomico": "Eventos com preparo, venda ou distribuição de alimentos e bebidas, exigindo atenção especial a higiene, manipulação e avaliação da Vigilância Sanitária quando aplicável.",
+    "festa_popular_tradicional": "Festas de calendário, tradição local ou grande mobilização popular, como Carnaval, São João, São Pedro e Réveillon, geralmente com maior articulação entre secretarias.",
+    "comercial_empresarial": "Ações de divulgação, exposição, lançamento, feira ou encontro empresarial, inclusive eventos volantes ou promocionais em área pública.",
+    "educacional_capacitacao": "Cursos, palestras, seminários, congressos e workshops que reúnem público para formação, capacitação ou divulgação de conhecimento.",
+    "institucional_governamental": "Eventos oficiais ou de interesse público promovidos por órgãos públicos, conselhos, escolas ou parceiros institucionais.",
+    "social_comunitario": "Ações sociais, eventos beneficentes, campanhas e atividades organizadas por associações, grupos comunitários ou entidades sem fins lucrativos.",
+    "turistico": "Eventos que promovem Valença, distritos, praias, roteiros, receptivos e atividades de fluxo turístico ou valorização de atrativos locais.",
+    "rural_agropecuario": "Feiras, encontros e exposições relacionados à agricultura familiar, produção rural, agropecuária e comunidades do campo.",
+    "ambiental": "Mutirões, campanhas educativas e eventos ligados a sustentabilidade, educação ambiental, preservação e uso responsável dos espaços públicos.",
+    "automotivo_motociclistico": "Encontros, exposições, passeios, motofests e atividades com veículos, motos ou som automotivo, com possível necessidade de mapa, vistoria e organização de trânsito.",
+    "infantil_familiar": "Eventos direcionados a crianças e famílias, como recreação, Dia das Crianças e atividades de convivência em praças, escolas ou espaços comunitários.",
+    "saude_bem_estar": "Feiras, campanhas preventivas, ações de cuidado, qualidade de vida e bem-estar, podendo demandar apoio de saúde ou estrutura de atendimento.",
+    "outros": "Use apenas quando o evento realmente não se encaixar nas categorias anteriores; a descrição deve explicar o motivo para facilitar a análise da Central de Eventos.",
+}
 
 LEGACY_TEST_USERS = {
     "meio_ambiente": [
@@ -217,6 +274,39 @@ def ensure_secretaria_columns():
                 connection.execute(text(statement))
 
 
+def ensure_user_columns():
+    inspector = inspect(engine)
+    if "usuarios" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("usuarios")}
+    migrations = {
+        "foto_usuario_url": "ALTER TABLE usuarios ADD COLUMN foto_usuario_url VARCHAR(500) NULL",
+        "foto_usuario_nome": "ALTER TABLE usuarios ADD COLUMN foto_usuario_nome VARCHAR(255) NULL",
+        "comprovante_residencia_url": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_url VARCHAR(500) NULL",
+        "comprovante_residencia_nome": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_nome VARCHAR(255) NULL",
+        "comprovante_residencia_tipo": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_tipo VARCHAR(50) NULL",
+        "comprovante_residencia_status": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_status VARCHAR(50) NOT NULL DEFAULT 'pendente_validacao'",
+        "comprovante_residencia_observacao": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_observacao TEXT NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+        for index in inspector.get_indexes("usuarios"):
+            if index.get("unique") and index.get("column_names") == ["email"]:
+                try:
+                    connection.execute(text(f"ALTER TABLE usuarios DROP INDEX {index['name']}"))
+                except Exception:
+                    pass
+        try:
+            connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN cpf_cnpj VARCHAR(18) NULL"))
+            connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN email VARCHAR(255) NULL"))
+            connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN mfa_email_enabled BOOLEAN NOT NULL DEFAULT 0"))
+        except Exception:
+            pass
+        connection.execute(text("UPDATE usuarios SET mfa_email_enabled = 0 WHERE mfa_email_enabled IS NULL"))
+
+
 def ensure_question_definition_columns():
     inspector = inspect(engine)
     if "question_definitions" not in inspector.get_table_names():
@@ -230,6 +320,7 @@ def ensure_question_definition_columns():
         "prazo_resposta_dias_uteis": "ALTER TABLE question_definitions ADD COLUMN prazo_resposta_dias_uteis INTEGER NOT NULL DEFAULT 2",
         "display_order": "ALTER TABLE question_definitions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
         "vistoria_exige_foto": "ALTER TABLE question_definitions ADD COLUMN vistoria_exige_foto BOOLEAN NOT NULL DEFAULT 0",
+        "event_type_keys": "ALTER TABLE question_definitions ADD COLUMN event_type_keys JSON NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -262,6 +353,7 @@ def ensure_requirement_inspection_columns():
         "inspection_checklist": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_checklist JSON NULL",
         "inspection_requires_photo": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_requires_photo BOOLEAN NOT NULL DEFAULT 0",
         "inspection_scheduled_for": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_for DATE NULL",
+        "inspection_scheduled_time": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_time VARCHAR(5) NULL",
         "inspection_status": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_status VARCHAR(50) NOT NULL DEFAULT 'nao_agendada'",
         "inspection_result": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_result JSON NULL",
     }
@@ -353,12 +445,12 @@ QUESTION_DEFINITIONS = [
     },
     {
         "key": "bloqueia_via",
-        "pergunta": "O evento usará ou bloqueará vias/ruas municipais?",
-        "descricao": "Baixe o modelo de solicitação de bloqueio de via, preencha local, data, horário, mapa/croqui do bloqueio ou desvio, assine e anexe o documento preenchido na solicitação.",
+        "pergunta": "Vai fechar rua ou desviar o trânsito?",
+        "descricao": "Informe os trechos do percurso no formulário, gere a prévia do mapa, baixe o modelo de solicitação de bloqueio de via, preencha local, data, horário, mapa/croqui do bloqueio ou desvio, assine e anexe o documento preenchido na solicitação.",
         "secretaria": "DMTRAN",
         "tipo": "Alvará de Eventos",
         "secretaria_dam": "Desenvolvimento Econômico",
-        "tipos_resposta": ["Sim/Não", "Texto", "Anexar Documento", "Assinatura impressa", "Assinatura gov.br"],
+        "tipos_resposta": ["Sim/Não", "Texto", "Rota do Evento", "Anexar Documento", "Assinatura impressa", "Assinatura gov.br"],
         "campos_obrigatorios": {"Texto": False, "Anexar Documento": False},
         "modelo_documento_nome": "Solicitação de bloqueio de via",
         "modelo_documento_url": "assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf",
@@ -407,6 +499,125 @@ QUESTION_DEFINITIONS = [
     },
 ]
 
+QUESTION_EVENT_TYPE_LINKS = {
+    "tem_som": [
+        "cultural",
+        "musical_entretenimento",
+        "religioso",
+        "gastronomico",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "automotivo_motociclistico",
+        "infantil_familiar",
+    ],
+    "local_fixo_sem_alvara": ALL_EVENT_TYPE_KEYS,
+    "precisa_avcb": [
+        "musical_entretenimento",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "automotivo_motociclistico",
+        "saude_bem_estar",
+    ],
+    "tem_palco": [
+        "cultural",
+        "musical_entretenimento",
+        "religioso",
+        "festa_popular_tradicional",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+    ],
+    "tem_gerador": [
+        "cultural",
+        "musical_entretenimento",
+        "religioso",
+        "festa_popular_tradicional",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "automotivo_motociclistico",
+    ],
+    "precisa_planta_baixa": [
+        "musical_entretenimento",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "turistico",
+    ],
+    "tem_trio_eletrico": [
+        "cultural",
+        "festa_popular_tradicional",
+        "religioso",
+        "social_comunitario",
+        "automotivo_motociclistico",
+    ],
+    "bloqueia_via": [
+        "cultural",
+        "esportivo",
+        "religioso",
+        "festa_popular_tradicional",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "automotivo_motociclistico",
+    ],
+    "tem_alimentacao": [
+        "cultural",
+        "musical_entretenimento",
+        "esportivo",
+        "religioso",
+        "gastronomico",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "rural_agropecuario",
+        "infantil_familiar",
+        "saude_bem_estar",
+        "outros",
+    ],
+    "precisa_ambulancia": [
+        "musical_entretenimento",
+        "esportivo",
+        "festa_popular_tradicional",
+        "automotivo_motociclistico",
+        "saude_bem_estar",
+        "institucional_governamental",
+        "social_comunitario",
+    ],
+    "precisa_guarda": [
+        "cultural",
+        "musical_entretenimento",
+        "esportivo",
+        "religioso",
+        "gastronomico",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "rural_agropecuario",
+        "automotivo_motociclistico",
+        "infantil_familiar",
+        "saude_bem_estar",
+    ],
+    "precisa_brigadista": [
+        "musical_entretenimento",
+        "esportivo",
+        "festa_popular_tradicional",
+        "automotivo_motociclistico",
+        "institucional_governamental",
+        "social_comunitario",
+        "outros",
+    ],
+}
+
 
 def seed_users(db, roles, secretarias):
     password = hash_password("123456")
@@ -420,7 +631,7 @@ def seed_users(db, roles, secretarias):
         {
             "email": "cidadao@teste.local",
             "nome": "Maria Solicitante",
-            "cpf_cnpj": "11111111111",
+            "cpf_cnpj": "52998224725",
             "role_id": roles["cidadao"].id,
         },
     ]
@@ -475,10 +686,29 @@ def seed_users(db, roles, secretarias):
                 "endereco": "Valença - BA",
                 "role_id": data["role_id"],
                 "secretaria_id": data.get("secretaria_id"),
-                "mfa_email_enabled": True,
+                "mfa_email_enabled": False,
+                "foto_usuario_nome": "foto_maria_solicitante.jpg" if data["email"] == "cidadao@teste.local" else None,
+                "foto_usuario_url": "/uploads/cidadao/foto_maria_solicitante.jpg" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_nome": "conta_luz_maria_solicitante.pdf" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_url": "/uploads/cidadao/conta_luz_maria_solicitante.pdf" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_tipo": "luz" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_status": "pre_validado" if data["email"] == "cidadao@teste.local" else "pendente_validacao",
                 "mfa_totp_enabled": False,
             },
         )
+        user = created[data["email"]]
+        user.nome = data["nome"]
+        user.cpf_cnpj = data["cpf_cnpj"]
+        user.role_id = data["role_id"]
+        user.secretaria_id = data.get("secretaria_id")
+        user.mfa_email_enabled = False
+        if data["email"] == "cidadao@teste.local":
+            user.foto_usuario_nome = "foto_maria_solicitante.jpg"
+            user.foto_usuario_url = "/uploads/cidadao/foto_maria_solicitante.jpg"
+            user.comprovante_residencia_nome = "conta_luz_maria_solicitante.pdf"
+            user.comprovante_residencia_url = "/uploads/cidadao/conta_luz_maria_solicitante.pdf"
+            user.comprovante_residencia_tipo = "luz"
+            user.comprovante_residencia_status = "pre_validado"
     return created
 
 
@@ -488,6 +718,7 @@ def seed_question_definitions(db):
     for index, data in enumerate(QUESTION_DEFINITIONS, start=1):
         data.setdefault("display_order", index)
         data.setdefault("vistoria_exige_foto", data.get("requer_vistoria", False))
+        data["event_type_keys"] = QUESTION_EVENT_TYPE_LINKS.get(data["key"], ALL_EVENT_TYPE_KEYS)
         existing = db.query(QuestionDefinitionModel).filter_by(key=data["key"]).first()
         if existing:
             fields_to_update = [
@@ -496,6 +727,7 @@ def seed_question_definitions(db):
                 "prazo_resposta_dias_uteis",
                 "display_order",
                 "vistoria_exige_foto",
+                "event_type_keys",
             ]
             if data["key"] == "bloqueia_via":
                 fields_to_update.extend(
@@ -518,6 +750,47 @@ def seed_question_definitions(db):
         db.add(QuestionDefinitionModel(**data))
 
 
+def seed_event_types(db):
+    for index, (key, name, examples) in enumerate(EVENT_TYPES, start=1):
+        existing = db.query(EventTypeModel).filter_by(key=key).first()
+        required_documents = list(BASE_EVENT_DOCUMENTS)
+        description = EVENT_TYPE_DESCRIPTIONS.get(
+            key,
+            f"Categoria criada a partir da planilha de solicitação de eventos: {examples}.",
+        )
+        if key in {"religioso", "festa_popular_tradicional", "social_comunitario"}:
+            required_documents.append(
+                {"label": "Ofício de apoio operacional, quando houver uso de via pública", "url": ""}
+            )
+        if key in {"gastronomico", "festa_popular_tradicional", "rural_agropecuario"}:
+            required_documents.append(
+                {"label": "Documentação sanitária dos manipuladores de alimentos, quando houver alimentação", "url": ""}
+            )
+        if key == "automotivo_motociclistico":
+            required_documents.append(
+                {"label": "Mapa/circuito e documentos dos veículos, quando houver deslocamento ou exposição", "url": ""}
+            )
+        if existing:
+            existing.name = name
+            existing.examples = examples
+            existing.description = description
+            existing.required_documents = required_documents
+            existing.display_order = index
+            existing.is_active = True
+            continue
+        db.add(
+            EventTypeModel(
+                key=key,
+                name=name,
+                description=description,
+                examples=examples,
+                required_documents=required_documents,
+                display_order=index,
+                is_active=True,
+            )
+        )
+
+
 def inspection_fields(tipo_exigencia, scheduled_for=None):
     value = tipo_exigencia.lower()
     checklist = []
@@ -536,13 +809,20 @@ def inspection_fields(tipo_exigencia, scheduled_for=None):
         "inspection_checklist": checklist,
         "inspection_requires_photo": bool(checklist),
         "inspection_scheduled_for": scheduled_for if checklist else None,
-        "inspection_status": "agendada" if checklist and scheduled_for else "nao_agendada",
+        "inspection_scheduled_time": "09:00" if checklist and scheduled_for else None,
+        "inspection_status": "vistoria_agendada" if checklist and scheduled_for else "nao_agendada",
     }
 
 
 def seed_permit_request(db, users, secretarias):
     existing = db.query(PermitRequestModel).filter_by(protocolo="AL-EV0001").first()
     if existing:
+        event_data = dict(existing.dados_evento or {})
+        event_data.setdefault("tipo_evento", "festa_popular_tradicional")
+        event_data.setdefault("tipo_evento_nome", "Festa Popular / Tradicional")
+        event_data.setdefault("latitude_evento", "-13.370400")
+        event_data.setdefault("longitude_evento", "-39.073300")
+        existing.dados_evento = event_data
         return existing
 
     request = PermitRequestModel(
@@ -554,7 +834,7 @@ def seed_permit_request(db, users, secretarias):
         is_beneficente=False,
         dados_responsavel={
             "nome": "Maria Solicitante",
-            "cpf_cnpj": "11111111111",
+            "cpf_cnpj": "52998224725",
             "telefone": "(75) 99999-0000",
             "email": "cidadao@teste.local",
             "endereco": "Valença - BA",
@@ -563,6 +843,10 @@ def seed_permit_request(db, users, secretarias):
             "nome_evento": "Festa Teste MVP",
             "data_evento": add_business_days(date.today(), 20).isoformat(),
             "endereco_evento": "Praça Central",
+            "latitude_evento": "-13.370400",
+            "longitude_evento": "-39.073300",
+            "tipo_evento": "festa_popular_tradicional",
+            "tipo_evento_nome": "Festa Popular / Tradicional",
             "publico_estimado": 300,
             "horario_inicio": "18:00",
             "horario_termino": "23:00",
@@ -621,152 +905,367 @@ def seed_permit_request(db, users, secretarias):
 
 
 def seed_test_scenarios(db, users, secretarias):
+    current_year = date.today().year
+    event_type_names = {key: name for key, name, _ in EVENT_TYPES}
+
     scenarios = [
-        (
-            "AL-EV0002",
-            "Festival com Som e Alimentação",
-            "em_analise",
-            "nao_gerado",
-            False,
-            [("meio_ambiente", "Termo de Responsabilidade Ambiental", "aguardando_analise")],
-        ),
-        (
-            "AL-EV0003",
-            "Evento Pronto para DAM",
-            "aguardando_geracao_dam",
-            "pendente_prefeitura",
-            False,
-            [("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada")],
-        ),
-        (
-            "AL-EV0004",
-            "Evento Aguardando Pagamento",
-            "aguardando_pagamento_dam",
-            "gerado",
-            False,
-            [("infraestrutura", "Vistoria de palco/estrutura", "aprovada")],
-        ),
-        (
-            "AL-EV0005",
-            "Evento Aguardando Alvará",
-            "aguardando_geracao_alvara",
-            "pago",
-            False,
-            [("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aprovada")],
-        ),
-        (
-            "AL-EV0006",
-            "Evento Beneficente Autorizado",
-            "autorizada",
-            "isento",
-            True,
-            [("receita_municipal", "Conferência de declaração de evento beneficente", "aprovada")],
-        ),
-        (
-            "AL-EV0007",
-            "Festival Autorizado com DAM Pago",
-            "autorizada",
-            "pago",
-            False,
-            [("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada")],
-        ),
+        {
+            "protocolo": "AL-EV0002",
+            "nome_evento": "Festival com Som e Alimentação",
+            "event_type": "gastronomico",
+            "data_evento": date(current_year, 1, 18),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 500,
+            "endereco": "Praça da República, Centro, Valença - BA",
+            "latitude": "-13.370900",
+            "longitude": "-39.073100",
+            "requirements": [
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aguardando_analise"),
+                ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0003",
+            "nome_evento": "Bloquinho de Verão",
+            "event_type": "festa_popular_tradicional",
+            "data_evento": date(current_year, 2, 9),
+            "status": "aguardando_geracao_dam",
+            "dam_status": "pendente_prefeitura",
+            "is_beneficente": False,
+            "publico_estimado": 1200,
+            "endereco": "Avenida ACM, Centro, Valença - BA",
+            "latitude": "-13.368800",
+            "longitude": "-39.071900",
+            "requirements": [
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0004",
+            "nome_evento": "Show na Orla",
+            "event_type": "musical_entretenimento",
+            "data_evento": date(current_year, 3, 22),
+            "status": "aguardando_pagamento_dam",
+            "dam_status": "gerado",
+            "is_beneficente": False,
+            "publico_estimado": 800,
+            "endereco": "Orla de Valença, Valença - BA",
+            "latitude": "-13.373200",
+            "longitude": "-39.075600",
+            "requirements": [
+                ("infraestrutura", "Vistoria de palco/estrutura", "aprovada"),
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0005",
+            "nome_evento": "Feira Gastronômica do Centro",
+            "event_type": "gastronomico",
+            "data_evento": date(current_year, 4, 14),
+            "status": "aguardando_geracao_alvara",
+            "dam_status": "pago",
+            "is_beneficente": False,
+            "publico_estimado": 650,
+            "endereco": "Rua Duque de Caxias, Centro, Valença - BA",
+            "latitude": "-13.369700",
+            "longitude": "-39.072600",
+            "requirements": [
+                ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0006",
+            "nome_evento": "Ação Social Beneficente",
+            "event_type": "social_comunitario",
+            "data_evento": date(current_year, 5, 25),
+            "status": "autorizada",
+            "dam_status": "isento",
+            "is_beneficente": True,
+            "publico_estimado": 300,
+            "endereco": "Ginásio Municipal de Valença - BA",
+            "latitude": "-13.366500",
+            "longitude": "-39.074800",
+            "requirements": [
+                ("receita_municipal", "Conferência de declaração de evento beneficente", "aprovada"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0007",
+            "nome_evento": "Festival Cultural Autorizado",
+            "event_type": "cultural",
+            "data_evento": date(current_year, 6, 21),
+            "status": "autorizada",
+            "dam_status": "pago",
+            "is_beneficente": False,
+            "publico_estimado": 900,
+            "endereco": "Casa da Cultura, Centro, Valença - BA",
+            "latitude": "-13.371600",
+            "longitude": "-39.073800",
+            "requirements": [
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada"),
+                ("infraestrutura", "Vistoria de palco/estrutura", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0008",
+            "nome_evento": "Corrida Cidade de Valença",
+            "event_type": "esportivo",
+            "data_evento": date(current_year, 7, 13),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 450,
+            "endereco": "Largada na Praça da República, Valença - BA",
+            "latitude": "-13.370100",
+            "longitude": "-39.071500",
+            "requirements": [
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aguardando_analise"),
+                ("secretaria_saude", "Ofício solicitando ambulância no local do evento", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0009",
+            "nome_evento": "Encontro de Motociclistas",
+            "event_type": "automotivo_motociclistico",
+            "data_evento": date(current_year, 8, 10),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 700,
+            "endereco": "Estacionamento da Orla, Valença - BA",
+            "latitude": "-13.374100",
+            "longitude": "-39.076000",
+            "requirements": [
+                ("dmtran", "Vistoria do veículo, CNH do motorista e mapa do circuito", "aguardando_analise"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0010",
+            "nome_evento": "Seminário de Empreendedorismo",
+            "event_type": "educacional_capacitacao",
+            "data_evento": date(current_year, 8, 28),
+            "status": "autorizada",
+            "dam_status": "pago",
+            "is_beneficente": False,
+            "publico_estimado": 180,
+            "endereco": "Auditório Municipal, Centro, Valença - BA",
+            "latitude": "-13.368900",
+            "longitude": "-39.074300",
+            "requirements": [
+                ("desenvolvimento_economico", "Regularização do alvará de funcionamento do local fixo", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0011",
+            "nome_evento": "Festa de São Pedro",
+            "event_type": "festa_popular_tradicional",
+            "data_evento": date(current_year, 9, 7),
+            "status": "aguardando_pagamento_dam",
+            "dam_status": "gerado",
+            "is_beneficente": False,
+            "publico_estimado": 1500,
+            "endereco": "Praça da Matriz, Valença - BA",
+            "latitude": "-13.369300",
+            "longitude": "-39.070900",
+            "requirements": [
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada"),
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada"),
+                ("infraestrutura", "Vistoria de palco/estrutura", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0012",
+            "nome_evento": "Feira da Agricultura Familiar",
+            "event_type": "rural_agropecuario",
+            "data_evento": date(current_year, 10, 19),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 600,
+            "endereco": "Mercado Municipal, Valença - BA",
+            "latitude": "-13.367700",
+            "longitude": "-39.072200",
+            "requirements": [
+                ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aguardando_analise"),
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0013",
+            "nome_evento": "Procissão de Nossa Senhora",
+            "event_type": "religioso",
+            "data_evento": date(current_year, 12, 8),
+            "status": "aguardando_geracao_dam",
+            "dam_status": "pendente_prefeitura",
+            "is_beneficente": False,
+            "publico_estimado": 1000,
+            "endereco": "Igreja Matriz, Centro, Valença - BA",
+            "latitude": "-13.370700",
+            "longitude": "-39.071200",
+            "requirements": [
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aprovada"),
+            ],
+        },
     ]
 
-    for index, (protocolo, nome_evento, status_value, dam_status, is_beneficente, requirements) in enumerate(scenarios):
-        if db.query(PermitRequestModel).filter_by(protocolo=protocolo).first():
-            continue
-        request = PermitRequestModel(
-            protocolo=protocolo,
-            solicitante_id=users["cidadao@teste.local"].id,
-            tipo="alvara_evento",
-            status=status_value,
-            dam_status=dam_status,
-            is_beneficente=is_beneficente,
-            instituicao_beneficiada="Instituição Social de Valença" if is_beneficente else None,
-            dados_responsavel={
-                "nome": "Maria Solicitante",
-                "cpf_cnpj": "11111111111",
-                "telefone": "(75) 99999-0000",
-                "email": "cidadao@teste.local",
-                "endereco": "Valença - BA",
-            },
-            dados_evento={
-                "nome_evento": nome_evento,
-                "data_evento": add_business_days(date.today(), 25).isoformat(),
-                "endereco_evento": "Rua Duque de Caxias, Centro, Valença - BA",
-                "latitude_evento": f"{-13.370400 + (index * 0.0012):.6f}",
-                "longitude_evento": f"{-39.073300 + (index * 0.0010):.6f}",
-                "publico_estimado": 500,
-                "horario_inicio": "17:00",
-                "horario_termino": "23:30",
-                "termo_aceite": "true",
-                "anexos_informados": ["rg_cpf.pdf", "comprovante_residencia.pdf", "alvara_funcionamento.pdf"],
-            },
-            respostas={"tem_som": True, "tem_alimentacao": True},
-        )
-        db.add(request)
-        db.flush()
-        for secretaria_slug, tipo_exigencia, requirement_status in requirements:
+    for scenario in scenarios:
+        protocolo = scenario["protocolo"]
+        event_type = scenario["event_type"]
+        status_value = scenario["status"]
+        dam_status = scenario["dam_status"]
+        is_beneficente = scenario["is_beneficente"]
+        request = db.query(PermitRequestModel).filter_by(protocolo=protocolo).first()
+        event_data = {
+            "nome_evento": scenario["nome_evento"],
+            "data_evento": scenario["data_evento"].isoformat(),
+            "endereco_evento": scenario["endereco"],
+            "latitude_evento": scenario["latitude"],
+            "longitude_evento": scenario["longitude"],
+            "tipo_evento": event_type,
+            "tipo_evento_nome": event_type_names.get(event_type, event_type),
+            "publico_estimado": scenario["publico_estimado"],
+            "horario_inicio": "17:00",
+            "horario_termino": "23:30",
+            "termo_aceite": "true",
+            "anexos_informados": ["rg_cpf.pdf", "comprovante_residencia.pdf", "alvara_funcionamento.pdf"],
+        }
+        responsible_data = {
+            "nome": "Maria Solicitante",
+            "cpf_cnpj": "52998224725",
+            "telefone": "(75) 99999-0000",
+            "email": "cidadao@teste.local",
+            "endereco": "Valença - BA",
+        }
+        if request:
+            request.status = status_value
+            request.dam_status = dam_status
+            request.is_beneficente = is_beneficente
+            request.instituicao_beneficiada = "Instituição Social de Valença" if is_beneficente else None
+            request.dados_responsavel = responsible_data
+            request.dados_evento = event_data
+            request.respostas = {"tem_som": True, "tem_alimentacao": event_type in {"gastronomico", "rural_agropecuario"}}
+        else:
+            request = PermitRequestModel(
+                protocolo=protocolo,
+                solicitante_id=users["cidadao@teste.local"].id,
+                tipo="alvara_evento",
+                status=status_value,
+                dam_status=dam_status,
+                is_beneficente=is_beneficente,
+                instituicao_beneficiada="Instituição Social de Valença" if is_beneficente else None,
+                dados_responsavel=responsible_data,
+                dados_evento=event_data,
+                respostas={"tem_som": True, "tem_alimentacao": event_type in {"gastronomico", "rural_agropecuario"}},
+            )
+            db.add(request)
+            db.flush()
+        for secretaria_slug, tipo_exigencia, requirement_status in scenario["requirements"]:
+            if secretaria_slug not in secretarias:
+                continue
             fields = inspection_fields(
                 tipo_exigencia,
                 date.today() if requirement_status != "aprovada" else add_business_days(date.today(), -1),
             )
             if requirement_status == "aprovada" and fields["requires_inspection"]:
                 fields["inspection_status"] = "aprovada"
-            db.add(
-                PermitRequirementModel(
+            requirement = (
+                db.query(PermitRequirementModel)
+                .filter_by(
                     permit_request_id=request.id,
                     secretaria_id=secretarias[secretaria_slug].id,
                     tipo_exigencia=tipo_exigencia,
-                    status=requirement_status,
-                    **fields,
                 )
+                .first()
             )
+            if requirement:
+                requirement.status = requirement_status
+                for key, value in fields.items():
+                    setattr(requirement, key, value)
+            else:
+                db.add(
+                    PermitRequirementModel(
+                        permit_request_id=request.id,
+                        secretaria_id=secretarias[secretaria_slug].id,
+                        tipo_exigencia=tipo_exigencia,
+                        status=requirement_status,
+                        **fields,
+                    )
+                )
         if dam_status in {"gerado", "pago"}:
-            db.add(
-                AttachmentModel(
-                    permit_request_id=request.id,
-                    tipo_documento="dam",
-                    nome_arquivo=f"dam_{protocolo}.pdf",
-                    arquivo_url=f"/uploads/{protocolo}/dam.pdf",
-                    mime_type="application/pdf",
-                    tamanho_bytes=120000,
-                )
+            existing_dam = (
+                db.query(AttachmentModel)
+                .filter_by(permit_request_id=request.id, tipo_documento="dam")
+                .first()
             )
+            if not existing_dam:
+                db.add(
+                    AttachmentModel(
+                        permit_request_id=request.id,
+                        tipo_documento="dam",
+                        nome_arquivo=f"dam_{protocolo}.pdf",
+                        arquivo_url=f"/uploads/{protocolo}/dam.pdf",
+                        mime_type="application/pdf",
+                        tamanho_bytes=120000,
+                    )
+                )
         if dam_status == "pago":
-            db.add(
-                AttachmentModel(
-                    permit_request_id=request.id,
-                    tipo_documento="comprovante_pagamento_dam",
-                    nome_arquivo=f"comprovante_{protocolo}.pdf",
-                    arquivo_url=f"/uploads/{protocolo}/comprovante.pdf",
-                    mime_type="application/pdf",
-                    tamanho_bytes=90000,
-                )
+            existing_proof = (
+                db.query(AttachmentModel)
+                .filter_by(permit_request_id=request.id, tipo_documento="comprovante_pagamento_dam")
+                .first()
             )
+            if not existing_proof:
+                db.add(
+                    AttachmentModel(
+                        permit_request_id=request.id,
+                        tipo_documento="comprovante_pagamento_dam",
+                        nome_arquivo=f"comprovante_{protocolo}.pdf",
+                        arquivo_url=f"/uploads/{protocolo}/comprovante.pdf",
+                        mime_type="application/pdf",
+                        tamanho_bytes=90000,
+                    )
+                )
         if status_value == "autorizada":
             token = create_event_credential_token(protocolo, request.id)
-            db.add(
-                AttachmentModel(
-                    permit_request_id=request.id,
-                    tipo_documento="alvara_evento",
-                    nome_arquivo=f"alvara_{protocolo}.pdf",
-                    arquivo_url=f"/uploads/{protocolo}/alvara.pdf",
-                    mime_type="application/pdf",
-                    tamanho_bytes=140000,
-                )
+            existing_permit = (
+                db.query(AttachmentModel)
+                .filter_by(permit_request_id=request.id, tipo_documento="alvara_evento")
+                .first()
             )
-            db.add(
-                EventCredentialModel(
-                    permit_request_id=request.id,
-                    codigo_publico=protocolo,
-                    token_hash=hash_token(token),
-                    status="ativa",
-                    valid_from=datetime.now(timezone.utc),
-                    valid_until=datetime.now(timezone.utc) + timedelta(days=30),
-                    issued_by=users["admin@prefeitura.local"].id,
+            if not existing_permit:
+                db.add(
+                    AttachmentModel(
+                        permit_request_id=request.id,
+                        tipo_documento="alvara_evento",
+                        nome_arquivo=f"alvara_{protocolo}.pdf",
+                        arquivo_url=f"/uploads/{protocolo}/alvara.pdf",
+                        mime_type="application/pdf",
+                        tamanho_bytes=140000,
+                    )
                 )
-            )
+            existing_credential = db.query(EventCredentialModel).filter_by(codigo_publico=protocolo).first()
+            if existing_credential:
+                existing_credential.token_hash = hash_token(token)
+                existing_credential.status = "ativa"
+                existing_credential.valid_until = datetime.now(timezone.utc) + timedelta(days=30)
+            else:
+                db.add(
+                    EventCredentialModel(
+                        permit_request_id=request.id,
+                        codigo_publico=protocolo,
+                        token_hash=hash_token(token),
+                        status="ativa",
+                        valid_from=datetime.now(timezone.utc),
+                        valid_until=datetime.now(timezone.utc) + timedelta(days=30),
+                        issued_by=users["admin@prefeitura.local"].id,
+                    )
+                )
 
 
 def seed_home_content(db, users):
@@ -875,6 +1374,7 @@ def main():
     if reset:
         Base.metadata.drop_all(bind=engine)
     create_tables()
+    ensure_user_columns()
     ensure_secretaria_columns()
     ensure_question_definition_columns()
     ensure_event_credential_columns()
@@ -885,6 +1385,7 @@ def main():
         seed_permissions(db, roles)
         secretarias = seed_secretarias(db)
         users = seed_users(db, roles, secretarias)
+        seed_event_types(db)
         seed_question_definitions(db)
         seed_public_ranges(db)
         seed_permit_request(db, users, secretarias)

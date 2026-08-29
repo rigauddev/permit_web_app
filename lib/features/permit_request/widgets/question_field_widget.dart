@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 class QuestionFieldWidget extends StatefulWidget {
   final int questionId;
+  final String? questionKey;
   final String questionText;
   final String? descricao;
   final List<String> tiposResposta;
@@ -19,6 +20,7 @@ class QuestionFieldWidget extends StatefulWidget {
   const QuestionFieldWidget({
     super.key,
     required this.questionId,
+    this.questionKey,
     required this.questionText,
     this.descricao,
     required this.tiposResposta,
@@ -36,10 +38,12 @@ class QuestionFieldWidget extends StatefulWidget {
 class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   String? respostaSimNao;
   final TextEditingController textoController = TextEditingController();
+  final List<_StreetSegmentControllers> percursoControllers = [];
   DateTime? dataSelecionada;
   TimeOfDay? horaSelecionada;
   String? arquivoSelecionado;
   String? assinaturaSelecionada;
+  String? percursoUrl;
 
   @override
   void initState() {
@@ -50,8 +54,7 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   @override
   void didUpdateWidget(covariant QuestionFieldWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.questionId != widget.questionId ||
-        oldWidget.currentValue != widget.currentValue) {
+    if (oldWidget.questionId != widget.questionId) {
       _loadCurrentValue();
     }
   }
@@ -62,6 +65,9 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
     dataSelecionada = null;
     horaSelecionada = null;
     arquivoSelecionado = null;
+    assinaturaSelecionada = null;
+    percursoUrl = null;
+    _resetRouteControllers();
 
     if (widget.currentValue is Map) {
       respostaSimNao = widget.currentValue['resposta'];
@@ -70,23 +76,120 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       horaSelecionada = widget.currentValue['hora'];
       arquivoSelecionado = widget.currentValue['arquivo'];
       assinaturaSelecionada = widget.currentValue['assinatura'];
+      percursoUrl = widget.currentValue['percurso_url'];
+      _loadRouteSegments(widget.currentValue['percurso_ruas']);
+    }
+
+    if (_usesRouteAnswer && percursoControllers.isEmpty) {
+      _addRouteSegmentControllers();
     }
   }
 
   @override
   void dispose() {
     textoController.dispose();
+    _disposeRouteControllers();
     super.dispose();
   }
 
   void salvarResposta() {
-    widget.onChanged({
+    final payload = {
       'resposta': respostaSimNao,
       'texto': textoController.text,
       'data': dataSelecionada,
       'hora': horaSelecionada,
       'arquivo': arquivoSelecionado,
       'assinatura': assinaturaSelecionada,
+    };
+    if (_usesRouteAnswer) {
+      payload['percurso_ruas'] = _routeSegments();
+      payload['percurso_url'] = percursoUrl;
+    }
+    widget.onChanged(payload);
+  }
+
+  bool get _isRouteQuestion => widget.questionKey == 'bloqueia_via';
+  bool get _usesRouteAnswer =>
+      _isRouteQuestion || widget.tiposResposta.contains('Rota do Evento');
+
+  void _loadRouteSegments(dynamic rawSegments) {
+    if (rawSegments is! List) return;
+    for (final item in rawSegments) {
+      if (item is! Map) continue;
+      final inicio = item['inicio']?.toString() ?? '';
+      final fim = item['fim']?.toString() ?? '';
+      if (inicio.trim().isEmpty && fim.trim().isEmpty) continue;
+      _addRouteSegmentControllers(inicio: inicio, fim: fim);
+    }
+  }
+
+  void _addRouteSegmentControllers({String inicio = '', String fim = ''}) {
+    percursoControllers.add(
+      _StreetSegmentControllers(
+        inicio: TextEditingController(text: inicio),
+        fim: TextEditingController(text: fim),
+      ),
+    );
+  }
+
+  void _resetRouteControllers() {
+    _disposeRouteControllers();
+    percursoControllers.clear();
+  }
+
+  void _disposeRouteControllers() {
+    for (final segment in percursoControllers) {
+      segment.dispose();
+    }
+  }
+
+  List<Map<String, String>> _routeSegments() {
+    return percursoControllers
+        .map(
+          (segment) => {
+            'inicio': segment.inicio.text.trim(),
+            'fim': segment.fim.text.trim(),
+          },
+        )
+        .where(
+          (segment) =>
+              segment['inicio']!.isNotEmpty || segment['fim']!.isNotEmpty,
+        )
+        .toList();
+  }
+
+  Future<void> _generateRoutePreview() async {
+    final segments =
+        _routeSegments()
+            .where(
+              (segment) =>
+                  segment['inicio']!.isNotEmpty && segment['fim']!.isNotEmpty,
+            )
+            .toList();
+
+    if (segments.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe pelo menos uma rua de início e fim.'),
+        ),
+      );
+      return;
+    }
+
+    final stops = <String>[
+      '${segments.first['inicio']}, Valença - BA',
+      ...segments.map((segment) => '${segment['fim']}, Valença - BA'),
+    ];
+    final origin = Uri.encodeComponent(stops.first);
+    final destination = Uri.encodeComponent(stops.last);
+    final waypoints =
+        stops.length > 2
+            ? '&waypoints=${Uri.encodeComponent(stops.sublist(1, stops.length - 1).join('|'))}'
+            : '';
+    setState(() {
+      percursoUrl =
+          'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination$waypoints';
+      salvarResposta();
     });
   }
 
@@ -174,6 +277,10 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
               ),
               onChanged: (_) => salvarResposta(),
             ),
+          ],
+          if (_usesRouteAnswer) ...[
+            const SizedBox(height: 10),
+            _buildRouteBuilder(context),
           ],
           const SizedBox(height: 10),
           if (widget.tiposResposta.contains('Calendário')) ...[
@@ -276,8 +383,166 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
     );
   }
 
+  Widget _buildRouteBuilder(BuildContext context) {
+    final theme = Theme.of(context);
+    final segments = _routeSegments();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAF7),
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.alt_route, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Percurso de bloqueio ou desvio',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Informe os trechos do percurso. Use o botão + para incluir outras ruas.',
+          ),
+          const SizedBox(height: 12),
+          ...List.generate(percursoControllers.length, (index) {
+            final segment = percursoControllers[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: segment.inicio,
+                      decoration: InputDecoration(
+                        labelText: 'Rua início ${index + 1}',
+                      ),
+                      onChanged: (_) => salvarResposta(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: segment.fim,
+                      decoration: InputDecoration(
+                        labelText: 'Rua final ${index + 1}',
+                      ),
+                      onChanged: (_) => salvarResposta(),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remover trecho',
+                    onPressed:
+                        percursoControllers.length <= 1
+                            ? null
+                            : () {
+                              setState(() {
+                                final removed = percursoControllers.removeAt(
+                                  index,
+                                );
+                                removed.dispose();
+                                salvarResposta();
+                              });
+                            },
+                    icon: const Icon(Icons.remove_circle_outline),
+                  ),
+                ],
+              ),
+            );
+          }),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _addRouteSegmentControllers();
+                    salvarResposta();
+                  });
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Adicionar trecho'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _generateRoutePreview,
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Gerar percurso'),
+              ),
+            ],
+          ),
+          if (percursoUrl != null && segments.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: const Color(0xFFE0E6E0)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Prévia do percurso gerado',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  ...segments.map(
+                    (segment) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.route_outlined,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${segment['inicio']} -> ${segment['fim']}',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _openGeneratedRoute,
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Ver no mapa'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   String _labelWithRequired(String label, String field) {
     return widget.camposObrigatorios[field] == true ? '$label *' : label;
+  }
+
+  Future<void> _openGeneratedRoute() async {
+    final rawUrl = percursoUrl;
+    if (rawUrl == null || rawUrl.isEmpty) return;
+    await launchUrl(Uri.parse(rawUrl), mode: LaunchMode.externalApplication);
   }
 
   Future<void> _openModelDocument() async {
@@ -303,5 +568,17 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
     final parsed = Uri.tryParse(rawReference);
     if (parsed != null && parsed.hasScheme) return parsed;
     return Uri.base.resolve(rawReference);
+  }
+}
+
+class _StreetSegmentControllers {
+  final TextEditingController inicio;
+  final TextEditingController fim;
+
+  _StreetSegmentControllers({required this.inicio, required this.fim});
+
+  void dispose() {
+    inicio.dispose();
+    fim.dispose();
   }
 }

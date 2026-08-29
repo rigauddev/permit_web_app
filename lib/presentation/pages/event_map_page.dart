@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/permit_api_service.dart';
@@ -20,7 +19,6 @@ class EventMapPage extends StatefulWidget {
 
 class _EventMapPageState extends State<EventMapPage> {
   final _api = PermitApiService();
-  final _storage = const FlutterSecureStorage();
 
   bool _loading = true;
   String? _error;
@@ -45,7 +43,7 @@ class _EventMapPageState extends State<EventMapPage> {
       _error = null;
     });
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -109,6 +107,16 @@ class _EventMapPageState extends State<EventMapPage> {
       lastDate: DateTime(now.year + 2),
       helpText: 'Filtrar eventos por período',
       saveText: 'Aplicar',
+      builder:
+          (context, child) => Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
+          ),
     );
     if (selected == null) return;
     setState(() {

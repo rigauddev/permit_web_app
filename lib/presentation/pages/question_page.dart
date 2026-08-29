@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
@@ -21,6 +20,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
 
   final List<Map<String, dynamic>> _perguntas = [];
   final List<Map<String, dynamic>> _publicRanges = [];
+  final List<Map<String, dynamic>> _eventTypes = [];
 
   String? _key;
   String? _pergunta;
@@ -40,12 +40,22 @@ class _PerguntasPageState extends State<PerguntasPage> {
   final TextEditingController _rangeMinController = TextEditingController();
   final TextEditingController _rangeMaxController = TextEditingController();
   final TextEditingController _rangeDaysController = TextEditingController();
+  final TextEditingController _eventTypeNameController =
+      TextEditingController();
+  final TextEditingController _eventTypeKeyController = TextEditingController();
+  final TextEditingController _eventTypeDescriptionController =
+      TextEditingController();
+  final TextEditingController _eventTypeExamplesController =
+      TextEditingController();
   final Map<String, bool> _selectedResponseFields = {};
   final Map<String, bool> _requiredResponseFields = {};
+  final Set<String> _selectedEventTypeKeys = {};
   int _formVersion = 0;
   int? _rangeEditId;
+  int? _eventTypeEditId;
   bool _isSaving = false;
   bool _isSavingRange = false;
+  bool _isSavingEventType = false;
 
   int? _indiceEdicao;
 
@@ -68,6 +78,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     'Texto',
     'Anexar Documento',
     'Calendário',
+    'Rota do Evento',
     'Botão de Baixar',
     'Assinatura impressa',
     'Assinatura gov.br',
@@ -78,6 +89,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     super.initState();
     _fetchQuestionDefinitions();
     _fetchPublicRanges();
+    _fetchEventTypes();
   }
 
   @override
@@ -87,6 +99,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _rangeMinController.dispose();
     _rangeMaxController.dispose();
     _rangeDaysController.dispose();
+    _eventTypeNameController.dispose();
+    _eventTypeKeyController.dispose();
+    _eventTypeDescriptionController.dispose();
+    _eventTypeExamplesController.dispose();
     super.dispose();
   }
 
@@ -206,6 +222,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                         ),
                       ],
                       _buildResponseFieldSelection(),
+                      _buildEventTypeSelection(),
                       _buildInspectionChecklistSection(),
                       SizedBox(
                         width: isMobile ? double.infinity : 200,
@@ -227,6 +244,8 @@ class _PerguntasPageState extends State<PerguntasPage> {
                 const SizedBox(height: 32),
                 _buildPublicRangeSection(),
                 const SizedBox(height: 32),
+                _buildEventTypesManagerSection(),
+                const SizedBox(height: 32),
                 const Text(
                   'Perguntas Cadastradas',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -246,6 +265,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                           DataColumn(label: Text('Ordem')),
                           DataColumn(label: Text('Respostas')),
                           DataColumn(label: Text('Vistoria')),
+                          DataColumn(label: Text('Categorias')),
                           DataColumn(label: Text('Tipo')),
                           DataColumn(label: Text('Ações')),
                         ],
@@ -271,6 +291,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
                                       : 'Não',
                                 ),
                               ),
+                              DataCell(Text(_formatEventTypeSummary(p))),
                               DataCell(Text(p['tipo']!)),
                               DataCell(
                                 Row(
@@ -411,6 +432,59 @@ class _PerguntasPageState extends State<PerguntasPage> {
               }).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildEventTypeSelection() {
+    return Container(
+      width: MediaQuery.of(context).size.width < 600 ? double.infinity : 400,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Categorias de evento vinculadas',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Se nenhuma categoria for marcada, a pergunta será exibida para todos os tipos de evento.',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 8),
+          if (_eventTypes.isEmpty)
+            const Text(
+              'Categorias ainda não carregadas.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  _eventTypes.map((eventType) {
+                    final key = eventType['key']?.toString() ?? '';
+                    final selected = _selectedEventTypeKeys.contains(key);
+                    return FilterChip(
+                      label: Text(eventType['name']?.toString() ?? key),
+                      selected: selected,
+                      onSelected:
+                          (value) => setState(() {
+                            if (value) {
+                              _selectedEventTypeKeys.add(key);
+                            } else {
+                              _selectedEventTypeKeys.remove(key);
+                            }
+                          }),
+                    );
+                  }).toList(),
+            ),
+        ],
+      ),
     );
   }
 
@@ -656,6 +730,125 @@ class _PerguntasPageState extends State<PerguntasPage> {
     );
   }
 
+  Widget _buildEventTypesManagerSection() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Categorias de evento',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Crie e edite os tipos usados no alvará de eventos. A descrição aparece para o cidadão antes da solicitação e ajuda a secretaria na análise.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _plainControllerField(
+                  _eventTypeNameController,
+                  'Nome da categoria',
+                  isMobile,
+                ),
+                _plainControllerField(
+                  _eventTypeKeyController,
+                  'Chave',
+                  isMobile,
+                  hint: 'exemplo: festa_popular',
+                ),
+                _plainControllerField(
+                  _eventTypeDescriptionController,
+                  'Descrição',
+                  isMobile,
+                  maxLines: 3,
+                ),
+                _plainControllerField(
+                  _eventTypeExamplesController,
+                  'Exemplos',
+                  isMobile,
+                  maxLines: 2,
+                ),
+                SizedBox(
+                  width: isMobile ? double.infinity : 180,
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        _isSavingEventType ? null : _saveEventTypeCategory,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(
+                      _isSavingEventType
+                          ? 'Salvando...'
+                          : _eventTypeEditId == null
+                          ? 'Adicionar'
+                          : 'Atualizar',
+                    ),
+                  ),
+                ),
+                if (_eventTypeEditId != null)
+                  TextButton(
+                    onPressed: _resetEventTypeForm,
+                    child: const Text('Cancelar edição'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_eventTypes.isEmpty)
+              const Text('Nenhuma categoria cadastrada.')
+            else
+              ..._eventTypes.map(
+                (eventType) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.category_outlined),
+                  title: Text(eventType['name']?.toString() ?? ''),
+                  subtitle: Text(
+                    [
+                      eventType['description']?.toString() ?? '',
+                      eventType['examples']?.toString() ?? '',
+                    ].where((value) => value.trim().isNotEmpty).join('\n'),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Editar categoria',
+                    onPressed: () => _editEventTypeCategory(eventType),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _plainControllerField(
+    TextEditingController controller,
+    String label,
+    bool isMobile, {
+    String? hint,
+    int maxLines = 1,
+  }) {
+    return SizedBox(
+      width: isMobile ? double.infinity : 240,
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
   Widget _rangeField(
     TextEditingController controller,
     String label,
@@ -763,6 +956,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
       'prazo_resposta_dias_uteis': _prazoRespostaDiasUteis,
       'display_order': _displayOrder,
       'vistoria_exige_foto': _requerVistoria && _vistoriaExigeFoto,
+      'event_type_keys': _selectedEventTypeKeys.toList(),
     };
 
     final payload = Map<String, dynamic>.from(novaPergunta);
@@ -802,6 +996,9 @@ class _PerguntasPageState extends State<PerguntasPage> {
         ..clear()
         ..addAll(List<String>.from(pergunta['checklist_vistoria'] ?? []));
       _checklistController.clear();
+      _selectedEventTypeKeys
+        ..clear()
+        ..addAll(List<String>.from(pergunta['event_type_keys'] ?? []));
       _selectedResponseFields.clear();
       _requiredResponseFields.clear();
       final tiposResposta = List<String>.from(pergunta['tipos_resposta'] ?? []);
@@ -833,6 +1030,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _vistoriaExigeFoto = false;
     _checklistVistoria.clear();
     _checklistController.clear();
+    _selectedEventTypeKeys.clear();
     _selectedResponseFields.clear();
     _requiredResponseFields.clear();
     _formVersion++;
@@ -851,6 +1049,22 @@ class _PerguntasPageState extends State<PerguntasPage> {
     return '$summary • Obrigatórios: ${obrigatorios.join(', ')}';
   }
 
+  String _formatEventTypeSummary(Map<String, dynamic> p) {
+    final keys = List<String>.from(p['event_type_keys'] ?? const []);
+    if (keys.isEmpty) return 'Todas';
+    final labels =
+        keys.map((key) {
+          final matches = _eventTypes.where(
+            (eventType) => eventType['key'] == key,
+          );
+          return matches.isEmpty
+              ? key
+              : matches.first['name']?.toString() ?? key;
+        }).toList();
+    if (labels.length <= 2) return labels.join(', ');
+    return '${labels.take(2).join(', ')} +${labels.length - 2}';
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(
       context,
@@ -864,8 +1078,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   Future<void> _fetchQuestionDefinitions() async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -902,8 +1115,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   Future<String?> _accessToken() async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return null;
@@ -923,6 +1135,28 @@ class _PerguntasPageState extends State<PerguntasPage> {
         _publicRanges
           ..clear()
           ..addAll(ranges);
+      });
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    }
+  }
+
+  Future<void> _fetchEventTypes() async {
+    final token = await _accessToken();
+    if (token == null) return;
+    try {
+      final eventTypes = await PermitApiService().listEventTypes(
+        accessToken: token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _eventTypes
+          ..clear()
+          ..addAll(eventTypes);
       });
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -1024,9 +1258,95 @@ class _PerguntasPageState extends State<PerguntasPage> {
     });
   }
 
+  Future<void> _saveEventTypeCategory() async {
+    final token = await _accessToken();
+    if (token == null) return;
+    final name = _eventTypeNameController.text.trim();
+    final key =
+        _eventTypeKeyController.text.trim().isNotEmpty
+            ? _eventTypeKeyController.text.trim()
+            : _generateKeyFromPergunta(name);
+    if (name.isEmpty || key.isEmpty) {
+      _showError('Informe nome e chave da categoria.');
+      return;
+    }
+    final payload = {
+      'key': key,
+      'name': name,
+      'description': _eventTypeDescriptionController.text.trim(),
+      'examples': _eventTypeExamplesController.text.trim(),
+      'required_documents':
+          _eventTypeEditId == null
+              ? <Map<String, String>>[]
+              : (_eventTypes.firstWhere(
+                        (item) => item['id'] == _eventTypeEditId,
+                        orElse: () => const <String, dynamic>{},
+                      )['required_documents']
+                      as List<dynamic>? ??
+                  const []),
+      'display_order':
+          _eventTypeEditId == null
+              ? _eventTypes.length + 1
+              : _eventTypes.firstWhere(
+                    (item) => item['id'] == _eventTypeEditId,
+                    orElse: () => const <String, dynamic>{},
+                  )['display_order'] ??
+                  _eventTypes.length,
+      'is_active': true,
+    };
+    setState(() => _isSavingEventType = true);
+    try {
+      if (_eventTypeEditId == null) {
+        await PermitApiService().createEventType(
+          accessToken: token,
+          payload: payload,
+        );
+      } else {
+        await PermitApiService().updateEventType(
+          accessToken: token,
+          eventTypeId: _eventTypeEditId!,
+          payload: payload,
+        );
+      }
+      if (!mounted) return;
+      _resetEventTypeForm();
+      await _fetchEventTypes();
+      if (mounted) _showSuccess('Categoria salva.');
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isSavingEventType = false);
+    }
+  }
+
+  void _editEventTypeCategory(Map<String, dynamic> eventType) {
+    setState(() {
+      _eventTypeEditId = eventType['id'] as int?;
+      _eventTypeNameController.text = eventType['name']?.toString() ?? '';
+      _eventTypeKeyController.text = eventType['key']?.toString() ?? '';
+      _eventTypeDescriptionController.text =
+          eventType['description']?.toString() ?? '';
+      _eventTypeExamplesController.text =
+          eventType['examples']?.toString() ?? '';
+    });
+  }
+
+  void _resetEventTypeForm() {
+    setState(() {
+      _eventTypeEditId = null;
+      _eventTypeNameController.clear();
+      _eventTypeKeyController.clear();
+      _eventTypeDescriptionController.clear();
+      _eventTypeExamplesController.clear();
+    });
+  }
+
   Future<void> _enviarParaAPISalvar(Map<String, dynamic> pergunta) async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -1057,8 +1377,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   Future<void> _enviarParaAPIEditar(Map<String, dynamic> pergunta) async {
     final questionId = pergunta['id'] as int?;
     if (questionId == null) return;
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -1093,8 +1412,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   ) async {
     final questionId = pergunta['id'] as int?;
     if (questionId == null) return;
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);

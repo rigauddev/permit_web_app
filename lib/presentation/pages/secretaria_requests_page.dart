@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/permit_api_service.dart';
@@ -25,7 +24,6 @@ class SecretariaRequestsPage extends ConsumerStatefulWidget {
 class _SecretariaRequestsPageState
     extends ConsumerState<SecretariaRequestsPage> {
   final _api = PermitApiService();
-  final _storage = const FlutterSecureStorage();
 
   bool _loading = true;
   List<Map<String, dynamic>> _requests = [];
@@ -45,7 +43,7 @@ class _SecretariaRequestsPageState
       _error = null;
     });
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -76,7 +74,7 @@ class _SecretariaRequestsPageState
     final observation = await _askObservation(title);
     if (observation == null) return;
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -92,6 +90,76 @@ class _SecretariaRequestsPageState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Solicitação atualizada.')));
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _scheduleRequirementInspection(int requirementId) async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (selectedDate == null || !mounted) return;
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (selectedTime == null) return;
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      await _api.scheduleInspection(
+        accessToken: token,
+        requirementId: requirementId,
+        scheduledFor: _dateToIso(selectedDate),
+        scheduledTime: _timeToText(selectedTime),
+      );
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Vistoria agendada.')));
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _confirmRequirementInspection(int requirementId) async {
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      await _api.confirmInspection(
+        accessToken: token,
+        requirementId: requirementId,
+      );
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Vistoria confirmada.')));
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
         await SessionExpiration.logout(context);
@@ -181,7 +249,7 @@ class _SecretariaRequestsPageState
     );
     if (attachment == null) return;
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -431,6 +499,8 @@ class _SecretariaRequestsPageState
                                 status: 'recusada',
                                 title: 'Recusar exigência',
                               ),
+                          onScheduleInspection: _scheduleRequirementInspection,
+                          onConfirmInspection: _confirmRequirementInspection,
                           onAttachDam:
                               (request) => _attachWorkflowDocument(
                                 request: request,
@@ -496,8 +566,20 @@ class _SecretariaRequestsPageState
   Future<void> _showRequestDetails(Map<String, dynamic> request) {
     return showDialog<void>(
       context: context,
-      builder: (context) => _RequestDetailsDialog(request: request),
+      builder:
+          (context) => _RequestDetailsDialog(
+            request: request,
+            onOpenAttachment: _openAttachment,
+          ),
     );
+  }
+
+  static String _dateToIso(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static String _timeToText(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 }
 
@@ -593,6 +675,8 @@ class _ServiceGroup extends StatelessWidget {
     required this.onApprove,
     required this.onPending,
     required this.onReject,
+    required this.onScheduleInspection,
+    required this.onConfirmInspection,
     required this.onAttachDam,
     required this.onAttachFinalPermit,
     required this.onOpenDetails,
@@ -605,6 +689,8 @@ class _ServiceGroup extends StatelessWidget {
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
   final void Function(int requirementId) onReject;
+  final void Function(int requirementId) onScheduleInspection;
+  final void Function(int requirementId) onConfirmInspection;
   final ValueChanged<Map<String, dynamic>> onAttachDam;
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
@@ -630,6 +716,8 @@ class _ServiceGroup extends StatelessWidget {
                   onApprove: onApprove,
                   onPending: onPending,
                   onReject: onReject,
+                  onScheduleInspection: onScheduleInspection,
+                  onConfirmInspection: onConfirmInspection,
                   onAttachDam: onAttachDam,
                   onAttachFinalPermit: onAttachFinalPermit,
                   onOpenDetails: onOpenDetails,
@@ -664,6 +752,8 @@ class _RequestCard extends StatelessWidget {
     required this.onApprove,
     required this.onPending,
     required this.onReject,
+    required this.onScheduleInspection,
+    required this.onConfirmInspection,
     required this.onAttachDam,
     required this.onAttachFinalPermit,
     required this.onOpenDetails,
@@ -676,6 +766,8 @@ class _RequestCard extends StatelessWidget {
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
   final void Function(int requirementId) onReject;
+  final void Function(int requirementId) onScheduleInspection;
+  final void Function(int requirementId) onConfirmInspection;
   final ValueChanged<Map<String, dynamic>> onAttachDam;
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
@@ -726,10 +818,13 @@ class _RequestCard extends StatelessWidget {
           ...requirements.map(
             (requirement) => _RequirementRow(
               requirement: requirement,
+              requestStatus: request['status']?.toString() ?? '',
               currentUser: currentUser,
               onApprove: onApprove,
               onPending: onPending,
               onReject: onReject,
+              onScheduleInspection: onScheduleInspection,
+              onConfirmInspection: onConfirmInspection,
               onOpenAttachment: onOpenAttachment,
             ),
           ),
@@ -740,14 +835,25 @@ class _RequestCard extends StatelessWidget {
 }
 
 class _RequestDetailsDialog extends StatelessWidget {
-  const _RequestDetailsDialog({required this.request});
+  const _RequestDetailsDialog({
+    required this.request,
+    required this.onOpenAttachment,
+  });
 
   final Map<String, dynamic> request;
+  final ValueChanged<Map<String, dynamic>> onOpenAttachment;
 
   @override
   Widget build(BuildContext context) {
     final requirements =
         (request['perguntas'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    final respostas = (request['respostas'] as Map<dynamic, dynamic>? ??
+            const {})
+        .map((key, value) => MapEntry(key.toString(), value));
+    final attachments =
+        (request['attachments'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .toList();
     return AlertDialog(
@@ -789,6 +895,54 @@ class _RequestDetailsDialog extends StatelessWidget {
               ),
               const Divider(height: 24),
               Text(
+                'Respostas do cidadão',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              if (respostas.isEmpty)
+                const Text('Nenhuma resposta registrada.')
+              else
+                ...respostas.entries.map(
+                  (entry) => _AnswerTile(
+                    label: _formatAnswerKey(entry.key),
+                    value: entry.value,
+                  ),
+                ),
+              const Divider(height: 24),
+              Text(
+                'Documentos anexados',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              if (attachments.isEmpty)
+                const Text('Nenhum documento anexado.')
+              else
+                ...attachments.map(
+                  (attachment) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.attach_file_outlined),
+                    title: Text(
+                      attachment['nome_arquivo']?.toString() ??
+                          'Documento anexado',
+                    ),
+                    subtitle: Text(
+                      [attachment['tipo_documento']?.toString()]
+                          .where((item) => item != null && item.isNotEmpty)
+                          .join(' | '),
+                    ),
+                    trailing: TextButton.icon(
+                      onPressed: () => onOpenAttachment(attachment),
+                      icon: const Icon(Icons.open_in_new, size: 18),
+                      label: const Text('Abrir'),
+                    ),
+                  ),
+                ),
+              const Divider(height: 24),
+              Text(
                 'Perguntas e validações',
                 style: Theme.of(
                   context,
@@ -811,6 +965,10 @@ class _RequestDetailsDialog extends StatelessWidget {
                             _formatStatus(
                               requirement['status']?.toString() ?? '',
                             ),
+                            _formatStatus(
+                              requirement['inspection_status']?.toString() ??
+                                  '',
+                            ),
                           ]
                           .where((item) => item != null && item.isNotEmpty)
                           .join(' | '),
@@ -827,6 +985,39 @@ class _RequestDetailsDialog extends StatelessWidget {
           child: const Text('Fechar'),
         ),
       ],
+    );
+  }
+}
+
+class _AnswerTile extends StatelessWidget {
+  const _AnswerTile({required this.label, required this.value});
+
+  final String label;
+  final Object? value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 180,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(_formatAnswerValue(value))),
+        ],
+      ),
     );
   }
 }
@@ -902,18 +1093,24 @@ class _WorkflowActions extends StatelessWidget {
 class _RequirementRow extends StatelessWidget {
   const _RequirementRow({
     required this.requirement,
+    required this.requestStatus,
     required this.currentUser,
     required this.onApprove,
     required this.onPending,
     required this.onReject,
+    required this.onScheduleInspection,
+    required this.onConfirmInspection,
     required this.onOpenAttachment,
   });
 
   final Map<String, dynamic> requirement;
+  final String requestStatus;
   final UserModel? currentUser;
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
   final void Function(int requirementId) onReject;
+  final void Function(int requirementId) onScheduleInspection;
+  final void Function(int requirementId) onConfirmInspection;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
 
   @override
@@ -924,10 +1121,31 @@ class _RequirementRow extends StatelessWidget {
         (requirement['anexos'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .toList();
+    final requiresInspection = requirement['requires_inspection'] == true;
+    final inspectionStatus =
+        requirement['inspection_status']?.toString() ?? 'nao_agendada';
+    final inspectionDate =
+        requirement['inspection_scheduled_for']?.toString() ?? '';
+    final inspectionTime =
+        requirement['inspection_scheduled_time']?.toString() ?? '';
+    final isCancelled = requestStatus == 'cancelada';
     final isLocked = status == 'aprovada' || status == 'recusada';
     final canManageLocked =
         currentUser?.userType == 'admin' || currentUser?.userType == 'gestor';
-    final canAct = id != null && (!isLocked || canManageLocked);
+    final canAct = id != null && !isCancelled && (!isLocked || canManageLocked);
+    final canScheduleInspection =
+        canAct &&
+        requiresInspection &&
+        (inspectionStatus == 'nao_agendada' ||
+            inspectionStatus == 'vistoria_agendada' ||
+            inspectionStatus == 'agendada' ||
+            inspectionStatus == 'vistoria_confirmada');
+    final canConfirmInspection =
+        canAct &&
+        requiresInspection &&
+        inspectionDate.isNotEmpty &&
+        (inspectionStatus == 'vistoria_agendada' ||
+            inspectionStatus == 'agendada');
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -957,12 +1175,40 @@ class _RequirementRow extends StatelessWidget {
               if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
                 _DeadlineChip(dueDate: requirement['due_date']?.toString()),
               _StatusChip(status: status),
+              if (requiresInspection && inspectionStatus != 'nao_agendada')
+                _StatusChip(status: inspectionStatus),
+              if (requiresInspection && inspectionDate.isNotEmpty)
+                Chip(
+                  avatar: const Icon(Icons.event_outlined, size: 16),
+                  label: Text(
+                    [
+                      inspectionDate,
+                      if (inspectionTime.isNotEmpty) inspectionTime,
+                    ].join(' '),
+                  ),
+                ),
               if (id == null)
                 const Tooltip(
                   message: 'A exigência veio sem identificador do backend.',
                   child: Icon(Icons.info_outline, size: 18),
                 ),
               if (canAct) ...[
+                if (canScheduleInspection)
+                  OutlinedButton.icon(
+                    onPressed: () => onScheduleInspection(id),
+                    icon: const Icon(Icons.event_outlined),
+                    label: Text(
+                      inspectionDate.isEmpty
+                          ? 'Agendar vistoria'
+                          : 'Reagendar vistoria',
+                    ),
+                  ),
+                if (canConfirmInspection)
+                  OutlinedButton.icon(
+                    onPressed: () => onConfirmInspection(id),
+                    icon: const Icon(Icons.event_available_outlined),
+                    label: const Text('Confirmar vistoria'),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () => onPending(id),
                   icon: const Icon(Icons.assignment_late_outlined),
@@ -982,6 +1228,11 @@ class _RequirementRow extends StatelessWidget {
                 const Chip(
                   avatar: Icon(Icons.lock_outline, size: 16),
                   label: Text('Ações bloqueadas'),
+                )
+              else if (isCancelled)
+                const Chip(
+                  avatar: Icon(Icons.lock_outline, size: 16),
+                  label: Text('Solicitação cancelada'),
                 ),
             ],
           ),
@@ -1026,8 +1277,11 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (status) {
       'aprovada' || 'autorizada' || 'isenta_dam' => Colors.green,
+      'vistoria_concluida' => Colors.green,
       'recusada' || 'indeferida' || 'cancelada' => Colors.red,
+      'vistoria_reprovada' => Colors.red,
       'pendente_documento' || 'pendente_correcao' => Colors.orange,
+      'vistoria_agendada' || 'agendada' || 'vistoria_confirmada' => Colors.teal,
       'dam_pendente' ||
       'aguardando_geracao_dam' ||
       'aguardando_pagamento_dam' ||
@@ -1170,7 +1424,50 @@ String _formatStatus(String status) {
       return 'Pendente de correção';
     case 'cancelada':
       return 'Cancelada';
+    case 'nao_agendada':
+      return '';
+    case 'agendada':
+    case 'vistoria_agendada':
+      return 'Vistoria agendada';
+    case 'vistoria_confirmada':
+      return 'Vistoria confirmada';
+    case 'vistoria_concluida':
+      return 'Vistoria concluída';
+    case 'reprovada':
+    case 'vistoria_reprovada':
+      return 'Vistoria reprovada';
+    case 'reagendada':
+      return 'Vistoria reagendada';
     default:
       return status.isEmpty ? 'Status' : status;
   }
+}
+
+String _formatAnswerKey(String key) {
+  return key
+      .replaceAll('_', ' ')
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+}
+
+String _formatAnswerValue(Object? value) {
+  if (value == null) return '-';
+  if (value is bool) return value ? 'Sim' : 'Não';
+  if (value is List) {
+    if (value.isEmpty) return '-';
+    return value.map(_formatAnswerValue).join('\n');
+  }
+  if (value is Map) {
+    if (value.isEmpty) return '-';
+    return value.entries
+        .map(
+          (entry) =>
+              '${_formatAnswerKey(entry.key.toString())}: ${_formatAnswerValue(entry.value)}',
+        )
+        .join('\n');
+  }
+  final text = value.toString().trim();
+  return text.isEmpty ? '-' : text;
 }

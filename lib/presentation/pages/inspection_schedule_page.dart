@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../core/permit_api_service.dart';
@@ -23,7 +22,6 @@ class InspectionSchedulePage extends ConsumerStatefulWidget {
 class _InspectionSchedulePageState
     extends ConsumerState<InspectionSchedulePage> {
   final _api = PermitApiService();
-  final _storage = const FlutterSecureStorage();
 
   bool _loading = true;
   String? _error;
@@ -41,7 +39,7 @@ class _InspectionSchedulePageState
       _error = null;
     });
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -195,6 +193,7 @@ class _InspectionSchedulePageState
             date: _parseDate(
               requirement['inspection_scheduled_for']?.toString(),
             ),
+            time: requirement['inspection_scheduled_time']?.toString(),
           ),
         );
       }
@@ -287,6 +286,17 @@ class _InspectionSchedulePageState
 
   void _showInspectionDetails(_InspectionItem item) {
     final request = item.request;
+    final hasSchedule = item.date != null;
+    final canConfirm =
+        item.requirementId != null &&
+        hasSchedule &&
+        (item.inspectionStatus == 'vistoria_agendada' ||
+            item.inspectionStatus == 'agendada');
+    final canReschedule = item.requirementId != null && !item.isPerformed;
+    final canPerform =
+        item.requirementId != null &&
+        !item.isPerformed &&
+        item.inspectionStatus == 'vistoria_confirmada';
     showDialog<void>(
       context: context,
       builder:
@@ -310,6 +320,8 @@ class _InspectionSchedulePageState
                     value: _formatInspectionStatus(item.inspectionStatus),
                   ),
                   _DetailLine(label: 'Data da vistoria', value: item.dateLabel),
+                  if ((item.time ?? '').isNotEmpty)
+                    _DetailLine(label: 'Horário', value: item.time!),
                   _DetailLine(
                     label: 'Local',
                     value: request['local_evento']?.toString() ?? '-',
@@ -364,23 +376,34 @@ class _InspectionSchedulePageState
               ),
               OutlinedButton.icon(
                 onPressed:
-                    item.requirementId == null
-                        ? null
-                        : () {
+                    canReschedule
+                        ? () {
                           Navigator.pop(context);
                           _scheduleInspection(item);
-                        },
+                        }
+                        : null,
                 icon: const Icon(Icons.event_outlined),
-                label: const Text('Agendar'),
+                label: Text(hasSchedule ? 'Reagendar' : 'Agendar'),
+              ),
+              OutlinedButton.icon(
+                onPressed:
+                    canConfirm
+                        ? () {
+                          Navigator.pop(context);
+                          _confirmInspection(item);
+                        }
+                        : null,
+                icon: const Icon(Icons.event_available_outlined),
+                label: const Text('Confirmar'),
               ),
               ElevatedButton.icon(
                 onPressed:
-                    item.requirementId == null
-                        ? null
-                        : () {
+                    canPerform
+                        ? () {
                           Navigator.pop(context);
                           _performInspection(item);
-                        },
+                        }
+                        : null,
                 icon: const Icon(Icons.fact_check_outlined),
                 label: const Text('Realizar vistoria'),
               ),
@@ -402,16 +425,29 @@ class _InspectionSchedulePageState
   }
 
   Future<void> _scheduleInspection(_InspectionItem item) async {
-    final initialDate = item.date ?? DateTime.now();
+    final today = DateTime.now();
+    final initialDate =
+        item.date != null &&
+                !item.date!.isBefore(
+                  DateTime(today.year, today.month, today.day),
+                )
+            ? item.date!
+            : today;
     final selected = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
     );
     if (selected == null || item.requirementId == null) return;
+    if (!mounted) return;
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: _parseTime(item.time) ?? const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (selectedTime == null) return;
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -420,11 +456,46 @@ class _InspectionSchedulePageState
         accessToken: token,
         requirementId: item.requirementId!,
         scheduledFor: _dateToIso(selected),
+        scheduledTime: _timeToText(selectedTime),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            item.date == null ? 'Vistoria agendada.' : 'Vistoria reagendada.',
+          ),
+        ),
+      );
+      _loadRequests();
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
+  Future<void> _confirmInspection(_InspectionItem item) async {
+    if (item.requirementId == null) return;
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      await _api.confirmInspection(
+        accessToken: token,
+        requirementId: item.requirementId!,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Vistoria agendada.')));
+      ).showSnackBar(const SnackBar(content: Text('Vistoria confirmada.')));
       _loadRequests();
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -446,7 +517,7 @@ class _InspectionSchedulePageState
     );
     if (result == null || item.requirementId == null) return;
     try {
-      final token = await _storage.read(key: 'access_token');
+      final token = await SessionExpiration.readAccessToken();
       if (token == null || token.isEmpty) {
         if (mounted) await SessionExpiration.logout(context);
         return;
@@ -492,12 +563,27 @@ class _InspectionSchedulePageState
     return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  static TimeOfDay? _parseTime(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final parts = value.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  static String _timeToText(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
   static String _formatInspectionStatus(String status) {
     return switch (status) {
-      'agendada' => 'Agendada',
-      'aprovada' => 'Aprovada',
-      'reprovada' => 'Reprovada',
-      'reagendada' => 'Reagendada',
+      'agendada' || 'vistoria_agendada' => 'Vistoria agendada',
+      'vistoria_confirmada' => 'Vistoria confirmada',
+      'aprovada' || 'vistoria_concluida' => 'Vistoria concluída',
+      'reprovada' || 'vistoria_reprovada' => 'Vistoria reprovada',
+      'reagendada' => 'Vistoria reagendada',
       _ => 'Não agendada',
     };
   }
@@ -753,7 +839,14 @@ class _InspectionTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(item.dateLabel),
-          Text(item.status, style: const TextStyle(fontSize: 12)),
+          if ((item.time ?? '').isNotEmpty)
+            Text(item.time!, style: const TextStyle(fontSize: 12)),
+          Text(
+            _InspectionSchedulePageState._formatInspectionStatus(
+              item.inspectionStatus,
+            ),
+            style: const TextStyle(fontSize: 12),
+          ),
         ],
       ),
     );
@@ -1047,6 +1140,7 @@ class _InspectionItem {
     required this.requiresPhoto,
     required this.inspectionResult,
     required this.date,
+    required this.time,
   });
 
   final int? requirementId;
@@ -1061,11 +1155,14 @@ class _InspectionItem {
   final bool requiresPhoto;
   final Map<String, dynamic>? inspectionResult;
   final DateTime? date;
+  final String? time;
 
   bool get isPerformed =>
       inspectionResult != null ||
       inspectionStatus == 'aprovada' ||
-      inspectionStatus == 'reprovada';
+      inspectionStatus == 'reprovada' ||
+      inspectionStatus == 'vistoria_concluida' ||
+      inspectionStatus == 'vistoria_reprovada';
 
   String get dateLabel {
     final value = date;
