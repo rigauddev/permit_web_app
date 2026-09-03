@@ -899,6 +899,7 @@ def seed_historical_event_requests(db, roles, secretarias, users):
             "bairro_evento": extract_neighborhood(row["local"]),
             "tipo_evento": event_type,
             "tipo_evento_nome": event_type_names.get(event_type, event_type),
+            "tipo_espaco_evento": "publico",
             "publico_estimado": normalize_public(row["publico"]),
             "publico_estimado_original": row["publico"],
             "horario_inicio": row["horario_inicio"],

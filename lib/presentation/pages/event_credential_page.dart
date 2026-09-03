@@ -515,6 +515,8 @@ class _AuthorizationDocument extends StatelessWidget {
     final theme = Theme.of(context);
     final status = form['status']?.toString() ?? '';
     final isAuthorized = status == 'autorizada' || status == 'isenta_dam';
+    final eventData = form['dados_evento'] as Map<String, dynamic>? ?? {};
+    final authorizationTitle = _spaceAuthorizationTitle(eventData);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -539,11 +541,12 @@ class _AuthorizationDocument extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Alvará de Evento',
+                          'Secretaria de Desenvolvimento Econômico',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                        Text(authorizationTitle),
                         Text('Protocolo ${form['protocolo'] ?? '-'}'),
                       ],
                     ),
@@ -1288,6 +1291,14 @@ String _timeRange(Object? start, Object? end) {
   return '$startText às $endText';
 }
 
+String _spaceAuthorizationTitle(Map<String, dynamic> eventData) {
+  final type = eventData['tipo_espaco_evento']?.toString().toLowerCase() ?? '';
+  if (type == 'privado') {
+    return 'Autorização de evento em espaço privado';
+  }
+  return 'Autorização de evento em espaço público';
+}
+
 String _contactLabel(Object? phone, Object? email) {
   final parts =
       [
@@ -1318,6 +1329,8 @@ Future<Uint8List> _buildAuthorizationPdf({
   final document = pw.Document();
   final requirements = _pdfRequirements(form, validation);
   final isValid = validation?['valid'] == true;
+  final eventData = form['dados_evento'] as Map<String, dynamic>? ?? {};
+  final authorizationTitle = _spaceAuthorizationTitle(eventData);
   final logoBytes =
       (await rootBundle.load(
         'assets/images/logo_prefeitura_1.png',
@@ -1352,8 +1365,12 @@ Future<Uint8List> _buildAuthorizationPdf({
                           ),
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            'Central de Eventos - Alvará de Autorização de Evento',
+                            'Secretaria de Desenvolvimento Econômico',
                             style: const pw.TextStyle(fontSize: 12),
+                          ),
+                          pw.Text(
+                            authorizationTitle,
+                            style: const pw.TextStyle(fontSize: 11),
                           ),
                         ],
                       ),

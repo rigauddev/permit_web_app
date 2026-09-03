@@ -152,6 +152,15 @@ class RequirementStatusUpdateRequest(BaseModel):
     observacoes: str | None = Field(default=None, max_length=2000)
 
 
+class AdditionalRequirementRequest(BaseModel):
+    pergunta: str = Field(..., min_length=3, max_length=120)
+    observacoes: str | None = Field(default=None, max_length=2000)
+    requires_inspection: bool = False
+    checklist_vistoria: list[str] = Field(default_factory=list)
+    inspection_requires_photo: bool = False
+    prazo_resposta_dias_uteis: int = Field(default=2, ge=1, le=30)
+
+
 class InspectionScheduleRequest(BaseModel):
     scheduled_for: date
     scheduled_time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")

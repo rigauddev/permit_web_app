@@ -853,6 +853,34 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> createAdditionalRequirement({
+    required String accessToken,
+    required int requestId,
+    required String pergunta,
+    String? observacoes,
+    bool requiresInspection = false,
+    List<String> checklistVistoria = const [],
+    bool inspectionRequiresPhoto = false,
+    int prazoRespostaDiasUteis = 2,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/requirements'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'pergunta': pergunta,
+        'observacoes': observacoes,
+        'requires_inspection': requiresInspection,
+        'checklist_vistoria': checklistVistoria,
+        'inspection_requires_photo': inspectionRequiresPhoto,
+        'prazo_resposta_dias_uteis': prazoRespostaDiasUteis,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   static const Map<String, List<Map<String, String>>> requirementRules = {
     'tem_som': [
       {

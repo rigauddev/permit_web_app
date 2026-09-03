@@ -718,7 +718,7 @@ class _RequestListTile extends StatelessWidget {
                   if (finalPermit != null)
                     IconButton(
                       tooltip: 'Visualizar ou baixar alvará',
-                      onPressed: () => onOpenAttachment(finalPermit),
+                      onPressed: () => onOpenCredential(request),
                       icon: const Icon(Icons.picture_as_pdf_outlined),
                     ),
                   if (finalPermit != null)
@@ -1063,7 +1063,7 @@ class _RequestDetailsPage extends StatelessWidget {
                         ),
                       if (finalPermit != null)
                         OutlinedButton.icon(
-                          onPressed: () => onOpenAttachment(finalPermit),
+                          onPressed: () => onOpenCredential(request),
                           icon: const Icon(Icons.picture_as_pdf_outlined),
                           label: const Text('Visualizar alvará'),
                         ),

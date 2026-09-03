@@ -150,6 +150,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? eventLongitude,
     String? eventTypeKey,
     String? eventTypeName,
+    String? eventSpaceType,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -174,6 +175,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     if (eventLongitude != null) updated['longitude_evento'] = eventLongitude;
     if (eventTypeKey != null) updated['tipo_evento'] = eventTypeKey;
     if (eventTypeName != null) updated['tipo_evento_nome'] = eventTypeName;
+    if (eventSpaceType != null) updated['tipo_espaco_evento'] = eventSpaceType;
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
     }
@@ -271,6 +273,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         'publico_estimado',
         'horario_inicio',
         'horario_termino',
+        'tipo_espaco_evento',
       ]) {
         if ((state.eventData[field] ?? '').trim().isEmpty) {
           return 'Preencha todos os dados obrigatórios do evento.';

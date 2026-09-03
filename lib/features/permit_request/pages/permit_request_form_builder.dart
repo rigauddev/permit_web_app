@@ -411,6 +411,30 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
             onTap: _pickDate,
           ),
           const SizedBox(height: 12),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'publico',
+                icon: Icon(Icons.account_balance_outlined),
+                label: Text('Espaço público'),
+              ),
+              ButtonSegment(
+                value: 'privado',
+                icon: Icon(Icons.storefront_outlined),
+                label: Text('Espaço privado'),
+              ),
+            ],
+            selected:
+                (state.eventData['tipo_espaco_evento'] ?? '').isEmpty
+                    ? const <String>{}
+                    : {state.eventData['tipo_espaco_evento']!},
+            emptySelectionAllowed: true,
+            onSelectionChanged: (value) {
+              if (value.isEmpty) return;
+              controller.updateEventInfo(eventSpaceType: value.first);
+            },
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: eventAddressController,
             minLines: 1,

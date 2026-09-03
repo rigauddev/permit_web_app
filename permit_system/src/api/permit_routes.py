@@ -5,6 +5,7 @@ from src.api.dependencies import get_current_user, require_roles
 from src.infra.database.models import UserModel
 from src.infra.database.mysql_db import get_db
 from src.schemas.permit_schema import (
+    AdditionalRequirementRequest,
     AttachmentResponse,
     AttachmentCreateRequest,
     AuthorizationTemplateRequest,
@@ -236,6 +237,16 @@ def attach_requirement_document_to_permit_request(
     current_user: UserModel = Depends(get_current_user),
 ):
     return PermitService(db).attach_requirement_document(request_id, payload, current_user)
+
+
+@router.post("/{request_id}/requirements", response_model=RequirementResponse)
+def create_additional_requirement(
+    request_id: int,
+    payload: AdditionalRequirementRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).create_additional_requirement(request_id, payload, current_user)
 
 
 @router.post("/{request_id}/final-permit-attachment", response_model=EventCredentialResponse)

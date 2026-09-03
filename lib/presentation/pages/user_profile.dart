@@ -10,6 +10,7 @@ import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/custom_appbar.dart';
+import 'change_password_page.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key, required this.userType});
@@ -189,6 +190,21 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                                 label: Text(
                                   _saving ? 'Salvando...' : 'Salvar perfil',
                                 ),
+                              ),
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (_) => const ChangePasswordPage(
+                                              firstAccess: false,
+                                            ),
+                                      ),
+                                    ),
+                                icon: const Icon(Icons.lock_reset_outlined),
+                                label: const Text('Alterar senha'),
                               ),
                             ],
                           ),

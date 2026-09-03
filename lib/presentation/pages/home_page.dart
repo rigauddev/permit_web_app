@@ -168,7 +168,7 @@ class _InternalHome extends StatelessWidget {
   final UserModel? user;
 
   bool get _canManageUsers =>
-      user?.userType == 'admin' || user?.userType == 'gestor';
+      user?.userType == 'admin' || user?.userType == 'gestor_secretaria';
 
   @override
   Widget build(BuildContext context) {
@@ -243,13 +243,6 @@ class _InternalHome extends StatelessWidget {
                         route: '/inspections',
                       ),
                       const _HomeActionCard(
-                        icon: Icons.map_outlined,
-                        title: 'Mapa de eventos',
-                        description:
-                            'Visualize eventos autorizados por período e abra o endereço no Google Maps.',
-                        route: '/event-map',
-                      ),
-                      const _HomeActionCard(
                         icon: Icons.analytics_outlined,
                         title: 'Relatórios',
                         description:
@@ -289,7 +282,7 @@ class _InternalHome extends StatelessWidget {
                           route: '/secretarias',
                         ),
                       if (user?.userType == 'admin' ||
-                          user?.userType == 'gestor')
+                          user?.userType == 'gestor_secretaria')
                         const _HomeActionCard(
                           icon: Icons.design_services_outlined,
                           title: 'Gestão de Serviços',

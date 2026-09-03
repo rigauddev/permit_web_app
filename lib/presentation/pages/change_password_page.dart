@@ -9,7 +9,9 @@ import '../../core/session_store.dart';
 import '../../data/providers/user_provider.dart';
 
 class ChangePasswordPage extends ConsumerStatefulWidget {
-  const ChangePasswordPage({super.key});
+  const ChangePasswordPage({super.key, this.firstAccess = true});
+
+  final bool firstAccess;
 
   @override
   ConsumerState<ChangePasswordPage> createState() => _ChangePasswordPageState();
@@ -61,7 +63,27 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
       );
       ref.read(userProvider.notifier).setUser(session.user);
       if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+      if (widget.firstAccess) {
+        await Future<void>.delayed(Duration.zero);
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Senha atualizada'),
+              content: const Text('Sua senha foi atualizada com sucesso.'),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+      );
+      if (mounted) Navigator.pop(context);
     } on AuthException catch (error) {
       setState(() => _error = error.message);
     } catch (_) {
@@ -74,7 +96,9 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Criar nova senha')),
+      appBar: AppBar(
+        title: Text(widget.firstAccess ? 'Criar nova senha' : 'Alterar senha'),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -92,15 +116,17 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Primeiro acesso',
+                    widget.firstAccess ? 'Primeiro acesso' : 'Alterar senha',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Crie uma senha própria para continuar usando o sistema.',
+                  Text(
+                    widget.firstAccess
+                        ? 'Crie uma senha própria para continuar usando o sistema.'
+                        : 'Informe a senha atual e defina uma nova senha.',
                     textAlign: TextAlign.center,
                   ),
                   if (_error != null) ...[

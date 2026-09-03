@@ -22,6 +22,7 @@ from src.infra.database.models import (
     UserModel,
 )
 from src.schemas.permit_schema import (
+    AdditionalRequirementRequest,
     AttachmentResponse,
     AttachmentCreateRequest,
     AuthorizationTemplateRequest,
@@ -935,6 +936,44 @@ class PermitService:
         self.db.refresh(question)
         return self._question_to_response(question)
 
+    def create_additional_requirement(
+        self,
+        request_id: int,
+        payload: AdditionalRequirementRequest,
+        current_user: UserModel,
+    ) -> RequirementResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if not self._can_view_request(request, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        secretaria_id = current_user.secretaria_id
+        if current_user.role.slug == "admin" and not secretaria_id:
+            secretaria = self.db.query(SecretariaModel).filter_by(slug="desenvolvimento_economico").first()
+            secretaria_id = secretaria.id if secretaria else None
+        if not secretaria_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Usuário sem secretaria vinculada para criar exigência.",
+            )
+        requirement = PermitRequirementModel(
+            permit_request_id=request.id,
+            secretaria_id=secretaria_id,
+            tipo_exigencia=payload.pergunta.strip(),
+            status="aguardando_analise",
+            observacoes=payload.observacoes,
+            due_date=PermitService._add_business_days(date.today(), payload.prazo_resposta_dias_uteis),
+            requires_inspection=payload.requires_inspection,
+            inspection_checklist=payload.checklist_vistoria,
+            inspection_requires_photo=payload.inspection_requires_photo,
+            inspection_status="nao_agendada",
+        )
+        self.db.add(requirement)
+        request.status = "em_analise"
+        self.db.commit()
+        self.db.refresh(requirement)
+        return self._requirement_to_response(requirement)
+
     def update_question_definition(self, question_id: int, payload: QuestionCreateRequest, current_user: UserModel) -> QuestionResponse:
         question = self.db.query(QuestionDefinitionModel).filter(QuestionDefinitionModel.id == question_id).first()
         if not question:
@@ -1336,6 +1375,7 @@ class PermitService:
             "publico_estimado",
             "horario_inicio",
             "horario_termino",
+            "tipo_espaco_evento",
         ]
 
         if any(not str(payload.dados_responsavel.get(field, "")).strip() for field in responsible_required):
@@ -1348,6 +1388,11 @@ class PermitService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Dados obrigatórios do evento não foram preenchidos.",
+            )
+        if str(payload.dados_evento.get("tipo_espaco_evento", "")).lower() not in {"publico", "privado"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe se o evento será em espaço público ou privado.",
             )
 
         try:

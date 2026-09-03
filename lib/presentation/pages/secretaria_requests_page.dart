@@ -185,6 +185,206 @@ class _SecretariaRequestsPageState
     }
   }
 
+  Future<void> _createAdditionalRequirement(
+    Map<String, dynamic> request,
+  ) async {
+    final input = await _askAdditionalRequirement();
+    if (input == null) return;
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      final requestId = request['formId'] as int? ?? request['id'] as int?;
+      if (requestId == null) return;
+      await _api.createAdditionalRequirement(
+        accessToken: token,
+        requestId: requestId,
+        pergunta: input.pergunta,
+        observacoes: input.observacoes,
+        requiresInspection: input.requiresInspection,
+        checklistVistoria: input.checklistVistoria,
+        inspectionRequiresPhoto: input.inspectionRequiresPhoto,
+        prazoRespostaDiasUteis: input.prazoRespostaDiasUteis,
+      );
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pergunta adicionada à solicitação.')),
+      );
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<_AdditionalRequirementInput?> _askAdditionalRequirement() async {
+    final perguntaController = TextEditingController();
+    final observacoesController = TextEditingController();
+    final prazoController = TextEditingController(text: '2');
+    final checklistController = TextEditingController();
+    var requiresInspection = false;
+    var inspectionRequiresPhoto = false;
+    final checklist = <String>[];
+    return showDialog<_AdditionalRequirementInput>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Incluir pergunta na solicitação'),
+                  content: SizedBox(
+                    width: 520,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextField(
+                            controller: perguntaController,
+                            decoration: const InputDecoration(
+                              labelText: 'Pergunta ou exigência',
+                              border: OutlineInputBorder(),
+                            ),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: observacoesController,
+                            decoration: const InputDecoration(
+                              labelText: 'Orientação ao cidadão',
+                              border: OutlineInputBorder(),
+                            ),
+                            minLines: 2,
+                            maxLines: 4,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: prazoController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Prazo em dias úteis',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Exige vistoria?'),
+                            value: requiresInspection,
+                            onChanged:
+                                (value) => setDialogState(() {
+                                  requiresInspection = value ?? false;
+                                  if (!requiresInspection) {
+                                    inspectionRequiresPhoto = false;
+                                    checklist.clear();
+                                  }
+                                }),
+                          ),
+                          if (requiresInspection) ...[
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Exigir foto na vistoria'),
+                              value: inspectionRequiresPhoto,
+                              onChanged:
+                                  (value) => setDialogState(
+                                    () =>
+                                        inspectionRequiresPhoto =
+                                            value ?? false,
+                                  ),
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: checklistController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Item do checklist',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.filled(
+                                  tooltip: 'Adicionar item',
+                                  onPressed:
+                                      () => setDialogState(() {
+                                        final value =
+                                            checklistController.text.trim();
+                                        if (value.isEmpty ||
+                                            checklist.contains(value)) {
+                                          return;
+                                        }
+                                        checklist.add(value);
+                                        checklistController.clear();
+                                      }),
+                                  icon: const Icon(Icons.add),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children:
+                                  checklist
+                                      .map(
+                                        (item) => InputChip(
+                                          label: Text(item),
+                                          onDeleted:
+                                              () => setDialogState(
+                                                () => checklist.remove(item),
+                                              ),
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        final pergunta = perguntaController.text.trim();
+                        if (pergunta.length < 3) return;
+                        final prazo =
+                            int.tryParse(prazoController.text.trim()) ?? 2;
+                        Navigator.pop(
+                          context,
+                          _AdditionalRequirementInput(
+                            pergunta: pergunta,
+                            observacoes:
+                                observacoesController.text.trim().isEmpty
+                                    ? null
+                                    : observacoesController.text.trim(),
+                            prazoRespostaDiasUteis: prazo.clamp(1, 30),
+                            requiresInspection: requiresInspection,
+                            checklistVistoria: List<String>.from(checklist),
+                            inspectionRequiresPhoto: inspectionRequiresPhoto,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Adicionar'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
   Future<void> _openAttachment(Map<String, dynamic> attachment) async {
     final rawUrl = attachment['arquivo_url']?.toString() ?? '';
     if (rawUrl.trim().isEmpty) {
@@ -574,6 +774,8 @@ class _SecretariaRequestsPageState
                               ),
                           onOpenDetails: _showRequestDetails,
                           onOpenAttachment: _openAttachment,
+                          onCreateAdditionalRequirement:
+                              _createAdditionalRequirement,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -952,6 +1154,7 @@ class _ServiceGroup extends StatelessWidget {
     required this.onAttachFinalPermit,
     required this.onOpenDetails,
     required this.onOpenAttachment,
+    required this.onCreateAdditionalRequirement,
   });
 
   final String title;
@@ -966,6 +1169,7 @@ class _ServiceGroup extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
+  final ValueChanged<Map<String, dynamic>> onCreateAdditionalRequirement;
 
   @override
   Widget build(BuildContext context) {
@@ -993,6 +1197,7 @@ class _ServiceGroup extends StatelessWidget {
                   onAttachFinalPermit: onAttachFinalPermit,
                   onOpenDetails: onOpenDetails,
                   onOpenAttachment: onOpenAttachment,
+                  onCreateAdditionalRequirement: onCreateAdditionalRequirement,
                 ),
               );
             }).toList(),
@@ -1029,6 +1234,7 @@ class _RequestCard extends StatelessWidget {
     required this.onAttachFinalPermit,
     required this.onOpenDetails,
     required this.onOpenAttachment,
+    required this.onCreateAdditionalRequirement,
   });
 
   final Map<String, dynamic> request;
@@ -1043,6 +1249,7 @@ class _RequestCard extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
+  final ValueChanged<Map<String, dynamic>> onCreateAdditionalRequirement;
 
   @override
   Widget build(BuildContext context) {
@@ -1072,6 +1279,11 @@ class _RequestCard extends StatelessWidget {
                 onPressed: () => onOpenDetails(request),
                 icon: const Icon(Icons.visibility_outlined),
                 label: const Text('Ver detalhes'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => onCreateAdditionalRequirement(request),
+                icon: const Icon(Icons.add_comment_outlined),
+                label: const Text('Incluir pergunta'),
               ),
             ],
           ),
@@ -1693,6 +1905,24 @@ class _AttachmentInput {
   final String fileName;
   final String fileUrl;
   final String? mimeType;
+}
+
+class _AdditionalRequirementInput {
+  const _AdditionalRequirementInput({
+    required this.pergunta,
+    required this.prazoRespostaDiasUteis,
+    required this.requiresInspection,
+    required this.checklistVistoria,
+    required this.inspectionRequiresPhoto,
+    this.observacoes,
+  });
+
+  final String pergunta;
+  final String? observacoes;
+  final int prazoRespostaDiasUteis;
+  final bool requiresInspection;
+  final List<String> checklistVistoria;
+  final bool inspectionRequiresPhoto;
 }
 
 String _formatSecretaria(String? slug) {
