@@ -15,6 +15,7 @@ from src.core.security import (
 )
 from src.infra.database.models import EmailVerificationModel, RoleModel, SecretariaModel, UserModel
 from src.schemas.auth_schema import (
+    ChangePasswordRequest,
     EmailVerificationConfirmResponse,
     EmailVerificationStartResponse,
     LoginStartResponse,
@@ -261,7 +262,7 @@ class AuthService:
     @staticmethod
     def _create_session_token(user: UserModel, client_type: str = "web") -> TokenResponse:
         session = AuthService._to_session(user)
-        expires_delta = timedelta(days=5) if client_type == "app" else timedelta(hours=3)
+        expires_delta = timedelta(days=5)
         token = create_access_token(
             subject=str(user.id),
             claims={
@@ -281,6 +282,20 @@ class AuthService:
         self.db.commit()
         self.db.refresh(user)
         return self.to_response(user)
+
+    def change_password(self, user: UserModel, payload: ChangePasswordRequest) -> TokenResponse:
+        if not verify_password(payload.current_password, user.senha_hash):
+            self._invalid_credentials()
+        if payload.current_password == payload.new_password:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A nova senha deve ser diferente da senha atual.",
+            )
+        user.senha_hash = hash_password(payload.new_password)
+        user.must_change_password = False
+        self.db.commit()
+        self.db.refresh(user)
+        return self._create_session_token(user, "web")
 
     def update_user_by_admin(
         self,
@@ -347,6 +362,8 @@ class AuthService:
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
             permissions=AuthService._permission_slugs(user),
+            foto_usuario_url=user.foto_usuario_url,
+            must_change_password=bool(user.must_change_password),
         )
 
     def _get_user_from_challenge(self, challenge_token: str) -> UserModel:
@@ -497,6 +514,7 @@ class AuthService:
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
             permissions=AuthService._permission_slugs(user),
+            must_change_password=bool(user.must_change_password),
             is_active=user.is_active,
         )
 

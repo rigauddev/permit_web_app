@@ -55,6 +55,23 @@ docker compose up -d --build
 docker compose ps
 ```
 
+Para carregar usuários e solicitações reais da planilha histórica, copie a planilha para uma pasta privada, fora do Git:
+
+```bash
+mkdir -p permit_system/private
+cp "/caminho/seguro/Planilha_de_solicitacao_de_eventos.xlsx" permit_system/private/Planilha_de_solicitacao_de_eventos.xlsx
+```
+
+No `.env`, mantenha:
+
+```bash
+HISTORICAL_EVENTS_XLSX_PATH=/app/private/Planilha_de_solicitacao_de_eventos.xlsx
+```
+
+Usuários importados da planilha entram como cidadãos. O login inicial é o CPF/CNPJ e a senha inicial também é o CPF/CNPJ, somente com números. No primeiro acesso, o sistema obriga a troca de senha.
+
+O seed padrão do MVP continua criando solicitações de teste em cada status. As solicitações importadas da planilha entram como histórico aprovado quando a data do evento já passou; se uma nova planilha trouxer evento futuro, a solicitação entra em análise.
+
 Validar serviços:
 
 ```bash

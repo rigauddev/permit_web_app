@@ -38,6 +38,7 @@ class QuestionFieldWidget extends StatefulWidget {
 class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   String? respostaSimNao;
   final TextEditingController textoController = TextEditingController();
+  final Map<String, TextEditingController> customControllers = {};
   final List<_StreetSegmentControllers> percursoControllers = [];
   DateTime? dataSelecionada;
   TimeOfDay? horaSelecionada;
@@ -68,6 +69,10 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
     assinaturaSelecionada = null;
     percursoUrl = null;
     _resetRouteControllers();
+    for (final controller in customControllers.values) {
+      controller.dispose();
+    }
+    customControllers.clear();
 
     if (widget.currentValue is Map) {
       respostaSimNao = widget.currentValue['resposta'];
@@ -78,16 +83,25 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       assinaturaSelecionada = widget.currentValue['assinatura'];
       percursoUrl = widget.currentValue['percurso_url'];
       _loadRouteSegments(widget.currentValue['percurso_ruas']);
+      for (final label in _customResponseLabels) {
+        customControllers[label] = TextEditingController(
+          text: widget.currentValue[label]?.toString() ?? '',
+        );
+      }
     }
 
     if (_usesRouteAnswer && percursoControllers.isEmpty) {
       _addRouteSegmentControllers();
     }
+    _syncCustomControllers();
   }
 
   @override
   void dispose() {
     textoController.dispose();
+    for (final controller in customControllers.values) {
+      controller.dispose();
+    }
     _disposeRouteControllers();
     super.dispose();
   }
@@ -101,6 +115,9 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       'arquivo': arquivoSelecionado,
       'assinatura': assinaturaSelecionada,
     };
+    for (final entry in customControllers.entries) {
+      payload[entry.key] = entry.value.text.trim();
+    }
     if (_usesRouteAnswer) {
       payload['percurso_ruas'] = _routeSegments();
       payload['percurso_url'] = percursoUrl;
@@ -111,6 +128,34 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   bool get _isRouteQuestion => widget.questionKey == 'bloqueia_via';
   bool get _usesRouteAnswer =>
       _isRouteQuestion || widget.tiposResposta.contains('Rota do Evento');
+  List<String> get _customResponseLabels =>
+      widget.tiposResposta
+          .where(
+            (field) =>
+                field != 'Sim/Não' &&
+                field != 'Texto' &&
+                field != 'Anexar Documento' &&
+                field != 'Calendário' &&
+                field != 'Rota do Evento' &&
+                field != 'Botão de Baixar' &&
+                field != 'Assinatura impressa' &&
+                field != 'Assinatura gov.br',
+          )
+          .toList();
+
+  void _syncCustomControllers() {
+    final labels = _customResponseLabels.toSet();
+    final removedLabels =
+        customControllers.keys
+            .where((label) => !labels.contains(label))
+            .toList();
+    for (final label in removedLabels) {
+      customControllers.remove(label)?.dispose();
+    }
+    for (final label in labels) {
+      customControllers.putIfAbsent(label, () => TextEditingController());
+    }
+  }
 
   void _loadRouteSegments(dynamic rawSegments) {
     if (rawSegments is! List) return;
@@ -274,6 +319,16 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
               maxLength: 255,
               decoration: InputDecoration(
                 labelText: _labelWithRequired('Descreva...', 'Texto'),
+              ),
+              onChanged: (_) => salvarResposta(),
+            ),
+          ],
+          for (final label in _customResponseLabels) ...[
+            TextFormField(
+              controller: customControllers[label],
+              maxLength: 255,
+              decoration: InputDecoration(
+                labelText: _labelWithRequired(label, label),
               ),
               onChanged: (_) => salvarResposta(),
             ),

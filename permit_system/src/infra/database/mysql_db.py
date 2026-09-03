@@ -1,7 +1,9 @@
 import os
+import time
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import sessionmaker
 
 from .models import Base
@@ -23,8 +25,22 @@ def get_db():
         db.close()
 
 def create_tables():
-    Base.metadata.create_all(bind=engine)
-    print("Tabelas criadas com sucesso!")
+    last_error = None
+    for attempt in range(1, 6):
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("Tabelas criadas com sucesso!")
+            return
+        except DatabaseError as error:
+            message = str(error).lower()
+            if "concurrent ddl" not in message and "definition is being modified" not in message:
+                raise
+            last_error = error
+            wait_seconds = min(attempt * 2, 10)
+            print(f"DDL concorrente detectado; tentando novamente em {wait_seconds}s...")
+            time.sleep(wait_seconds)
+    if last_error:
+        raise last_error
 
 if __name__ == "__main__":
     create_tables()

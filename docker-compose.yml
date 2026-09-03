@@ -39,6 +39,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       PREFEITURA_LOGO_URL: ${PREFEITURA_LOGO_URL:-}
+      HISTORICAL_EVENTS_XLSX_PATH: ${HISTORICAL_EVENTS_XLSX_PATH:-/app/private/Planilha_de_solicitacao_de_eventos.xlsx}
+    volumes:
+      - ./permit_system/private:/app/private:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -48,8 +51,8 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)\""]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 20s
+      retries: 12
+      start_period: 120s
     restart: unless-stopped
 
   web:

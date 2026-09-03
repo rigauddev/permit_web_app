@@ -11,6 +11,7 @@ import 'package:permit_web_app/data/providers/user_provider.dart';
 
 import 'features/services/receita_municipal/ui/receita_municipal_services_page.dart';
 import 'presentation/pages/login_page.dart';
+import 'presentation/pages/change_password_page.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/home_content_page.dart';
 import 'presentation/pages/event_map_page.dart';
@@ -69,6 +70,18 @@ class _AppRouter extends StatelessWidget {
       routes: {
         AppRoutes.login: (context) => const LoginPage(),
         AppRoutes.recoveryPassword: (context) => RecoveryPassword(),
+        AppRoutes.changePassword:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+                'cidadao',
+              },
+              allowPasswordChange: true,
+              child: const ChangePasswordPage(),
+            ),
         AppRoutes.home:
             (context) => _GuardedRoute(
               user: user,
@@ -261,11 +274,13 @@ class _GuardedRoute extends StatelessWidget {
     required this.user,
     required this.allowedRoles,
     required this.child,
+    this.allowPasswordChange = false,
   });
 
   final UserModel? user;
   final Set<String> allowedRoles;
   final Widget child;
+  final bool allowPasswordChange;
 
   @override
   Widget build(BuildContext context) {
@@ -285,6 +300,9 @@ class _GuardedRoute extends StatelessWidget {
         buttonLabel: 'Voltar para início',
         route: AppRoutes.home,
       );
+    }
+    if (user!.mustChangePassword && !allowPasswordChange) {
+      return const ChangePasswordPage();
     }
     return child;
   }

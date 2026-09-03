@@ -242,6 +242,18 @@ class AuthService {
     return UserModel.fromApiUser(response);
   }
 
+  Future<AuthSession> changePassword({
+    required String accessToken,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _post('/auth/change-password', {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    }, accessToken: accessToken);
+    return AuthSession.fromJson(response);
+  }
+
   Future<UserModel> updateCurrentUser({
     required String accessToken,
     required String nome,

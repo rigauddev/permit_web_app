@@ -53,4 +53,5 @@ class UserResponse(BaseModel):
     role: str
     secretaria: str | None = None
     permissions: list[str] = Field(default_factory=list)
+    must_change_password: bool = False
     is_active: bool

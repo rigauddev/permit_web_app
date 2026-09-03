@@ -10,6 +10,7 @@
 !.env.homologacao.example
 .venv/
 venv/
+permit_system/private/
 __pycache__/
 .pytest_cache/
 .mypy_cache/

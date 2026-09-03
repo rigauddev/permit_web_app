@@ -90,6 +90,7 @@ class UserModel(Base):
     mfa_totp_enabled = Column(Boolean, default=False, nullable=False)
     mfa_code_hash = Column(String(255), nullable=True)
     mfa_code_expires_at = Column(DateTime(timezone=True), nullable=True)
+    must_change_password = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

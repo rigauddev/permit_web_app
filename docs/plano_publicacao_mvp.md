@@ -34,6 +34,8 @@ Fluxo recomendado:
 - Agendamento, confirmação e reagendamento de vistoria.
 - Relatórios por período, ano, tipo, bairro e mês.
 - Emissão/visualização de autorização final e QR Code.
+- Seed de homologação com usuários/solicitações históricas importados da planilha privada, sem versionar CPF/CNPJ no Git.
+- Seed padrão mantido com solicitações em cada status do fluxo do MVP.
 
 ## Onde subir primeiro
 
@@ -52,6 +54,8 @@ Para este sistema, Hostinger só é boa se usarmos VPS com Docker. A hospedagem 
 O Lightsail tem planos previsíveis de VPS Linux a partir de valores baixos e opção de avaliação gratuita para planos elegíveis: https://aws.amazon.com/lightsail/pricing/ e https://aws.amazon.com/free/compute/lightsail/
 
 Também existe Lightsail Containers, mas ele cobra serviço de container continuamente e o banco gerenciado é cobrado à parte: https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-container-services.html
+
+Guia operacional do caminho escolhido para o MVP: `docs/aws_lightsail_mvp.md`.
 
 Recomendação para segunda-feira:
 
@@ -78,6 +82,7 @@ Configurar no servidor:
 - `SMTP_PASSWORD`
 - `SMTP_FROM`
 - `PREFEITURA_LOGO_URL`
+- `HISTORICAL_EVENTS_XLSX_PATH`
 
 ## Comandos-base no servidor
 

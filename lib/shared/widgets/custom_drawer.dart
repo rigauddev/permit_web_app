@@ -53,6 +53,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
             primaryColor: colorScheme.primary,
             textColor: colorScheme.onPrimary,
             userName: user?.name ?? '',
+            userPhotoUrl: user?.photoUrl ?? '',
             compactMode: widget.compactMode,
             showToggle:
                 !widget.asDrawer &&
@@ -200,6 +201,7 @@ class _DrawerHeader extends StatelessWidget {
     required this.primaryColor,
     required this.textColor,
     required this.userName,
+    required this.userPhotoUrl,
     required this.compactMode,
     required this.showToggle,
     required this.onToggle,
@@ -209,6 +211,7 @@ class _DrawerHeader extends StatelessWidget {
   final Color primaryColor;
   final Color textColor;
   final String userName;
+  final String userPhotoUrl;
   final bool compactMode;
   final bool showToggle;
   final VoidCallback onToggle;
@@ -253,7 +256,21 @@ class _DrawerHeader extends StatelessWidget {
               onTap: () => Navigator.pushReplacementNamed(context, '/profile'),
               child: CircleAvatar(
                 radius: collapsed ? 22 : 42,
-                backgroundImage: const AssetImage('assets/images/avatar.jpg'),
+                backgroundColor: Colors.white,
+                backgroundImage:
+                    _avatarImage(userPhotoUrl) == null
+                        ? null
+                        : NetworkImage(_avatarImage(userPhotoUrl)!),
+                child:
+                    _avatarImage(userPhotoUrl) == null
+                        ? Text(
+                          _initials(userName),
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        )
+                        : null,
               ),
             ),
           ),
@@ -281,6 +298,30 @@ class _DrawerHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _avatarImage(String rawUrl) {
+  final value = rawUrl.trim();
+  if (value.isEmpty) return null;
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value;
+  }
+  if (value.startsWith('/uploads/')) {
+    const baseUrl = String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: 'http://127.0.0.1:8000',
+    );
+    return '$baseUrl$value';
+  }
+  return null;
+}
+
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  if (parts.isEmpty || parts.first.isEmpty) return 'U';
+  final first = parts.first.characters.first;
+  final second = parts.length > 1 ? parts.last.characters.first : '';
+  return (first + second).toUpperCase();
 }
 
 class _DrawerTile extends StatelessWidget {

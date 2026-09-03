@@ -19,6 +19,7 @@ import '../../features/permit_request/pages/permit_request_page.dart';
 class AppRoutes {
   static const String login = '/';
   static const String recoveryPassword = '/recovery-password';
+  static const String changePassword = '/change-password';
   static const String home = '/home';
   static const String profile = '/profile';
   static const String users = '/users';

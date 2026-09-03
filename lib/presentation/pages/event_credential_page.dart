@@ -657,18 +657,48 @@ class _DocumentDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsible =
+        form['dados_responsavel'] as Map<String, dynamic>? ?? {};
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _DetailRow(label: 'Evento', value: form['nome_do_evento']),
-        _DetailRow(label: 'Responsável', value: form['responsavel']),
+        const _DocumentSectionTitle('Dados do Evento'),
+        _DetailRow(label: 'Nome do evento', value: form['nome_do_evento']),
         _DetailRow(label: 'Data', value: form['data_do_evento']),
         _DetailRow(
-          label: 'Horário',
+          label: 'Início/fim',
           value: _timeRange(form['horario_inicio'], form['horario_termino']),
         ),
-        _DetailRow(label: 'Local', value: form['local_evento']),
-        _DetailRow(label: 'DAM', value: _damLabel(form['dam_status'])),
+        _DetailRow(label: 'Público estimado', value: form['publico_estimado']),
+        const SizedBox(height: 12),
+        const _DocumentSectionTitle('Dados do Solicitante'),
+        _DetailRow(label: 'Nome', value: form['responsavel']),
+        _DetailRow(label: 'CPF/CNPJ', value: responsible['cpf_cnpj']),
+        _DetailRow(label: 'Endereço', value: responsible['endereco']),
+        _DetailRow(
+          label: 'Contato',
+          value: _contactLabel(responsible['telefone'], responsible['email']),
+        ),
       ],
+    );
+  }
+}
+
+class _DocumentSectionTitle extends StatelessWidget {
+  final String label;
+
+  const _DocumentSectionTitle(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        label,
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+      ),
     );
   }
 }
@@ -1258,6 +1288,15 @@ String _timeRange(Object? start, Object? end) {
   return '$startText às $endText';
 }
 
+String _contactLabel(Object? phone, Object? email) {
+  final parts =
+      [
+        phone?.toString().trim() ?? '',
+        email?.toString().trim() ?? '',
+      ].where((value) => value.isNotEmpty).toList();
+  return parts.isEmpty ? '-' : parts.join(' | ');
+}
+
 String _tokenFromUrl(String url) {
   final uri = Uri.tryParse(url);
   return uri?.queryParameters['t'] ?? '';
@@ -1364,19 +1403,39 @@ Future<Uint8List> _buildAuthorizationPdf({
                   child: pw.Column(
                     children: [
                       _pdfRow('Protocolo', form['protocolo']),
-                      _pdfRow('Evento', form['nome_do_evento']),
-                      _pdfRow('Responsável', form['responsavel']),
+                      _pdfSectionTitle('DADOS DO EVENTO'),
+                      _pdfRow('Nome do evento', form['nome_do_evento']),
                       _pdfRow('Data', form['data_do_evento']),
                       _pdfRow(
-                        'Horário',
+                        'Início/fim',
                         _timeRange(
                           form['horario_inicio'],
                           form['horario_termino'],
                         ),
                       ),
-                      _pdfRow('Local', form['local_evento']),
                       _pdfRow('Público estimado', form['publico_estimado']),
-                      _pdfRow('DAM', _damLabel(form['dam_status'])),
+                      pw.SizedBox(height: 10),
+                      _pdfSectionTitle('DADOS DO SOLICITANTE'),
+                      _pdfRow('Nome', form['responsavel']),
+                      _pdfRow(
+                        'CPF/CNPJ',
+                        (form['dados_responsavel']
+                            as Map<String, dynamic>?)?['cpf_cnpj'],
+                      ),
+                      _pdfRow(
+                        'Endereço',
+                        (form['dados_responsavel']
+                            as Map<String, dynamic>?)?['endereco'],
+                      ),
+                      _pdfRow(
+                        'Contato',
+                        _contactLabel(
+                          (form['dados_responsavel']
+                              as Map<String, dynamic>?)?['telefone'],
+                          (form['dados_responsavel']
+                              as Map<String, dynamic>?)?['email'],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1475,6 +1534,16 @@ pw.Widget _pdfRow(String label, Object? value) {
         ),
         pw.Expanded(child: pw.Text(text.isEmpty ? '-' : text)),
       ],
+    ),
+  );
+}
+
+pw.Widget _pdfSectionTitle(String label) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.only(top: 6, bottom: 4),
+    child: pw.Text(
+      label,
+      style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
     ),
   );
 }

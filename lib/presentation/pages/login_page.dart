@@ -93,9 +93,7 @@ class LoginPage extends HookConsumerWidget {
           }
           final expiresAt =
               DateTime.now()
-                  .add(
-                    const Duration(days: 5),
-                  )
+                  .add(const Duration(days: 5))
                   .toUtc()
                   .toIso8601String();
           await sessionStore.save(
@@ -106,7 +104,10 @@ class LoginPage extends HookConsumerWidget {
           ref.read(userProvider.notifier).setUser(user);
           await Future<void>.delayed(Duration.zero);
           if (context.mounted) {
-            Navigator.pushReplacementNamed(context, '/home');
+            Navigator.pushReplacementNamed(
+              context,
+              user.mustChangePassword ? '/change-password' : '/home',
+            );
           }
           return;
         }
@@ -141,9 +142,7 @@ class LoginPage extends HookConsumerWidget {
         );
         final expiresAt =
             DateTime.now()
-                .add(
-                  const Duration(days: 5),
-                )
+                .add(const Duration(days: 5))
                 .toUtc()
                 .toIso8601String();
         await sessionStore.save(
@@ -154,7 +153,10 @@ class LoginPage extends HookConsumerWidget {
         ref.read(userProvider.notifier).setUser(session.user);
         await Future<void>.delayed(Duration.zero);
         if (context.mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
+          Navigator.pushReplacementNamed(
+            context,
+            session.user.mustChangePassword ? '/change-password' : '/home',
+          );
         }
       } on AuthException catch (error) {
         errorMessage.value = error.message;

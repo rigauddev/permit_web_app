@@ -16,6 +16,8 @@ class UserModel {
   final String cpfCnpj;
   final String? secretaria;
   final List<String> permissions;
+  final String photoUrl;
+  final bool mustChangePassword;
 
   UserModel({
     this.id,
@@ -35,6 +37,8 @@ class UserModel {
     required this.zipCode,
     this.secretaria,
     this.permissions = const [],
+    this.photoUrl = '',
+    this.mustChangePassword = false,
   });
 
   Map<String, dynamic> toJson() {
@@ -56,6 +60,8 @@ class UserModel {
       'zipCode': zipCode,
       'secretaria': secretaria,
       'permissions': permissions,
+      'foto_usuario_url': photoUrl,
+      'must_change_password': mustChangePassword,
     };
   }
 
@@ -81,6 +87,8 @@ class UserModel {
       zipCode: json['zipCode'] as String? ?? '',
       secretaria: json['secretaria'] as String?,
       permissions: _permissionsFromJson(json['permissions']),
+      photoUrl: json['foto_usuario_url'] as String? ?? '',
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
     );
   }
 
@@ -104,6 +112,8 @@ class UserModel {
       cpfCnpj: '',
       secretaria: json['secretaria'] as String?,
       permissions: _permissionsFromJson(json['permissions']),
+      photoUrl: json['foto_usuario_url'] as String? ?? '',
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
     );
   }
 
@@ -127,6 +137,8 @@ class UserModel {
       cpfCnpj: json['cpf_cnpj'] as String? ?? '',
       secretaria: json['secretaria'] as String?,
       permissions: _permissionsFromJson(json['permissions']),
+      photoUrl: json['foto_usuario_url'] as String? ?? '',
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
     );
   }
 

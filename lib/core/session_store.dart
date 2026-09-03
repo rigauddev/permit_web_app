@@ -49,18 +49,28 @@ class SessionStore {
     final expiresAtText = await _readValue(sessionExpiresAtKey);
     final expiresAt =
         expiresAtText == null ? null : DateTime.tryParse(expiresAtText);
-    if (accessToken == null || userJson == null || expiresAt == null) {
+    if (accessToken == null || userJson == null) {
       return null;
+    }
+    final effectiveExpiresAt =
+        expiresAt ?? DateTime.now().toUtc().add(const Duration(days: 5));
+    final effectiveExpiresAtText = effectiveExpiresAt.toUtc().toIso8601String();
+    if (expiresAt == null) {
+      await save(
+        accessToken: accessToken,
+        userJson: userJson,
+        expiresAt: effectiveExpiresAtText,
+      );
     }
     await _syncSecureStorage(
       accessToken: accessToken,
       userJson: userJson,
-      expiresAt: expiresAtText!,
+      expiresAt: effectiveExpiresAtText,
     );
     return SavedSession(
       accessToken: accessToken,
       userJson: userJson,
-      expiresAt: expiresAt,
+      expiresAt: effectiveExpiresAt,
     );
   }
 
