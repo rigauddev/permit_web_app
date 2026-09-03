@@ -881,6 +881,26 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> reclassifyRequestEventType({
+    required String accessToken,
+    required int requestId,
+    required String eventTypeKey,
+    required String eventTypeName,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/event-type'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'event_type_key': eventTypeKey,
+        'event_type_name': eventTypeName,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   static const Map<String, List<Map<String, String>>> requirementRules = {
     'tem_som': [
       {

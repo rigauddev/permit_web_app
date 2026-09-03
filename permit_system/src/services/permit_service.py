@@ -42,6 +42,7 @@ from src.schemas.permit_schema import (
     InspectionScheduleRequest,
     PermitCancelRequest,
     PermitCreateRequest,
+    PermitReclassifyRequest,
     PermitResponse,
     QuestionCreateRequest,
     QuestionResponse,
@@ -922,6 +923,7 @@ class PermitService:
             secretaria_dam=payload.secretaria_dam,
             tipos_resposta=payload.tipos_resposta,
             campos_obrigatorios=payload.campos_obrigatorios,
+            opcoes_resposta=self._normalized_selectable_options(payload),
             modelo_documento_nome=payload.modelo_documento_nome,
             modelo_documento_url=payload.modelo_documento_url,
             requer_vistoria=payload.requer_vistoria,
@@ -947,6 +949,11 @@ class PermitService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
         if not self._can_view_request(request, current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        if request.status != "autorizada":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Só é possível incluir perguntas em solicitações autorizadas.",
+            )
         secretaria_id = current_user.secretaria_id
         if current_user.role.slug == "admin" and not secretaria_id:
             secretaria = self.db.query(SecretariaModel).filter_by(slug="desenvolvimento_economico").first()
@@ -974,6 +981,32 @@ class PermitService:
         self.db.refresh(requirement)
         return self._requirement_to_response(requirement)
 
+    def reclassify_request_event_type(
+        self,
+        request_id: int,
+        payload: PermitReclassifyRequest,
+        current_user: UserModel,
+    ) -> PermitResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if not self._can_view_request(request, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        event_type = (
+            self.db.query(EventTypeModel)
+            .filter(EventTypeModel.key == payload.event_type_key, EventTypeModel.is_active.is_(True))
+            .first()
+        )
+        event_data = dict(request.dados_evento or {})
+        event_data["tipo_evento"] = payload.event_type_key
+        event_data["tipo_evento_nome"] = (
+            event_type.name if event_type else payload.event_type_name or payload.event_type_key
+        )
+        request.dados_evento = event_data
+        self.db.commit()
+        self.db.refresh(request)
+        return self.to_response(request)
+
     def update_question_definition(self, question_id: int, payload: QuestionCreateRequest, current_user: UserModel) -> QuestionResponse:
         question = self.db.query(QuestionDefinitionModel).filter(QuestionDefinitionModel.id == question_id).first()
         if not question:
@@ -999,6 +1032,7 @@ class PermitService:
         question.secretaria_dam = payload.secretaria_dam
         question.tipos_resposta = payload.tipos_resposta
         question.campos_obrigatorios = payload.campos_obrigatorios
+        question.opcoes_resposta = self._normalized_selectable_options(payload)
         question.modelo_documento_nome = payload.modelo_documento_nome
         question.modelo_documento_url = payload.modelo_documento_url
         question.requer_vistoria = payload.requer_vistoria
@@ -1032,6 +1066,7 @@ class PermitService:
             secretaria_dam=question.secretaria_dam,
             tipos_resposta=question.tipos_resposta,
             campos_obrigatorios=question.campos_obrigatorios,
+            opcoes_resposta=question.opcoes_resposta or [],
             modelo_documento_nome=question.modelo_documento_nome,
             modelo_documento_url=question.modelo_documento_url,
             requer_vistoria=question.requer_vistoria,
@@ -1077,6 +1112,22 @@ class PermitService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Informe o modelo do documento para download quando houver assinatura ou botão de baixar.",
             )
+        options = [item.strip() for item in payload.opcoes_resposta]
+        if any(not item for item in options):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Opções selecionáveis não podem ficar vazias.",
+            )
+        if "Opções selecionáveis" in payload.tipos_resposta and not options:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Inclua ao menos uma opção selecionável.",
+            )
+        if len(options) != len(set(options)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Opções selecionáveis não podem ser repetidas.",
+            )
         unknown_required_fields = set(payload.campos_obrigatorios) - set(payload.tipos_resposta)
         if unknown_required_fields:
             raise HTTPException(
@@ -1094,6 +1145,12 @@ class PermitService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Itens de checklist não podem ficar vazios.",
             )
+
+    @staticmethod
+    def _normalized_selectable_options(payload: QuestionCreateRequest) -> list[str]:
+        if "Opções selecionáveis" not in payload.tipos_resposta:
+            return []
+        return [item.strip() for item in payload.opcoes_resposta]
 
     def _ensure_can_manage_question_definition(self, secretaria_name: str, current_user: UserModel) -> None:
         if current_user.role.slug == "admin":

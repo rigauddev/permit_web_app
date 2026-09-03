@@ -25,6 +25,7 @@ from src.schemas.permit_schema import (
     InspectionScheduleRequest,
     PermitCancelRequest,
     PermitCreateRequest,
+    PermitReclassifyRequest,
     PermitResponse,
     QuestionCreateRequest,
     RequirementAttachmentRequest,
@@ -247,6 +248,16 @@ def create_additional_requirement(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
 ):
     return PermitService(db).create_additional_requirement(request_id, payload, current_user)
+
+
+@router.patch("/{request_id}/event-type", response_model=PermitResponse)
+def reclassify_permit_request(
+    request_id: int,
+    payload: PermitReclassifyRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).reclassify_request_event_type(request_id, payload, current_user)
 
 
 @router.post("/{request_id}/final-permit-attachment", response_model=EventCredentialResponse)

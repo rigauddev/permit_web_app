@@ -388,11 +388,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     for (final entry in requiredFields.entries) {
       if (entry.value != true) continue;
       final fieldValue = answer[_fieldKey(entry.key)];
-      if (fieldValue == null || fieldValue.toString().trim().isEmpty) {
+      if (_isEmptyRequiredValue(fieldValue)) {
         return 'Preencha o campo obrigatório: ${entry.key}.';
       }
     }
     return null;
+  }
+
+  bool _isEmptyRequiredValue(Object? value) {
+    if (value == null) return true;
+    if (value is Iterable) return value.isEmpty;
+    if (value is Map) return value.isEmpty;
+    return value.toString().trim().isEmpty;
   }
 
   String _fieldKey(String label) {
@@ -405,6 +412,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         return 'arquivo';
       case 'Rota do Evento':
         return 'percurso_ruas';
+      case 'Opções selecionáveis':
+        return 'opcoes_selecionadas';
       case 'Assinatura impressa':
       case 'Assinatura gov.br':
         return 'assinatura';

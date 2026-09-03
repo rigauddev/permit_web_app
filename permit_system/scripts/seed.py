@@ -332,6 +332,7 @@ def ensure_question_definition_columns():
         "display_order": "ALTER TABLE question_definitions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
         "vistoria_exige_foto": "ALTER TABLE question_definitions ADD COLUMN vistoria_exige_foto BOOLEAN NOT NULL DEFAULT 0",
         "event_type_keys": "ALTER TABLE question_definitions ADD COLUMN event_type_keys JSON NULL",
+        "opcoes_resposta": "ALTER TABLE question_definitions ADD COLUMN opcoes_resposta JSON NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():

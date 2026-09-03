@@ -25,6 +25,7 @@ class QuestionCreateRequest(BaseModel):
     secretaria_dam: str | None = None
     tipos_resposta: list[str] = Field(..., min_length=1)
     campos_obrigatorios: dict[str, bool] = Field(default_factory=dict)
+    opcoes_resposta: list[str] = Field(default_factory=list)
     modelo_documento_nome: str | None = Field(default=None, max_length=255)
     modelo_documento_url: str | None = Field(default=None, max_length=500)
     requer_vistoria: bool = False
@@ -45,6 +46,7 @@ class QuestionResponse(BaseModel):
     secretaria_dam: str | None = None
     tipos_resposta: list[str]
     campos_obrigatorios: dict[str, bool]
+    opcoes_resposta: list[str] = Field(default_factory=list)
     modelo_documento_nome: str | None = None
     modelo_documento_url: str | None = None
     requer_vistoria: bool = False
@@ -159,6 +161,11 @@ class AdditionalRequirementRequest(BaseModel):
     checklist_vistoria: list[str] = Field(default_factory=list)
     inspection_requires_photo: bool = False
     prazo_resposta_dias_uteis: int = Field(default=2, ge=1, le=30)
+
+
+class PermitReclassifyRequest(BaseModel):
+    event_type_key: str = Field(..., min_length=3, max_length=80)
+    event_type_name: str | None = Field(default=None, max_length=150)
 
 
 class InspectionScheduleRequest(BaseModel):

@@ -41,6 +41,7 @@ class QuestionDefinitionModel(Base):
     secretaria_dam = Column(String(150), nullable=True)
     tipos_resposta = Column(JSON, nullable=False)
     campos_obrigatorios = Column(JSON, nullable=False)
+    opcoes_resposta = Column(JSON, nullable=True)
     modelo_documento_nome = Column(String(255), nullable=True)
     modelo_documento_url = Column(String(500), nullable=True)
     requer_vistoria = Column(Boolean, default=False, nullable=False)

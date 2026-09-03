@@ -27,6 +27,7 @@ class _SecretariaRequestsPageState
 
   bool _loading = true;
   List<Map<String, dynamic>> _requests = [];
+  List<Map<String, dynamic>> _eventTypes = [];
   String? _error;
   late Set<String> _statusFilter;
   DateTimeRange? _dateFilter;
@@ -61,9 +62,15 @@ class _SecretariaRequestsPageState
         if (mounted) await SessionExpiration.logout(context);
         return;
       }
-      final requests = await _api.listRequests(token);
+      final results = await Future.wait([
+        _api.listRequests(token),
+        _api.listEventTypes(accessToken: token),
+      ]);
       if (!mounted) return;
-      setState(() => _requests = requests);
+      setState(() {
+        _requests = results[0];
+        _eventTypes = results[1];
+      });
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
         await SessionExpiration.logout(context);
@@ -188,6 +195,16 @@ class _SecretariaRequestsPageState
   Future<void> _createAdditionalRequirement(
     Map<String, dynamic> request,
   ) async {
+    if ((request['status']?.toString() ?? '') != 'autorizada') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Só é possível incluir perguntas em solicitações autorizadas.',
+          ),
+        ),
+      );
+      return;
+    }
     final input = await _askAdditionalRequirement();
     if (input == null) return;
     try {
@@ -223,6 +240,118 @@ class _SecretariaRequestsPageState
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
     }
+  }
+
+  Future<void> _reclassifyRequest(Map<String, dynamic> request) async {
+    final requestId = request['formId'] as int? ?? request['id'] as int?;
+    if (requestId == null) return;
+    if (_eventTypes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhuma categoria de evento carregada.')),
+      );
+      return;
+    }
+    final selected = await _askEventType(request);
+    if (selected == null) return;
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) await SessionExpiration.logout(context);
+        return;
+      }
+      await _api.reclassifyRequestEventType(
+        accessToken: token,
+        requestId: requestId,
+        eventTypeKey: selected.key,
+        eventTypeName: selected.name,
+      );
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tipo de evento reclassificado.')),
+      );
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<_EventTypeChoice?> _askEventType(Map<String, dynamic> request) {
+    final currentKey = _requestEventTypeKey(request);
+    var selectedKey =
+        _eventTypes.any((item) => item['key']?.toString() == currentKey)
+            ? currentKey
+            : _eventTypes.first['key']?.toString();
+    return showDialog<_EventTypeChoice>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Reclassificar tipo de evento'),
+                  content: SizedBox(
+                    width: 460,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedKey,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de evento',
+                        border: OutlineInputBorder(),
+                      ),
+                      items:
+                          _eventTypes
+                              .map(
+                                (eventType) => DropdownMenuItem(
+                                  value: eventType['key']?.toString() ?? '',
+                                  child: Text(
+                                    eventType['name']?.toString() ??
+                                        eventType['key']?.toString() ??
+                                        '',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                      onChanged:
+                          (value) => setDialogState(() => selectedKey = value),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      onPressed:
+                          selectedKey == null
+                              ? null
+                              : () {
+                                final eventType = _eventTypes.firstWhere(
+                                  (item) =>
+                                      item['key']?.toString() == selectedKey,
+                                );
+                                Navigator.pop(
+                                  context,
+                                  _EventTypeChoice(
+                                    key: eventType['key']?.toString() ?? '',
+                                    name:
+                                        eventType['name']?.toString() ??
+                                        eventType['key']?.toString() ??
+                                        '',
+                                  ),
+                                );
+                              },
+                      child: const Text('Salvar'),
+                    ),
+                  ],
+                ),
+          ),
+    );
   }
 
   Future<_AdditionalRequirementInput?> _askAdditionalRequirement() async {
@@ -776,6 +905,7 @@ class _SecretariaRequestsPageState
                           onOpenAttachment: _openAttachment,
                           onCreateAdditionalRequirement:
                               _createAdditionalRequirement,
+                          onReclassify: _reclassifyRequest,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1155,6 +1285,7 @@ class _ServiceGroup extends StatelessWidget {
     required this.onOpenDetails,
     required this.onOpenAttachment,
     required this.onCreateAdditionalRequirement,
+    required this.onReclassify,
   });
 
   final String title;
@@ -1170,6 +1301,7 @@ class _ServiceGroup extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
   final ValueChanged<Map<String, dynamic>> onCreateAdditionalRequirement;
+  final ValueChanged<Map<String, dynamic>> onReclassify;
 
   @override
   Widget build(BuildContext context) {
@@ -1198,6 +1330,7 @@ class _ServiceGroup extends StatelessWidget {
                   onOpenDetails: onOpenDetails,
                   onOpenAttachment: onOpenAttachment,
                   onCreateAdditionalRequirement: onCreateAdditionalRequirement,
+                  onReclassify: onReclassify,
                 ),
               );
             }).toList(),
@@ -1235,6 +1368,7 @@ class _RequestCard extends StatelessWidget {
     required this.onOpenDetails,
     required this.onOpenAttachment,
     required this.onCreateAdditionalRequirement,
+    required this.onReclassify,
   });
 
   final Map<String, dynamic> request;
@@ -1250,9 +1384,14 @@ class _RequestCard extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onOpenDetails;
   final ValueChanged<Map<String, dynamic>> onOpenAttachment;
   final ValueChanged<Map<String, dynamic>> onCreateAdditionalRequirement;
+  final ValueChanged<Map<String, dynamic>> onReclassify;
 
   @override
   Widget build(BuildContext context) {
+    final requestStatus = request['status']?.toString() ?? '';
+    final isViewMode = _isAuthorizedViewStatus(requestStatus);
+    final canCreateQuestion = requestStatus == 'autorizada';
+    final eventTypeName = _requestEventTypeName(request);
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: Theme.of(context).dividerColor),
@@ -1273,18 +1412,34 @@ class _RequestCard extends StatelessWidget {
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              _StatusChip(status: request['status']?.toString() ?? ''),
+              _StatusChip(status: requestStatus),
+              if (isViewMode)
+                const Chip(
+                  avatar: Icon(Icons.visibility_outlined, size: 16),
+                  label: Text('Modo visualização'),
+                ),
               Text('Protocolo: ${request['protocolo'] ?? '-'}'),
+              if (eventTypeName.isNotEmpty)
+                Chip(
+                  avatar: const Icon(Icons.category_outlined, size: 16),
+                  label: Text(eventTypeName),
+                ),
               OutlinedButton.icon(
                 onPressed: () => onOpenDetails(request),
                 icon: const Icon(Icons.visibility_outlined),
                 label: const Text('Ver detalhes'),
               ),
               OutlinedButton.icon(
-                onPressed: () => onCreateAdditionalRequirement(request),
-                icon: const Icon(Icons.add_comment_outlined),
-                label: const Text('Incluir pergunta'),
+                onPressed: () => onReclassify(request),
+                icon: const Icon(Icons.swap_horiz_outlined),
+                label: const Text('Reclassificar'),
               ),
+              if (canCreateQuestion)
+                OutlinedButton.icon(
+                  onPressed: () => onCreateAdditionalRequirement(request),
+                  icon: const Icon(Icons.add_comment_outlined),
+                  label: const Text('Incluir pergunta'),
+                ),
             ],
           ),
           const SizedBox(height: 6),
@@ -1300,6 +1455,7 @@ class _RequestCard extends StatelessWidget {
           const Divider(height: 24),
           _WorkflowActions(
             request: request,
+            readOnly: isViewMode,
             onAttachDam: onAttachDam,
             onAttachFinalPermit: onAttachFinalPermit,
           ),
@@ -1307,7 +1463,8 @@ class _RequestCard extends StatelessWidget {
           ...requirements.map(
             (requirement) => _RequirementRow(
               requirement: requirement,
-              requestStatus: request['status']?.toString() ?? '',
+              requestStatus: requestStatus,
+              readOnly: isViewMode,
               currentUser: currentUser,
               onApprove: onApprove,
               onPending: onPending,
@@ -1541,16 +1698,19 @@ class _DialogRow extends StatelessWidget {
 class _WorkflowActions extends StatelessWidget {
   const _WorkflowActions({
     required this.request,
+    required this.readOnly,
     required this.onAttachDam,
     required this.onAttachFinalPermit,
   });
 
   final Map<String, dynamic> request;
+  final bool readOnly;
   final ValueChanged<Map<String, dynamic>> onAttachDam;
   final ValueChanged<Map<String, dynamic>> onAttachFinalPermit;
 
   @override
   Widget build(BuildContext context) {
+    if (readOnly) return const SizedBox.shrink();
     final status = request['status']?.toString() ?? '';
     final actions = <Widget>[];
     if (status == 'aguardando_geracao_dam') {
@@ -1583,6 +1743,7 @@ class _RequirementRow extends StatelessWidget {
   const _RequirementRow({
     required this.requirement,
     required this.requestStatus,
+    required this.readOnly,
     required this.currentUser,
     required this.onApprove,
     required this.onPending,
@@ -1594,6 +1755,7 @@ class _RequirementRow extends StatelessWidget {
 
   final Map<String, dynamic> requirement;
   final String requestStatus;
+  final bool readOnly;
   final UserModel? currentUser;
   final void Function(int requirementId) onApprove;
   final void Function(int requirementId) onPending;
@@ -1622,7 +1784,11 @@ class _RequirementRow extends StatelessWidget {
     final canManageLocked =
         currentUser?.userType == 'admin' ||
         currentUser?.userType == 'gestor_secretaria';
-    final canAct = id != null && !isCancelled && (!isLocked || canManageLocked);
+    final canAct =
+        id != null &&
+        !readOnly &&
+        !isCancelled &&
+        (!isLocked || canManageLocked);
     final canScheduleInspection =
         canAct &&
         requiresInspection &&
@@ -1907,6 +2073,13 @@ class _AttachmentInput {
   final String? mimeType;
 }
 
+class _EventTypeChoice {
+  const _EventTypeChoice({required this.key, required this.name});
+
+  final String key;
+  final String name;
+}
+
 class _AdditionalRequirementInput {
   const _AdditionalRequirementInput({
     required this.pergunta,
@@ -1923,6 +2096,33 @@ class _AdditionalRequirementInput {
   final bool requiresInspection;
   final List<String> checklistVistoria;
   final bool inspectionRequiresPhoto;
+}
+
+bool _isAuthorizedViewStatus(String status) {
+  return status == 'autorizada';
+}
+
+Map<String, dynamic> _requestEventData(Map<String, dynamic> request) {
+  final raw = request['dados_evento'] ?? request['eventData'];
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) {
+    return raw.map((key, value) => MapEntry(key.toString(), value));
+  }
+  return request;
+}
+
+String _requestEventTypeKey(Map<String, dynamic> request) {
+  final eventData = _requestEventData(request);
+  return eventData['tipo_evento']?.toString() ??
+      eventData['event_type_key']?.toString() ??
+      '';
+}
+
+String _requestEventTypeName(Map<String, dynamic> request) {
+  final eventData = _requestEventData(request);
+  return eventData['tipo_evento_nome']?.toString() ??
+      eventData['event_type_name']?.toString() ??
+      _requestEventTypeKey(request);
 }
 
 String _formatSecretaria(String? slug) {

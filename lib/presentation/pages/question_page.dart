@@ -49,9 +49,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
       TextEditingController();
   final TextEditingController _customResponseFieldController =
       TextEditingController();
+  final TextEditingController _selectableOptionController =
+      TextEditingController();
   final Map<String, bool> _selectedResponseFields = {};
   final Map<String, bool> _requiredResponseFields = {};
   final List<String> _customResponseFields = [];
+  final List<String> _selectableOptions = [];
   final Set<String> _selectedEventTypeKeys = {};
   int _formVersion = 0;
   int? _rangeEditId;
@@ -82,6 +85,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     'Anexar Documento',
     'Calendário',
     'Rota do Evento',
+    'Opções selecionáveis',
     'Botão de Baixar',
     'Assinatura impressa',
     'Assinatura gov.br',
@@ -107,6 +111,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _eventTypeDescriptionController.dispose();
     _eventTypeExamplesController.dispose();
     _customResponseFieldController.dispose();
+    _selectableOptionController.dispose();
     super.dispose();
   }
 
@@ -516,19 +521,28 @@ class _PerguntasPageState extends State<PerguntasPage> {
                     if (selected)
                       Padding(
                         padding: const EdgeInsets.only(left: 48.0, bottom: 8.0),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Checkbox(
-                              value: required,
-                              onChanged: (value) {
-                                setState(() {
-                                  _requiredResponseFields[field] =
-                                      value ?? false;
-                                });
-                              },
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: required,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _requiredResponseFields[field] =
+                                          value ?? false;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('Obrigatório'),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            const Text('Obrigatório'),
+                            if (field == 'Opções selecionáveis') ...[
+                              const SizedBox(height: 8),
+                              _buildSelectableOptionsEditor(),
+                            ],
                           ],
                         ),
                       ),
@@ -587,6 +601,62 @@ class _PerguntasPageState extends State<PerguntasPage> {
                           }),
                     );
                   }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectableOptionsEditor() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return SizedBox(
+      width: isMobile ? double.infinity : 560,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _selectableOptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Opção selecionável',
+                    hintText: 'Exemplo: Som ao vivo',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _addSelectableOption(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: 'Adicionar opção',
+                onPressed: _addSelectableOption,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_selectableOptions.isEmpty)
+            const Text(
+              'Inclua as opções que o cidadão poderá marcar.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  _selectableOptions
+                      .map(
+                        (option) => InputChip(
+                          label: Text(option),
+                          onDeleted:
+                              () => setState(
+                                () => _selectableOptions.remove(option),
+                              ),
+                        ),
+                      )
+                      .toList(),
             ),
         ],
       ),
@@ -1020,6 +1090,11 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _showError('Informe uma ordem entre 0 e 1000.');
       return;
     }
+    if (_selectedResponseFields['Opções selecionáveis'] == true &&
+        _selectableOptions.isEmpty) {
+      _showError('Inclua ao menos uma opção selecionável.');
+      return;
+    }
 
     final tiposResposta = [
       'Sim/Não',
@@ -1054,6 +1129,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
       'secretaria_dam': _secretariaDam ?? '',
       'tipos_resposta': tiposResposta,
       'campos_obrigatorios': obrigatorios,
+      'opcoes_resposta':
+          _selectedResponseFields['Opções selecionáveis'] == true
+              ? _selectableOptions
+              : <String>[],
       'modelo_documento_nome': _modeloDocumentoNome?.trim(),
       'modelo_documento_url': _modeloDocumentoUrl?.trim(),
       'requer_vistoria': _requerVistoria,
@@ -1101,6 +1180,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
         ..clear()
         ..addAll(List<String>.from(pergunta['checklist_vistoria'] ?? []));
       _checklistController.clear();
+      _selectableOptionController.clear();
+      _selectableOptions
+        ..clear()
+        ..addAll(List<String>.from(pergunta['opcoes_resposta'] ?? []));
       _selectedEventTypeKeys
         ..clear()
         ..addAll(List<String>.from(pergunta['event_type_keys'] ?? []));
@@ -1145,7 +1228,9 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _checklistVistoria.clear();
     _checklistController.clear();
     _customResponseFieldController.clear();
+    _selectableOptionController.clear();
     _customResponseFields.clear();
+    _selectableOptions.clear();
     _selectedEventTypeKeys.clear();
     _selectedResponseFields.clear();
     _requiredResponseFields.clear();
@@ -1160,9 +1245,17 @@ class _PerguntasPageState extends State<PerguntasPage> {
             .map((entry) => entry.key)
             .toList() ??
         <String>[];
-    final summary = tipos.join(', ');
-    if (obrigatorios.isEmpty) return summary;
-    return '$summary • Obrigatórios: ${obrigatorios.join(', ')}';
+    final options = List<String>.from(p['opcoes_resposta'] ?? const []);
+    final details = <String>[tipos.join(', ')];
+    if (options.isNotEmpty) {
+      details.add(
+        'Opções: ${options.take(3).join(', ')}${options.length > 3 ? '...' : ''}',
+      );
+    }
+    if (obrigatorios.isNotEmpty) {
+      details.add('Obrigatórios: ${obrigatorios.join(', ')}');
+    }
+    return details.join(' • ');
   }
 
   String _formatEventTypeSummary(Map<String, dynamic> p) {
@@ -1199,6 +1292,19 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _customResponseFields.add(value);
       _selectedResponseFields[value] = true;
       _customResponseFieldController.clear();
+    });
+  }
+
+  void _addSelectableOption() {
+    final value = _selectableOptionController.text.trim();
+    if (value.isEmpty) return;
+    if (_selectableOptions.contains(value)) {
+      _showError('Esta opção já foi adicionada.');
+      return;
+    }
+    setState(() {
+      _selectableOptions.add(value);
+      _selectableOptionController.clear();
     });
   }
 

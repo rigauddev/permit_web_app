@@ -538,6 +538,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
         questionText: question['pergunta'] as String,
         descricao: question['descricao'] as String?,
         tiposResposta: List<String>.from(question['tipos_resposta'] ?? []),
+        opcoesResposta: List<String>.from(question['opcoes_resposta'] ?? []),
         camposObrigatorios:
             (question['campos_obrigatorios'] as Map<String, dynamic>?) ??
             const {},
