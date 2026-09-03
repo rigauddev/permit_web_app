@@ -29,6 +29,19 @@ class _SecretariaRequestsPageState
   List<Map<String, dynamic>> _requests = [];
   String? _error;
   late Set<String> _statusFilter;
+  DateTimeRange? _dateFilter;
+  int _currentPage = 0;
+  int _rowsPerPage = 10;
+
+  static const _openStatuses = {
+    'enviada',
+    'em_analise',
+    'pendente_correcao',
+    'aguardando_geracao_dam',
+    'aguardando_pagamento_dam',
+    'aguardando_geracao_alvara',
+    'isenta_dam',
+  };
 
   @override
   void initState() {
@@ -225,7 +238,9 @@ class _SecretariaRequestsPageState
 
   Set<String> _initialStatusFilter() {
     final value = Uri.base.queryParameters['status'];
-    if (value == null || value.trim().isEmpty) return <String>{};
+    if (value == null || value.trim().isEmpty) {
+      return Set<String>.from(_openStatuses);
+    }
     return value
         .split(',')
         .map((item) => item.trim())
@@ -363,22 +378,22 @@ class _SecretariaRequestsPageState
                   icon: const Icon(Icons.upload_file),
                   label: const Text('Selecionar arquivo'),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(
-                    labelText: 'URL ou referência do arquivo',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: mimeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Tipo MIME',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                // const SizedBox(height: 12),
+                // TextField(
+                //   controller: urlController,
+                //   decoration: const InputDecoration(
+                //     labelText: 'URL ou referência do arquivo',
+                //     border: OutlineInputBorder(),
+                //   ),
+                // ),
+                // const SizedBox(height: 12),
+                // TextField(
+                //   controller: mimeController,
+                //   decoration: const InputDecoration(
+                //     labelText: 'Tipo MIME',
+                //     border: OutlineInputBorder(),
+                //   ),
+                // ),
               ],
             ),
             actions: [
@@ -423,8 +438,17 @@ class _SecretariaRequestsPageState
       _requests,
       user,
       _statusFilter,
+      _dateFilter,
     );
-    final byType = _groupByType(visibleRequests);
+    final totalPages = _totalPages(visibleRequests.length);
+    final safePage = _currentPage >= totalPages ? totalPages - 1 : _currentPage;
+    if (safePage != _currentPage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _currentPage = safePage);
+      });
+    }
+    final pagedRequests = _pageItems(visibleRequests, safePage);
+    final byType = _groupByType(pagedRequests);
 
     return AppScaffold(
       userType: widget.userType,
@@ -452,7 +476,22 @@ class _SecretariaRequestsPageState
                     const SizedBox(height: 16),
                     _StatusFilters(
                       selected: _statusFilter,
-                      onChanged: (next) => setState(() => _statusFilter = next),
+                      openStatuses: _openStatuses,
+                      onChanged:
+                          (next) => setState(() {
+                            _statusFilter = next;
+                            _currentPage = 0;
+                          }),
+                    ),
+                    const SizedBox(height: 12),
+                    _DateFilters(
+                      period: _dateFilter,
+                      onPickPeriod: _pickDateFilter,
+                      onClear:
+                          () => setState(() {
+                            _dateFilter = null;
+                            _currentPage = 0;
+                          }),
                     ),
                     const SizedBox(height: 16),
                     if (_loading)
@@ -475,7 +514,27 @@ class _SecretariaRequestsPageState
                             'Nenhuma solicitação aguardando esta secretaria.',
                         action: _loadRequests,
                       )
-                    else
+                    else ...[
+                      _PaginationControls(
+                        totalItems: visibleRequests.length,
+                        currentPage: safePage,
+                        totalPages: totalPages,
+                        rowsPerPage: _rowsPerPage,
+                        onRowsPerPageChanged:
+                            (value) => setState(() {
+                              _rowsPerPage = value;
+                              _currentPage = 0;
+                            }),
+                        onPrevious:
+                            safePage <= 0
+                                ? null
+                                : () => setState(() => _currentPage--),
+                        onNext:
+                            safePage >= totalPages - 1
+                                ? null
+                                : () => setState(() => _currentPage++),
+                      ),
+                      const SizedBox(height: 12),
                       ...byType.entries.map(
                         (entry) => _ServiceGroup(
                           title: entry.key,
@@ -517,6 +576,28 @@ class _SecretariaRequestsPageState
                           onOpenAttachment: _openAttachment,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      _PaginationControls(
+                        totalItems: visibleRequests.length,
+                        currentPage: safePage,
+                        totalPages: totalPages,
+                        rowsPerPage: _rowsPerPage,
+                        compact: true,
+                        onRowsPerPageChanged:
+                            (value) => setState(() {
+                              _rowsPerPage = value;
+                              _currentPage = 0;
+                            }),
+                        onPrevious:
+                            safePage <= 0
+                                ? null
+                                : () => setState(() => _currentPage--),
+                        onNext:
+                            safePage >= totalPages - 1
+                                ? null
+                                : () => setState(() => _currentPage++),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -531,17 +612,43 @@ class _SecretariaRequestsPageState
     List<Map<String, dynamic>> requests,
     UserModel? user,
     Set<String> statusFilter,
+    DateTimeRange? dateFilter,
   ) {
     bool matchesStatus(Map<String, dynamic> request) =>
         statusFilter.isEmpty ||
         statusFilter.contains(request['status']?.toString() ?? '');
+    bool matchesDate(Map<String, dynamic> request) {
+      if (dateFilter == null) return true;
+      final date = DateTime.tryParse(
+        request['data_do_evento']?.toString() ?? '',
+      );
+      if (date == null) return false;
+      final start = DateTime(
+        dateFilter.start.year,
+        dateFilter.start.month,
+        dateFilter.start.day,
+      );
+      final end = DateTime(
+        dateFilter.end.year,
+        dateFilter.end.month,
+        dateFilter.end.day,
+        23,
+        59,
+        59,
+      );
+      return !date.isBefore(start) && !date.isAfter(end);
+    }
+
     if (user?.userType == 'admin') {
-      return requests.where(matchesStatus).toList();
+      return requests
+          .where((request) => matchesStatus(request) && matchesDate(request))
+          .toList();
     }
     final secretaria = user?.secretaria;
     if (secretaria == null || secretaria.isEmpty) return const [];
     return requests.where((request) {
       if (!matchesStatus(request)) return false;
+      if (!matchesDate(request)) return false;
       if (secretaria == 'desenvolvimento_economico') return true;
       final requirements = request['perguntas'] as List<dynamic>? ?? [];
       return requirements.any(
@@ -550,6 +657,48 @@ class _SecretariaRequestsPageState
             item['secretaria_slug'] == secretaria,
       );
     }).toList();
+  }
+
+  Future<void> _pickDateFilter() async {
+    final now = DateTime.now();
+    final selected = await showDateRangePicker(
+      context: context,
+      initialDateRange: _dateFilter,
+      firstDate: DateTime(now.year - 6),
+      lastDate: DateTime(now.year + 2),
+      helpText: 'Filtrar por data do evento',
+      saveText: 'Aplicar',
+      builder:
+          (context, child) => Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
+          ),
+    );
+    if (selected == null) return;
+    setState(() {
+      _dateFilter = selected;
+      _currentPage = 0;
+    });
+  }
+
+  int _totalPages(int totalItems) {
+    if (totalItems == 0) return 1;
+    return (totalItems / _rowsPerPage).ceil();
+  }
+
+  List<Map<String, dynamic>> _pageItems(
+    List<Map<String, dynamic>> items,
+    int page,
+  ) {
+    final start = page * _rowsPerPage;
+    if (start >= items.length) return const [];
+    final end = (start + _rowsPerPage).clamp(0, items.length);
+    return items.sublist(start, end);
   }
 
   static Map<String, List<Map<String, dynamic>>> _groupByType(
@@ -619,9 +768,14 @@ class _Header extends StatelessWidget {
 }
 
 class _StatusFilters extends StatelessWidget {
-  const _StatusFilters({required this.selected, required this.onChanged});
+  const _StatusFilters({
+    required this.selected,
+    required this.openStatuses,
+    required this.onChanged,
+  });
 
   final Set<String> selected;
+  final Set<String> openStatuses;
   final ValueChanged<Set<String>> onChanged;
 
   static const _filters = [
@@ -646,6 +800,13 @@ class _StatusFilters extends StatelessWidget {
           selected: selected.isEmpty,
           onSelected: (_) => onChanged(<String>{}),
         ),
+        FilterChip(
+          label: const Text('Em aberto'),
+          selected:
+              selected.length == openStatuses.length &&
+              selected.containsAll(openStatuses),
+          onSelected: (_) => onChanged(Set<String>.from(openStatuses)),
+        ),
         ..._filters.map((status) {
           final isSelected = selected.contains(status);
           return FilterChip(
@@ -662,6 +823,116 @@ class _StatusFilters extends StatelessWidget {
             },
           );
         }),
+      ],
+    );
+  }
+}
+
+class _DateFilters extends StatelessWidget {
+  const _DateFilters({
+    required this.period,
+    required this.onPickPeriod,
+    required this.onClear,
+  });
+
+  final DateTimeRange? period;
+  final VoidCallback onPickPeriod;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        const Text('Data do evento:'),
+        OutlinedButton.icon(
+          onPressed: onPickPeriod,
+          icon: const Icon(Icons.date_range_outlined),
+          label: Text(
+            period == null ? 'Todos os períodos' : _formatPeriod(period),
+          ),
+        ),
+        if (period != null)
+          IconButton(
+            tooltip: 'Limpar período',
+            onPressed: onClear,
+            icon: const Icon(Icons.close),
+          ),
+      ],
+    );
+  }
+}
+
+class _PaginationControls extends StatelessWidget {
+  const _PaginationControls({
+    required this.totalItems,
+    required this.currentPage,
+    required this.totalPages,
+    required this.rowsPerPage,
+    required this.onRowsPerPageChanged,
+    required this.onPrevious,
+    required this.onNext,
+    this.compact = false,
+  });
+
+  final int totalItems;
+  final int currentPage;
+  final int totalPages;
+  final int rowsPerPage;
+  final ValueChanged<int> onRowsPerPageChanged;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = totalItems == 0 ? 0 : currentPage * rowsPerPage + 1;
+    final end =
+        totalItems == 0
+            ? 0
+            : ((currentPage + 1) * rowsPerPage).clamp(0, totalItems);
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('$start-$end de $totalItems'),
+        if (!compact)
+          SizedBox(
+            width: 150,
+            child: DropdownButtonFormField<int>(
+              initialValue: rowsPerPage,
+              decoration: const InputDecoration(
+                labelText: 'Por página',
+                border: OutlineInputBorder(),
+              ),
+              items:
+                  const [10, 25, 50]
+                      .map(
+                        (value) => DropdownMenuItem<int>(
+                          value: value,
+                          child: Text(value.toString()),
+                        ),
+                      )
+                      .toList(),
+              onChanged: (value) {
+                if (value != null) onRowsPerPageChanged(value);
+              },
+            ),
+          ),
+        IconButton.outlined(
+          tooltip: 'Página anterior',
+          onPressed: onPrevious,
+          icon: const Icon(Icons.chevron_left),
+        ),
+        Text('Página ${currentPage + 1} de $totalPages'),
+        IconButton.outlined(
+          tooltip: 'Próxima página',
+          onPressed: onNext,
+          icon: const Icon(Icons.chevron_right),
+        ),
       ],
     );
   }
@@ -790,7 +1061,7 @@ class _RequestCard extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                request['nome_do_evento']?.toString() ?? 'Evento',
+                _compactText(request['nome_do_evento']?.toString() ?? 'Evento'),
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -805,8 +1076,14 @@ class _RequestCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            '${request['responsavel'] ?? '-'} | ${request['data_do_evento'] ?? '-'} | ${request['local_evento'] ?? '-'}',
+          Tooltip(
+            message:
+                '${request['responsavel'] ?? '-'} | ${request['data_do_evento'] ?? '-'} | ${request['local_evento'] ?? '-'}',
+            child: Text(
+              '${_compactText(request['responsavel']?.toString() ?? '-')} | ${request['data_do_evento'] ?? '-'} | ${_compactText(request['local_evento']?.toString() ?? '-')}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const Divider(height: 24),
           _WorkflowActions(
@@ -1131,7 +1408,8 @@ class _RequirementRow extends StatelessWidget {
     final isCancelled = requestStatus == 'cancelada';
     final isLocked = status == 'aprovada' || status == 'recusada';
     final canManageLocked =
-        currentUser?.userType == 'admin' || currentUser?.userType == 'gestor';
+        currentUser?.userType == 'admin' ||
+        currentUser?.userType == 'gestor_secretaria';
     final canAct = id != null && !isCancelled && (!isLocked || canManageLocked);
     final canScheduleInspection =
         canAct &&
@@ -1158,11 +1436,15 @@ class _RequirementRow extends StatelessWidget {
             children: [
               SizedBox(
                 width: 330,
-                child: Text(requirement['pergunta']?.toString() ?? 'Exigência'),
+                child: _TooltipText(
+                  requirement['pergunta']?.toString() ?? 'Exigência',
+                ),
               ),
               SizedBox(
                 width: 180,
-                child: Text(requirement['secretaria']?.toString() ?? ''),
+                child: _TooltipText(
+                  requirement['secretaria']?.toString() ?? '',
+                ),
               ),
               if ((requirement['due_date']?.toString() ?? '').isNotEmpty)
                 SizedBox(
@@ -1256,9 +1538,12 @@ class _RequirementRow extends StatelessWidget {
                             constraints: const BoxConstraints(maxWidth: 280),
                             child: Chip(
                               avatar: const Icon(Icons.attach_file, size: 16),
-                              label: Text(
-                                fileName,
-                                overflow: TextOverflow.ellipsis,
+                              label: Tooltip(
+                                message: fileName,
+                                child: Text(
+                                  fileName,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
                           ),
@@ -1477,6 +1762,35 @@ String _formatStatus(String status) {
       return 'Vistoria reagendada';
     default:
       return status.isEmpty ? 'Status' : status;
+  }
+}
+
+String _formatPeriod(DateTimeRange? period) {
+  if (period == null) return 'Todos os períodos';
+  return '${_formatDate(period.start)} a ${_formatDate(period.end)}';
+}
+
+String _formatDate(DateTime date) {
+  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
+
+String _compactText(String value, {int maxLength = 80}) {
+  final text = value.trim();
+  if (text.length <= maxLength) return text;
+  return '${text.substring(0, maxLength - 3)}...';
+}
+
+class _TooltipText extends StatelessWidget {
+  const _TooltipText(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: value,
+      child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
   }
 }
 

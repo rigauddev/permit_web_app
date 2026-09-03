@@ -295,9 +295,24 @@ class _PerguntasPageState extends State<PerguntasPage> {
                                   return DataRow(
                                     cells: [
                                       DataCell(Text(p['key'] ?? '')),
-                                      DataCell(Text(p['pergunta']!)),
-                                      DataCell(Text(p['secretaria']!)),
-                                      DataCell(Text(p['secretaria_dam'] ?? '')),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['pergunta']?.toString() ?? '',
+                                          width: 260,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['secretaria']?.toString() ?? '',
+                                          width: 180,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['secretaria_dam']?.toString() ?? '',
+                                          width: 180,
+                                        ),
+                                      ),
                                       DataCell(
                                         Text(
                                           '${p['prazo_resposta_dias_uteis'] ?? 2} dia(s) úteis',
@@ -306,7 +321,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
                                       DataCell(
                                         Text('${p['display_order'] ?? 0}'),
                                       ),
-                                      DataCell(Text(_formatResponseSummary(p))),
+                                      DataCell(
+                                        _TableCellText(
+                                          _formatResponseSummary(p),
+                                          width: 240,
+                                        ),
+                                      ),
                                       DataCell(
                                         Text(
                                           p['requer_vistoria'] == true
@@ -315,9 +335,17 @@ class _PerguntasPageState extends State<PerguntasPage> {
                                         ),
                                       ),
                                       DataCell(
-                                        Text(_formatEventTypeSummary(p)),
+                                        _TableCellText(
+                                          _formatEventTypeSummary(p),
+                                          width: 190,
+                                        ),
                                       ),
-                                      DataCell(Text(p['tipo']!)),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['tipo']?.toString() ?? '',
+                                          width: 160,
+                                        ),
+                                      ),
                                       DataCell(
                                         Row(
                                           children: [
@@ -1575,5 +1603,23 @@ class _PerguntasPageState extends State<PerguntasPage> {
     } else {
       Navigator.pushReplacementNamed(context, '/home');
     }
+  }
+}
+
+class _TableCellText extends StatelessWidget {
+  const _TableCellText(this.value, {required this.width});
+
+  final String value;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Tooltip(
+        message: value,
+        child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
   }
 }

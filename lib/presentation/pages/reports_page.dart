@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
@@ -27,6 +31,9 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
   int _selectedYear = DateTime.now().year;
   String _filterMode = 'period';
   String? _selectedEventType;
+  int _eventsPage = 0;
+  int _eventsPerPage = 15;
+  bool _printingPdf = false;
 
   @override
   void initState() {
@@ -147,7 +154,42 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
     setState(() {
       _period = selected;
       _filterMode = 'period';
+      _eventsPage = 0;
     });
+  }
+
+  Future<void> _printReport() async {
+    final events = _visibleEvents;
+    if (events.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhum evento para gerar o PDF.')),
+      );
+      return;
+    }
+    setState(() => _printingPdf = true);
+    try {
+      final user = ref.read(userProvider);
+      final stats = _ReportStats(events);
+      await Printing.layoutPdf(
+        name: 'relatorio_eventos.pdf',
+        onLayout:
+            (_) => _buildReportPdf(
+              events: events,
+              stats: stats,
+              secretaria:
+                  user?.userType == 'admin'
+                      ? 'Todas as secretarias'
+                      : _formatSecretaria(user?.secretaria),
+              periodo:
+                  _filterMode == 'year'
+                      ? _selectedYear.toString()
+                      : _formatPeriod(_period),
+              tipoEvento: _selectedEventTypeLabel,
+            ),
+      );
+    } finally {
+      if (mounted) setState(() => _printingPdf = false);
+    }
   }
 
   @override
@@ -159,6 +201,18 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
       appBar: AppBar(
         title: const Text('Relatórios de eventos'),
         actions: [
+          IconButton(
+            tooltip: 'Gerar PDF',
+            onPressed: _printingPdf ? null : _printReport,
+            icon:
+                _printingPdf
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.picture_as_pdf_outlined),
+          ),
           IconButton(
             tooltip: 'Atualizar',
             onPressed: _loadReports,
@@ -186,12 +240,21 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                     eventType: _selectedEventType,
                     eventTypes: _eventTypeOptions,
                     onModeChanged:
-                        (value) => setState(() => _filterMode = value),
+                        (value) => setState(() {
+                          _filterMode = value;
+                          _eventsPage = 0;
+                        }),
                     onPickPeriod: _pickPeriod,
                     onYearChanged:
-                        (value) => setState(() => _selectedYear = value),
+                        (value) => setState(() {
+                          _selectedYear = value;
+                          _eventsPage = 0;
+                        }),
                     onEventTypeChanged:
-                        (value) => setState(() => _selectedEventType = value),
+                        (value) => setState(() {
+                          _selectedEventType = value;
+                          _eventsPage = 0;
+                        }),
                   ),
                   const SizedBox(height: 18),
                   if (_loading)
@@ -219,7 +282,18 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                     const SizedBox(height: 16),
                     _ChartsGrid(stats: stats),
                     const SizedBox(height: 16),
-                    _EventsTable(events: events),
+                    _EventsTable(
+                      events: events,
+                      currentPage: _eventsPage,
+                      rowsPerPage: _eventsPerPage,
+                      onPageChanged:
+                          (value) => setState(() => _eventsPage = value),
+                      onRowsPerPageChanged:
+                          (value) => setState(() {
+                            _eventsPerPage = value;
+                            _eventsPage = 0;
+                          }),
+                    ),
                   ],
                 ],
               ),
@@ -258,6 +332,15 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
       options.putIfAbsent(event.eventTypeKey, () => event.eventTypeName);
     }
     return options.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
+  }
+
+  String get _selectedEventTypeLabel {
+    final selected = _selectedEventType;
+    if (selected == null || selected.isEmpty) return 'Todos os tipos';
+    for (final item in _eventTypeOptions) {
+      if (item.key == selected) return item.value;
+    }
+    return selected;
   }
 }
 
@@ -720,12 +803,28 @@ class _NeighborhoodTypesPanel extends StatelessWidget {
 }
 
 class _EventsTable extends StatelessWidget {
-  const _EventsTable({required this.events});
+  const _EventsTable({
+    required this.events,
+    required this.currentPage,
+    required this.rowsPerPage,
+    required this.onPageChanged,
+    required this.onRowsPerPageChanged,
+  });
 
   final List<_ReportEvent> events;
+  final int currentPage;
+  final int rowsPerPage;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onRowsPerPageChanged;
 
   @override
   Widget build(BuildContext context) {
+    final totalPages =
+        events.isEmpty ? 1 : (events.length / rowsPerPage).ceil();
+    final safePage = currentPage >= totalPages ? totalPages - 1 : currentPage;
+    final start = safePage * rowsPerPage;
+    final end = (start + rowsPerPage).clamp(0, events.length);
+    final pageEvents = events.sublist(start, end);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -737,6 +836,15 @@ class _EventsTable extends StatelessWidget {
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            _ReportPagination(
+              totalItems: events.length,
+              currentPage: safePage,
+              totalPages: totalPages,
+              rowsPerPage: rowsPerPage,
+              onPageChanged: onPageChanged,
+              onRowsPerPageChanged: onRowsPerPageChanged,
             ),
             const SizedBox(height: 12),
             SingleChildScrollView(
@@ -751,15 +859,21 @@ class _EventsTable extends StatelessWidget {
                   DataColumn(label: Text('Status')),
                 ],
                 rows:
-                    events
+                    pageEvents
                         .map(
                           (event) => DataRow(
                             cells: [
                               DataCell(Text(_formatDate(event.date))),
-                              DataCell(Text(event.name)),
-                              DataCell(Text(event.eventTypeName)),
-                              DataCell(Text(event.neighborhood)),
-                              DataCell(Text(event.location)),
+                              DataCell(_TableCellText(event.name, width: 220)),
+                              DataCell(
+                                _TableCellText(event.eventTypeName, width: 180),
+                              ),
+                              DataCell(
+                                _TableCellText(event.neighborhood, width: 150),
+                              ),
+                              DataCell(
+                                _TableCellText(event.location, width: 240),
+                              ),
                               DataCell(Text(_formatStatus(event.status))),
                             ],
                           ),
@@ -767,8 +881,111 @@ class _EventsTable extends StatelessWidget {
                         .toList(),
               ),
             ),
+            const SizedBox(height: 12),
+            _ReportPagination(
+              totalItems: events.length,
+              currentPage: safePage,
+              totalPages: totalPages,
+              rowsPerPage: rowsPerPage,
+              compact: true,
+              onPageChanged: onPageChanged,
+              onRowsPerPageChanged: onRowsPerPageChanged,
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ReportPagination extends StatelessWidget {
+  const _ReportPagination({
+    required this.totalItems,
+    required this.currentPage,
+    required this.totalPages,
+    required this.rowsPerPage,
+    required this.onPageChanged,
+    required this.onRowsPerPageChanged,
+    this.compact = false,
+  });
+
+  final int totalItems;
+  final int currentPage;
+  final int totalPages;
+  final int rowsPerPage;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onRowsPerPageChanged;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = totalItems == 0 ? 0 : currentPage * rowsPerPage + 1;
+    final end =
+        totalItems == 0
+            ? 0
+            : ((currentPage + 1) * rowsPerPage).clamp(0, totalItems);
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('$start-$end de $totalItems'),
+        if (!compact)
+          SizedBox(
+            width: 150,
+            child: DropdownButtonFormField<int>(
+              initialValue: rowsPerPage,
+              decoration: const InputDecoration(
+                labelText: 'Por página',
+                border: OutlineInputBorder(),
+              ),
+              items:
+                  const [15, 30, 50]
+                      .map(
+                        (value) => DropdownMenuItem<int>(
+                          value: value,
+                          child: Text(value.toString()),
+                        ),
+                      )
+                      .toList(),
+              onChanged: (value) {
+                if (value != null) onRowsPerPageChanged(value);
+              },
+            ),
+          ),
+        IconButton.outlined(
+          tooltip: 'Página anterior',
+          onPressed:
+              currentPage <= 0 ? null : () => onPageChanged(currentPage - 1),
+          icon: const Icon(Icons.chevron_left),
+        ),
+        Text('Página ${currentPage + 1} de $totalPages'),
+        IconButton.outlined(
+          tooltip: 'Próxima página',
+          onPressed:
+              currentPage >= totalPages - 1
+                  ? null
+                  : () => onPageChanged(currentPage + 1),
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ],
+    );
+  }
+}
+
+class _TableCellText extends StatelessWidget {
+  const _TableCellText(this.value, {required this.width});
+
+  final String value;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Tooltip(
+        message: value,
+        child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
     );
   }
@@ -1077,4 +1294,171 @@ String _formatSecretaria(String? slug) {
     default:
       return slug ?? 'Sem secretaria vinculada';
   }
+}
+
+Future<Uint8List> _buildReportPdf({
+  required List<_ReportEvent> events,
+  required _ReportStats stats,
+  required String secretaria,
+  required String periodo,
+  required String tipoEvento,
+}) async {
+  final document = pw.Document();
+  final logoBytes =
+      (await rootBundle.load(
+        'assets/images/logo_prefeitura_1.png',
+      )).buffer.asUint8List();
+  final logo = pw.MemoryImage(logoBytes);
+  final generatedAt = DateTime.now();
+
+  document.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      build:
+          (context) => [
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Image(logo, width: 72),
+                pw.SizedBox(width: 14),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Relatório de Eventos',
+                        style: pw.TextStyle(
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(secretaria),
+                      pw.Text('Prefeitura Municipal de Valença'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            pw.Divider(height: 28),
+            _pdfInfoRow('Período', periodo),
+            _pdfInfoRow('Tipo de evento', tipoEvento),
+            _pdfInfoRow('Gerado em', _formatDate(generatedAt)),
+            pw.SizedBox(height: 16),
+            pw.Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _pdfKpi('Eventos', stats.total.toString()),
+                _pdfKpi('Área com mais eventos', stats.topArea?.key ?? '-'),
+                _pdfKpi('Tipo mais solicitado', stats.topType?.key ?? '-'),
+                _pdfKpi('Mês mais frequente', stats.topMonth?.key ?? '-'),
+                _pdfKpi(
+                  'Bairro com mais eventos',
+                  stats.topNeighborhood?.key ?? '-',
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 18),
+            pw.Text(
+              'Eventos listados',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey400),
+              columnWidths: const {
+                0: pw.FlexColumnWidth(0.8),
+                1: pw.FlexColumnWidth(1.7),
+                2: pw.FlexColumnWidth(1.2),
+                3: pw.FlexColumnWidth(1),
+                4: pw.FlexColumnWidth(1.5),
+                5: pw.FlexColumnWidth(1),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    _pdfCell('Data', bold: true),
+                    _pdfCell('Evento', bold: true),
+                    _pdfCell('Tipo', bold: true),
+                    _pdfCell('Bairro', bold: true),
+                    _pdfCell('Local', bold: true),
+                    _pdfCell('Status', bold: true),
+                  ],
+                ),
+                ...events.map(
+                  (event) => pw.TableRow(
+                    children: [
+                      _pdfCell(_formatDate(event.date)),
+                      _pdfCell(event.name),
+                      _pdfCell(event.eventTypeName),
+                      _pdfCell(event.neighborhood),
+                      _pdfCell(event.location),
+                      _pdfCell(_formatStatus(event.status)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+    ),
+  );
+  return document.save();
+}
+
+pw.Widget _pdfInfoRow(String label, String value) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: 4),
+    child: pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(
+          width: 90,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+        pw.Expanded(child: pw.Text(value.isEmpty ? '-' : value)),
+      ],
+    ),
+  );
+}
+
+pw.Widget _pdfKpi(String label, String value) {
+  return pw.Container(
+    width: 150,
+    padding: const pw.EdgeInsets.all(8),
+    decoration: pw.BoxDecoration(
+      border: pw.Border.all(color: PdfColors.grey400),
+      borderRadius: pw.BorderRadius.circular(4),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(label, style: const pw.TextStyle(fontSize: 8)),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          value,
+          maxLines: 2,
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        ),
+      ],
+    ),
+  );
+}
+
+pw.Widget _pdfCell(Object? value, {bool bold = false}) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.all(5),
+    child: pw.Text(
+      value?.toString().trim().isEmpty == false ? value.toString() : '-',
+      style: pw.TextStyle(
+        fontSize: 8,
+        fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+      ),
+    ),
+  );
 }
