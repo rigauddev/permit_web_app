@@ -175,3 +175,19 @@ docker compose exec mysql mysqldump -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATAB
 ```
 
 Guarde o arquivo fora da instância ou em armazenamento privado.
+
+## APK de homologação
+
+Para testes internos das secretarias, gere APKs release separados por arquitetura. Eles são menores que o APK debug e não habilitam tráfego HTTP claro no manifesto principal:
+
+```bash
+flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://servicevca.zapto.org/api
+mkdir -p build/distributions
+cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/distributions/app-servicevca-armeabi-v7a-release.apk
+cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/distributions/app-servicevca-arm64-v8a-release.apk
+cp build/app/outputs/flutter-apk/app-x86_64-release.apk build/distributions/app-servicevca-x86_64-release.apk
+```
+
+Distribua primeiro `app-servicevca-arm64-v8a-release.apk`, que atende a maioria dos Androids atuais. Se algum aparelho antigo não instalar, use `app-servicevca-armeabi-v7a-release.apk`.
+
+Observação de segurança: o build release do MVP ainda está assinado com a chave debug do projeto para facilitar homologação interna. Antes de publicar em loja ou produção formal, criar uma keystore própria, guardar a senha fora do Git e ajustar `android/app/build.gradle.kts` para assinar com essa chave.
