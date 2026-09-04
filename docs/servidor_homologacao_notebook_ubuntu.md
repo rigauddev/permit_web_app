@@ -101,9 +101,8 @@ O DNS já deve apontar `servicevca.zapto.org` para `170.239.37.184`.
 No roteador da rede, crie redirecionamento de portas para a máquina `192.168.0.13`:
 
 - Porta externa `80` TCP para `192.168.0.13:80`
-- Porta externa `443` TCP para `192.168.0.13:443`
 
-Não redirecione MySQL para internet.
+Não redirecione MySQL para internet. Para o primeiro teste sem HTTPS, também não precisa redirecionar a porta `8000`, pois o container web repassa `/api` para o backend.
 
 No servidor, use o env específico:
 
@@ -119,8 +118,15 @@ Suba os containers:
 ```bash
 docker compose up -d --build
 docker compose ps
-curl http://127.0.0.1:8000/health
 curl -I http://127.0.0.1:8080
+curl http://127.0.0.1:8080/api/health
+```
+
+Se estiver usando `.env.servicevca.example`, o `WEB_PORT` será `80`. Nesse caso valide com:
+
+```bash
+curl -I http://127.0.0.1
+curl http://127.0.0.1/api/health
 ```
 
 Instale o Caddy no Ubuntu:
