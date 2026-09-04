@@ -28,6 +28,20 @@ O projeto sobe três containers no mesmo host. Para o MVP isso simplifica custo 
 6. Nome sugerido: `permit-mvp-alvara`.
 7. Crie a instância.
 
+## O que criar no console da AWS
+
+Crie estes recursos no Lightsail:
+
+1. Uma instância Ubuntu LTS em `us-east-1`.
+2. Um IP estático na mesma região, anexado à instância.
+3. Regras de firewall na aba Networking da instância:
+   - `SSH` / TCP `22`, de preferência restrito ao seu IP.
+   - `HTTP` / TCP `80`, origem `Anywhere`.
+   - `HTTPS` / TCP `443`, origem `Anywhere`.
+4. Um registro DNS `A` no provedor do domínio apontando para o IP estático.
+
+Não crie banco separado por enquanto. Para o MVP, o MySQL sobe no Docker Compose da própria VPS e fica fechado para internet.
+
 ## Configurar rede
 
 No Lightsail, crie e anexe um IP estático na mesma região da instância. A documentação oficial recomenda isso porque o IP público dinâmico muda quando a instância é parada e iniciada novamente.
@@ -66,18 +80,21 @@ git --version
 git clone https://github.com/rigauddev/permit_web_app.git
 cd permit_web_app
 git checkout mvp
-cp .env.homologacao.example .env
+cp .env.lightsail.example .env
 nano .env
 ```
 
 Configure no `.env`:
 
 ```env
-WEB_PORT=8080
-API_PORT=8000
-MYSQL_PORT=3307
-API_BASE_URL=https://api.seu-dominio.com
+APP_DOMAIN=app.seu-dominio.com
+API_BASE_URL=https://app.seu-dominio.com/api
 PUBLIC_BASE_URL=https://app.seu-dominio.com
+WEB_PORT=127.0.0.1:8080
+API_PORT=127.0.0.1:8000
+MYSQL_PORT=127.0.0.1:3307
+HTTP_PORT=80
+HTTPS_PORT=443
 SECRET_KEY=troque-por-uma-chave-grande
 MYSQL_DATABASE=permit_system_mvp
 MYSQL_USER=permit_user_mvp
@@ -99,7 +116,7 @@ Essa pasta está ignorada pelo Git para evitar versionar CPF/CNPJ e dados pessoa
 Subir:
 
 ```bash
-docker compose up -d --build
+docker compose --profile https up -d --build
 docker compose ps
 ```
 
@@ -114,12 +131,14 @@ curl http://127.0.0.1:8080
 
 Opção simples para o MVP:
 
-- Usar Caddy ou Nginx no host como proxy reverso.
-- Apontar `app.seu-dominio.com` para `127.0.0.1:8080`.
-- Apontar `api.seu-dominio.com` para `127.0.0.1:8000`.
+- Usar o Caddy containerizado pelo próprio `docker-compose.yml`.
+- O domínio público aponta para o IP estático do Lightsail.
+- O Caddy recebe `80/443` e repassa:
+  - Web: `web:80`.
+  - API: `api:8000` via caminho `/api`.
 - Abrir no Lightsail somente `80` e `443`.
 
-Se usar certificado do próprio Lightsail ou outro caminho AWS, seguir a documentação oficial de SSL/TLS do Lightsail. Se usar Caddy, ele emite HTTPS automaticamente quando o DNS já aponta para o IP da instância.
+Se usar Caddy, ele emite HTTPS automaticamente quando o DNS já aponta para o IP estático da instância.
 
 ## Seed histórico
 
@@ -143,7 +162,7 @@ cd permit_web_app
 git fetch origin
 git checkout mvp
 git pull origin mvp
-docker compose up -d --build
+docker compose --profile https up -d --build
 docker compose ps
 ```
 
