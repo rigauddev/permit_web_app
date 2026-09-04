@@ -88,6 +88,69 @@ Com IP público fixo, apontar DNS para o IP do notebook e usar Caddy ou Nginx co
 - Web: `http://127.0.0.1:8080`
 - API: `http://127.0.0.1:8000`
 
+## Teste com servicevca.zapto.org
+
+Dados informados para o teste:
+
+- IP público: `170.239.37.184`
+- Domínio: `servicevca.zapto.org`
+- IP local da máquina: `192.168.0.13`
+
+O DNS já deve apontar `servicevca.zapto.org` para `170.239.37.184`.
+
+No roteador da rede, crie redirecionamento de portas para a máquina `192.168.0.13`:
+
+- Porta externa `80` TCP para `192.168.0.13:80`
+- Porta externa `443` TCP para `192.168.0.13:443`
+
+Não redirecione MySQL para internet.
+
+No servidor, use o env específico:
+
+```bash
+cp .env.servicevca.example .env
+nano .env
+```
+
+Troque pelo menos `SECRET_KEY`, `MYSQL_PASSWORD` e `MYSQL_ROOT_PASSWORD`.
+
+Suba os containers:
+
+```bash
+docker compose up -d --build
+docker compose ps
+curl http://127.0.0.1:8000/health
+curl -I http://127.0.0.1:8080
+```
+
+Instale o Caddy no Ubuntu:
+
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install -y caddy
+```
+
+Configure o proxy:
+
+```bash
+sudo cp docs/Caddyfile.servicevca.example /etc/caddy/Caddyfile
+sudo caddy fmt --overwrite /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+sudo systemctl status caddy --no-pager
+```
+
+Valide de fora da rede ou pelo 4G:
+
+```bash
+curl -I https://servicevca.zapto.org
+curl https://servicevca.zapto.org/api/health
+```
+
+Se `curl http://servicevca.zapto.org` der timeout, o problema está antes do sistema: porta do roteador, firewall do Ubuntu, CGNAT da operadora ou serviço Caddy ainda não escutando.
+
 ## Atualizar homologação
 
 ```bash
