@@ -96,6 +96,7 @@ MYSQL_PORT=127.0.0.1:3307
 HTTP_PORT=80
 HTTPS_PORT=443
 SECRET_KEY=troque-por-uma-chave-grande
+RUN_SEED=false
 MYSQL_DATABASE=permit_system_mvp
 MYSQL_USER=permit_user_mvp
 MYSQL_PASSWORD=troque-esta-senha
@@ -135,6 +136,12 @@ docker compose -f docker-compose.runtime.yml --profile https ps
 ```
 
 Esse modo não baixa a imagem Flutter no servidor. Ele usa apenas Nginx para servir `build/web`.
+
+Em VPS pequena, mantenha `RUN_SEED=false` para a API subir rápido. Depois que os containers estiverem saudáveis, rode o seed manualmente:
+
+```bash
+docker compose -f docker-compose.runtime.yml exec api python scripts/seed.py
+```
 
 Validar localmente na instância:
 

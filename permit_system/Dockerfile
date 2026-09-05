@@ -14,4 +14,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python scripts/seed.py && uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "if [ \"${RUN_SEED:-true}\" = \"true\" ]; then python scripts/seed.py; fi && uvicorn main:app --host 0.0.0.0 --port 8000"]

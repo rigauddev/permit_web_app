@@ -40,6 +40,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       PREFEITURA_LOGO_URL: ${PREFEITURA_LOGO_URL:-}
       HISTORICAL_EVENTS_XLSX_PATH: ${HISTORICAL_EVENTS_XLSX_PATH:-/app/private/Planilha_de_solicitacao_de_eventos.xlsx}
+      RUN_SEED: ${RUN_SEED:-true}
     volumes:
       - ./permit_system/private:/app/private:ro
     depends_on:

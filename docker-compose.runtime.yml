@@ -12,6 +12,7 @@ services:
       - "${MYSQL_PORT:-127.0.0.1:3307}:3306"
     volumes:
       - permit_mysql_data:/var/lib/mysql
+      - ./permit_system/mysql/conf.d:/etc/mysql/conf.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
       interval: 10s
@@ -40,6 +41,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       PREFEITURA_LOGO_URL: ${PREFEITURA_LOGO_URL:-}
       HISTORICAL_EVENTS_XLSX_PATH: ${HISTORICAL_EVENTS_XLSX_PATH:-/app/private/Planilha_de_solicitacao_de_eventos.xlsx}
+      RUN_SEED: ${RUN_SEED:-true}
     volumes:
       - ./permit_system/private:/app/private:ro
     depends_on:
