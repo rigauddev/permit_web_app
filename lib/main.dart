@@ -77,7 +77,6 @@ class _AppRouter extends StatelessWidget {
                 'operador_secretaria',
                 'cidadao',
               },
-              allowPasswordChange: true,
               child: const ChangePasswordPage(),
             ),
         AppRoutes.home:
@@ -270,13 +269,11 @@ class _GuardedRoute extends StatelessWidget {
     required this.user,
     required this.allowedRoles,
     required this.child,
-    this.allowPasswordChange = false,
   });
 
   final UserModel? user;
   final Set<String> allowedRoles;
   final Widget child;
-  final bool allowPasswordChange;
 
   @override
   Widget build(BuildContext context) {
@@ -296,9 +293,6 @@ class _GuardedRoute extends StatelessWidget {
         buttonLabel: 'Voltar para início',
         route: AppRoutes.home,
       );
-    }
-    if (user!.mustChangePassword && !allowPasswordChange) {
-      return const ChangePasswordPage();
     }
     return child;
   }

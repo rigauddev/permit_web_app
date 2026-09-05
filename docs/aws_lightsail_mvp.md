@@ -124,7 +124,9 @@ docker compose ps
 Em VPS pequena, o build do Flutter dentro do Docker pode demorar bastante porque baixa uma imagem grande e compila o web no servidor. Para homologação, prefira compilar o Flutter fora da VPS e subir somente os arquivos prontos:
 
 ```bash
-flutter build web --dart-define=API_BASE_URL=https://app.seu-dominio.com/api
+flutter build web \
+  --dart-define=API_BASE_URL=https://app.seu-dominio.com/api \
+  --dart-define=APP_APK_DOWNLOAD_URL=https://app.seu-dominio.com/downloads/central-servicos.apk
 rsync -avz --delete build/web/ ubuntu@IP_DA_INSTANCIA:/home/ubuntu/permit_web_app/build/web/
 ```
 
@@ -209,6 +211,8 @@ mkdir -p build/distributions
 cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/distributions/app-servicevca-armeabi-v7a-release.apk
 cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/distributions/app-servicevca-arm64-v8a-release.apk
 cp build/app/outputs/flutter-apk/app-x86_64-release.apk build/distributions/app-servicevca-x86_64-release.apk
+mkdir -p build/web/downloads
+cp build/distributions/app-servicevca-arm64-v8a-release.apk build/web/downloads/central-servicos.apk
 ```
 
 Distribua primeiro `app-servicevca-arm64-v8a-release.apk`, que atende a maioria dos Androids atuais. Se algum aparelho antigo não instalar, use `app-servicevca-armeabi-v7a-release.apk`.

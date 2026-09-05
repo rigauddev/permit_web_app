@@ -853,7 +853,7 @@ def seed_historical_event_requests(db, roles, secretarias, users):
                 role_id=roles["cidadao"].id,
                 mfa_email_enabled=False,
                 mfa_totp_enabled=False,
-                must_change_password=True,
+                must_change_password=False,
                 foto_usuario_nome=f"foto_{document}.jpg",
                 foto_usuario_url=f"/uploads/cidadaos/{document}/foto_usuario.jpg",
                 comprovante_residencia_nome=f"comprovante_residencia_{document}.pdf",

@@ -1,11 +1,15 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.api.auth_routes import router as auth_router
 from src.api.content_routes import router as content_router
 from src.api.permit_routes import credential_router, router as permit_router
 from src.api.permission_routes import router as permission_router
 from src.api.secretaria_routes import router as secretaria_router
+from src.api.upload_routes import router as upload_router
 from src.infra.database.mysql_db import create_tables
 
 
@@ -36,3 +40,7 @@ app.include_router(permission_router)
 app.include_router(secretaria_router)
 app.include_router(permit_router)
 app.include_router(credential_router)
+upload_root = os.getenv("UPLOAD_ROOT", "/app/uploads")
+os.makedirs(upload_root, exist_ok=True)
+app.include_router(upload_router)
+app.mount("/uploads", StaticFiles(directory=upload_root), name="uploads")

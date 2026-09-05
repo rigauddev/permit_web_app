@@ -14,8 +14,188 @@ import '../../data/providers/user_provider.dart';
 class LoginPage extends HookConsumerWidget {
   const LoginPage({super.key});
 
-  static const _playStoreUrl =
-      'https://play.google.com/store/apps/details?id=br.gov.ba.valenca.alvara';
+  static const _apkDownloadUrl = String.fromEnvironment(
+    'APP_APK_DOWNLOAD_URL',
+    defaultValue: '',
+  );
+
+  List<Widget> _loginFields({
+    required BuildContext context,
+    required bool isCitizenAccess,
+    required bool isLoading,
+    required bool obscurePassword,
+    required TextEditingController identifierController,
+    required TextEditingController passwordController,
+    required VoidCallback validateLogin,
+    required VoidCallback togglePassword,
+  }) {
+    return [
+      TextField(
+        controller: identifierController,
+        keyboardType:
+            isCitizenAccess ? TextInputType.number : TextInputType.emailAddress,
+        decoration: InputDecoration(
+          labelText: isCitizenAccess ? 'CPF ou CNPJ' : 'E-mail institucional',
+          prefixIcon: Icon(
+            isCitizenAccess ? Icons.badge_outlined : Icons.email_outlined,
+          ),
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: passwordController,
+        obscureText: obscurePassword,
+        decoration: InputDecoration(
+          labelText: 'Senha',
+          prefixIcon: const Icon(Icons.lock_outline),
+          suffixIcon: IconButton(
+            icon: Icon(
+              obscurePassword ? Icons.visibility : Icons.visibility_off,
+            ),
+            onPressed: togglePassword,
+          ),
+        ),
+        onSubmitted: (_) => validateLogin(),
+      ),
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          onPressed: () => Navigator.pushNamed(context, '/recovery-password'),
+          child: const Text('Esqueci minha senha'),
+        ),
+      ),
+      const SizedBox(height: 8),
+      ElevatedButton(
+        onPressed: isLoading ? null : validateLogin,
+        child:
+            isLoading
+                ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Text('Entrar'),
+      ),
+      const SizedBox(height: 12),
+      if (isCitizenAccess)
+        TextButton(
+          onPressed: () => Navigator.pushNamed(context, '/registrar_usuario'),
+          child: const Text('Criar conta de cidadão'),
+        ),
+    ];
+  }
+
+  List<Widget> _mfaFields({
+    required BuildContext context,
+    required ThemeData theme,
+    required LoginChallenge challenge,
+    required MfaGeneration? generation,
+    required bool isLoading,
+    required String selectedMethod,
+    required int resendSeconds,
+    required TextEditingController mfaController,
+    required FocusNode mfaFocusNode,
+    required Future<void> Function(LoginChallenge challenge, String method)
+    generateMfa,
+    required Future<void> Function(String method) changeMfaMethod,
+    required VoidCallback validateMfa,
+    required VoidCallback resetLogin,
+  }) {
+    return [
+      if (challenge.availableMethods.length > 1) ...[
+        DropdownButtonFormField<String>(
+          initialValue: selectedMethod,
+          decoration: const InputDecoration(labelText: 'Método de MFA'),
+          items:
+              challenge.availableMethods
+                  .map(
+                    (method) => DropdownMenuItem(
+                      value: method,
+                      child: Text(
+                        method == 'email' ? 'E-mail' : method.toUpperCase(),
+                      ),
+                    ),
+                  )
+                  .toList(),
+          onChanged:
+              isLoading || generation == null
+                  ? null
+                  : (value) {
+                    if (value != null) changeMfaMethod(value);
+                  },
+        ),
+        const SizedBox(height: 14),
+      ],
+      if (generation == null)
+        ElevatedButton.icon(
+          onPressed:
+              isLoading ? null : () => generateMfa(challenge, selectedMethod),
+          icon: const Icon(Icons.mark_email_read_outlined),
+          label: const Text('Enviar código'),
+        )
+      else ...[
+        Text(
+          'Código enviado para ${generation.delivery}',
+          style: theme.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+        if (generation.devCode != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: SelectableText(
+              'Código MFA de teste: ${generation.devCode}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.tertiary,
+                fontWeight: FontWeight.w800,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed:
+              isLoading || resendSeconds > 0
+                  ? null
+                  : () => generateMfa(challenge, selectedMethod),
+          icon: const Icon(Icons.refresh),
+          label: Text(
+            resendSeconds > 0
+                ? 'Solicitar novo código em ${resendSeconds}s'
+                : 'Solicitar novo código',
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: mfaController,
+          focusNode: mfaFocusNode,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          decoration: const InputDecoration(
+            labelText: 'Código MFA',
+            prefixIcon: Icon(Icons.verified_user_outlined),
+            counterText: '',
+          ),
+          onSubmitted: (_) => validateMfa(),
+        ),
+        const SizedBox(height: 14),
+        ElevatedButton(
+          onPressed: isLoading ? null : validateMfa,
+          child:
+              isLoading
+                  ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text('Validar e entrar'),
+        ),
+      ],
+      TextButton(
+        onPressed: isLoading ? null : resetLogin,
+        child: const Text('Voltar'),
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -104,10 +284,7 @@ class LoginPage extends HookConsumerWidget {
           ref.read(userProvider.notifier).setUser(user);
           await Future<void>.delayed(Duration.zero);
           if (context.mounted) {
-            Navigator.pushReplacementNamed(
-              context,
-              user.mustChangePassword ? '/change-password' : '/home',
-            );
+            Navigator.pushReplacementNamed(context, '/home');
           }
           return;
         }
@@ -153,10 +330,7 @@ class LoginPage extends HookConsumerWidget {
         ref.read(userProvider.notifier).setUser(session.user);
         await Future<void>.delayed(Duration.zero);
         if (context.mounted) {
-          Navigator.pushReplacementNamed(
-            context,
-            session.user.mustChangePassword ? '/change-password' : '/home',
-          );
+          Navigator.pushReplacementNamed(context, '/home');
         }
       } on AuthException catch (error) {
         errorMessage.value = error.message;
@@ -215,323 +389,157 @@ class LoginPage extends HookConsumerWidget {
     final isCitizenAccess = accessProfile.value == 'cidadao';
 
     Future<void> openPlayStore() async {
+      final targetUrl =
+          _apkDownloadUrl.isNotEmpty
+              ? _apkDownloadUrl
+              : 'https://play.google.com/store/apps/details?id=br.gov.ba.valenca.alvara';
       final opened = await launchUrl(
-        Uri.parse(_playStoreUrl),
+        Uri.parse(targetUrl),
         mode: LaunchMode.externalApplication,
       );
       if (opened) return;
-      errorMessage.value = 'Não foi possível abrir a Play Store';
+      errorMessage.value = 'Não foi possível iniciar o download do app';
     }
 
     return Scaffold(
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: TextButton.icon(
-                  onPressed:
-                      isLoading.value
-                          ? null
-                          : () => selectAccessProfile(
-                            isCitizenAccess ? 'interno' : 'cidadao',
-                          ),
-                  icon: Icon(
-                    isCitizenAccess
-                        ? Icons.badge_outlined
-                        : Icons.person_outline,
-                  ),
-                  label: Text(
-                    isCitizenAccess ? 'Portal do Servidor' : 'Acesso cidadão',
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed:
+                        isLoading.value
+                            ? null
+                            : () => selectAccessProfile(
+                              isCitizenAccess ? 'interno' : 'cidadao',
+                            ),
+                    icon: Icon(
+                      isCitizenAccess
+                          ? Icons.badge_outlined
+                          : Icons.person_outline,
+                    ),
+                    label: Text(
+                      isCitizenAccess ? 'Portal do Servidor' : 'Acesso cidadão',
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 72, 16, 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/images/logo_prefeitura_1.png',
-                    width: size.width < 600 ? size.width * 0.62 : 280,
+                const SizedBox(height: 8),
+                Image.asset(
+                  'assets/images/logo_prefeitura_1.png',
+                  width: size.width < 600 ? size.width * 0.62 : 280,
+                ),
+                const SizedBox(height: 24),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: size.width < 600 ? size.width * 0.92 : 420,
                   ),
-                  const SizedBox(height: 24),
+                  child: Card(
+                    elevation: 6,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            hasChallenge
+                                ? 'Validação de segurança'
+                                : isCitizenAccess
+                                ? 'Acesso do cidadão'
+                                : 'Portal do servidor',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            isCitizenAccess
+                                ? 'Entre para solicitar e acompanhar alvarás de evento.'
+                                : 'Acesso restrito a servidores, operadores, gestores e administradores.',
+                            style: theme.textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          if (!hasChallenge)
+                            ..._loginFields(
+                              context: context,
+                              isCitizenAccess: isCitizenAccess,
+                              isLoading: isLoading.value,
+                              obscurePassword: obscurePassword.value,
+                              identifierController: identifierController,
+                              passwordController: passwordController,
+                              validateLogin: validateLogin,
+                              togglePassword:
+                                  () =>
+                                      obscurePassword.value =
+                                          !obscurePassword.value,
+                            )
+                          else
+                            ..._mfaFields(
+                              context: context,
+                              theme: theme,
+                              challenge: challenge.value!,
+                              generation: mfaGeneration.value,
+                              isLoading: isLoading.value,
+                              selectedMethod: selectedMfaMethod.value,
+                              resendSeconds: mfaResendSeconds.value,
+                              mfaController: mfaController,
+                              mfaFocusNode: mfaFocusNode,
+                              generateMfa: generateMfa,
+                              changeMfaMethod: changeMfaMethod,
+                              validateMfa: validateMfa,
+                              resetLogin: resetLogin,
+                            ),
+                          if (errorMessage.value != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Text(
+                                errorMessage.value!,
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (isCitizenAccess) ...[
+                  const SizedBox(height: 14),
                   ConstrainedBox(
                     constraints: BoxConstraints(
                       maxWidth: size.width < 600 ? size.width * 0.92 : 420,
                     ),
-                    child: Card(
-                      elevation: 6,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              hasChallenge
-                                  ? 'Validação de segurança'
-                                  : isCitizenAccess
-                                  ? 'Acesso do cidadão'
-                                  : 'Portal do servidor',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              isCitizenAccess
-                                  ? 'Entre para solicitar e acompanhar alvarás de evento.'
-                                  : 'Acesso restrito a servidores, operadores, gestores e administradores.',
-                              style: theme.textTheme.bodyMedium,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 20),
-                            if (!hasChallenge) ...[
-                              TextField(
-                                controller: identifierController,
-                                keyboardType:
-                                    isCitizenAccess
-                                        ? TextInputType.number
-                                        : TextInputType.emailAddress,
-                                decoration: InputDecoration(
-                                  labelText:
-                                      isCitizenAccess
-                                          ? 'CPF ou CNPJ'
-                                          : 'E-mail institucional',
-                                  prefixIcon: Icon(
-                                    isCitizenAccess
-                                        ? Icons.badge_outlined
-                                        : Icons.email_outlined,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextField(
-                                controller: passwordController,
-                                obscureText: obscurePassword.value,
-                                decoration: InputDecoration(
-                                  labelText: 'Senha',
-                                  prefixIcon: const Icon(Icons.lock_outline),
-                                  suffixIcon: IconButton(
-                                    icon: Icon(
-                                      obscurePassword.value
-                                          ? Icons.visibility
-                                          : Icons.visibility_off,
-                                    ),
-                                    onPressed:
-                                        () =>
-                                            obscurePassword.value =
-                                                !obscurePassword.value,
-                                  ),
-                                ),
-                                onSubmitted: (_) => validateLogin(),
-                              ),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed:
-                                      () => Navigator.pushNamed(
-                                        context,
-                                        '/recovery-password',
-                                      ),
-                                  child: const Text('Esqueci minha senha'),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              ElevatedButton(
-                                onPressed:
-                                    isLoading.value ? null : validateLogin,
-                                child:
-                                    isLoading.value
-                                        ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                        : const Text('Entrar'),
-                              ),
-                              const SizedBox(height: 12),
-                              if (isCitizenAccess) ...[
-                                TextButton(
-                                  onPressed:
-                                      () => Navigator.pushNamed(
-                                        context,
-                                        '/registrar_usuario',
-                                      ),
-                                  child: const Text('Criar conta de cidadão'),
-                                ),
-                              ],
-                            ] else ...[
-                              if (challenge.value!.availableMethods.length >
-                                  1) ...[
-                                DropdownButtonFormField<String>(
-                                  initialValue: selectedMfaMethod.value,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Método de MFA',
-                                  ),
-                                  items:
-                                      challenge.value!.availableMethods
-                                          .map(
-                                            (method) => DropdownMenuItem(
-                                              value: method,
-                                              child: Text(
-                                                method == 'email'
-                                                    ? 'E-mail'
-                                                    : method.toUpperCase(),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged:
-                                      isLoading.value ||
-                                              mfaGeneration.value == null
-                                          ? null
-                                          : (value) {
-                                            if (value != null) {
-                                              changeMfaMethod(value);
-                                            }
-                                          },
-                                ),
-                                const SizedBox(height: 14),
-                              ],
-                              if (mfaGeneration.value == null)
-                                ElevatedButton.icon(
-                                  onPressed:
-                                      isLoading.value
-                                          ? null
-                                          : () => generateMfa(
-                                            challenge.value!,
-                                            selectedMfaMethod.value,
-                                          ),
-                                  icon: const Icon(
-                                    Icons.mark_email_read_outlined,
-                                  ),
-                                  label: const Text('Enviar código'),
-                                )
-                              else ...[
-                                Text(
-                                  'Código enviado para ${mfaGeneration.value!.delivery}',
-                                  style: theme.textTheme.bodyMedium,
-                                  textAlign: TextAlign.center,
-                                ),
-                                if (mfaGeneration.value!.devCode != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: SelectableText(
-                                      'Código MFA de teste: ${mfaGeneration.value!.devCode}',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: theme.colorScheme.tertiary,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                const SizedBox(height: 10),
-                                OutlinedButton.icon(
-                                  onPressed:
-                                      isLoading.value ||
-                                              mfaResendSeconds.value > 0
-                                          ? null
-                                          : () => generateMfa(
-                                            challenge.value!,
-                                            selectedMfaMethod.value,
-                                          ),
-                                  icon: const Icon(Icons.refresh),
-                                  label: Text(
-                                    mfaResendSeconds.value > 0
-                                        ? 'Solicitar novo código em ${mfaResendSeconds.value}s'
-                                        : 'Solicitar novo código',
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                TextField(
-                                  controller: mfaController,
-                                  focusNode: mfaFocusNode,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 6,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Código MFA',
-                                    prefixIcon: Icon(
-                                      Icons.verified_user_outlined,
-                                    ),
-                                    counterText: '',
-                                  ),
-                                  onSubmitted: (_) => validateMfa(),
-                                ),
-                                const SizedBox(height: 14),
-                                ElevatedButton(
-                                  onPressed:
-                                      isLoading.value ? null : validateMfa,
-                                  child:
-                                      isLoading.value
-                                          ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                          : const Text('Validar e entrar'),
-                                ),
-                              ],
-                              TextButton(
-                                onPressed: isLoading.value ? null : resetLogin,
-                                child: const Text('Voltar'),
-                              ),
-                            ],
-                            if (errorMessage.value != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: Text(
-                                  errorMessage.value!,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.error,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                          ],
+                    child: OutlinedButton.icon(
+                      onPressed: isLoading.value ? null : openPlayStore,
+                      icon: const _PlayStoreLogo(),
+                      label: const Text('Baixar app Android'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 14,
                         ),
                       ),
                     ),
                   ),
-                  if (isCitizenAccess) ...[
-                    const SizedBox(height: 14),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: size.width < 600 ? size.width * 0.92 : 420,
-                      ),
-                      child: OutlinedButton.icon(
-                        onPressed: isLoading.value ? null : openPlayStore,
-                        icon: const _PlayStoreLogo(),
-                        label: const Text('Baixar app na Play Store'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

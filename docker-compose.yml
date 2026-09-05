@@ -43,6 +43,7 @@ services:
       RUN_SEED: ${RUN_SEED:-true}
     volumes:
       - ./permit_system/private:/app/private:ro
+      - permit_uploads_data:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -62,6 +63,7 @@ services:
       dockerfile: Dockerfile
       args:
         API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+        APP_APK_DOWNLOAD_URL: ${APP_APK_DOWNLOAD_URL:-}
     container_name: permit_web_app
     depends_on:
       api:
@@ -93,5 +95,6 @@ services:
 
 volumes:
   permit_mysql_data:
+  permit_uploads_data:
   permit_caddy_data:
   permit_caddy_config:

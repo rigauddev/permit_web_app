@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
 class PermitApiService {
@@ -20,9 +21,37 @@ class PermitApiService {
     if (uri != null && uri.hasScheme) return value;
     final base = Uri.parse(_baseUrl);
     if (value.startsWith('/')) {
-      return base.replace(path: value, query: null, fragment: null).toString();
+      final basePath =
+          base.path.endsWith('/')
+              ? base.path.substring(0, base.path.length - 1)
+              : base.path;
+      return base
+          .replace(path: '$basePath$value', query: null, fragment: null)
+          .toString();
     }
     return base.resolve(value).toString();
+  }
+
+  Future<Map<String, dynamic>> uploadFile({
+    String? accessToken,
+    required String kind,
+    required PlatformFile file,
+  }) async {
+    final bytes = file.bytes;
+    if (bytes == null) {
+      throw PermitApiException('Não foi possível ler o arquivo selecionado.');
+    }
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$_baseUrl/uploads'))
+          ..fields['kind'] = kind
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: file.name),
+          );
+    if (accessToken != null && accessToken.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    final response = await http.Response.fromStream(await request.send());
+    return _decodeResponse(response) as Map<String, dynamic>;
   }
 
   static const List<Map<String, dynamic>> eventPermitQuestions = [

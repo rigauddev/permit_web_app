@@ -665,97 +665,97 @@ class _SecretariaRequestsPageState
     required List<String> allowedExtensions,
     required String submitLabel,
   }) async {
-    final fileController = TextEditingController();
-    final urlController = TextEditingController();
-    final mimeController = TextEditingController(text: 'application/pdf');
+    var uploading = false;
     return showDialog<_AttachmentInput>(
       context: context,
       builder:
-          (context) => AlertDialog(
-            title: Text(title),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(description),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: fileController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nome do arquivo',
-                    border: OutlineInputBorder(),
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: Text(title),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(description),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              uploading
+                                  ? null
+                                  : () async {
+                                    final result = await FilePicker.platform
+                                        .pickFiles(
+                                          type: FileType.custom,
+                                          allowedExtensions: allowedExtensions,
+                                          withData: true,
+                                        );
+                                    final file =
+                                        result == null || result.files.isEmpty
+                                            ? null
+                                            : result.files.single;
+                                    if (file == null) return;
+                                    final extension =
+                                        file.name.split('.').last.toLowerCase();
+                                    if (!allowedExtensions.contains(
+                                      extension,
+                                    )) {
+                                      return;
+                                    }
+                                    setDialogState(() => uploading = true);
+                                    final token =
+                                        await SessionExpiration.readAccessToken();
+                                    if (token == null || token.isEmpty) {
+                                      if (context.mounted) {
+                                        Navigator.pop(context);
+                                      }
+                                      return;
+                                    }
+                                    final upload = await _api.uploadFile(
+                                      accessToken: token,
+                                      kind: 'solicitacoes/anexos',
+                                      file: file,
+                                    );
+                                    if (!context.mounted) return;
+                                    Navigator.pop(
+                                      context,
+                                      _AttachmentInput(
+                                        fileName:
+                                            upload['file_name']?.toString() ??
+                                            file.name,
+                                        fileUrl:
+                                            upload['file_url']?.toString() ??
+                                            '',
+                                        mimeType:
+                                            upload['mime_type']?.toString(),
+                                      ),
+                                    );
+                                  },
+                          icon:
+                              uploading
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Icon(Icons.upload_file),
+                          label: Text(uploading ? 'Enviando...' : submitLabel),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: allowedExtensions,
-                    );
-                    final file =
-                        result == null || result.files.isEmpty
-                            ? null
-                            : result.files.single;
-                    if (file == null) return;
-                    fileController.text = file.name;
-                    urlController.text = file.path ?? file.name;
-                    final extension = file.name.split('.').last.toLowerCase();
-                    mimeController.text =
-                        extension == 'pdf' ? 'application/pdf' : '';
-                  },
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('Selecionar arquivo'),
-                ),
-                // const SizedBox(height: 12),
-                // TextField(
-                //   controller: urlController,
-                //   decoration: const InputDecoration(
-                //     labelText: 'URL ou referência do arquivo',
-                //     border: OutlineInputBorder(),
-                //   ),
-                // ),
-                // const SizedBox(height: 12),
-                // TextField(
-                //   controller: mimeController,
-                //   decoration: const InputDecoration(
-                //     labelText: 'Tipo MIME',
-                //     border: OutlineInputBorder(),
-                //   ),
-                // ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  if (fileController.text.trim().length < 3 ||
-                      urlController.text.trim().length < 3) {
-                    return;
-                  }
-                  final extension =
-                      fileController.text.trim().split('.').last.toLowerCase();
-                  if (!allowedExtensions.contains(extension)) return;
-                  if (mimeController.text.trim() != 'application/pdf') return;
-                  Navigator.pop(
-                    context,
-                    _AttachmentInput(
-                      fileName: fileController.text.trim(),
-                      fileUrl: urlController.text.trim(),
-                      mimeType:
-                          mimeController.text.trim().isEmpty
-                              ? null
-                              : mimeController.text.trim(),
+                  actions: [
+                    TextButton(
+                      onPressed:
+                          uploading ? null : () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.upload_file),
-                label: Text(submitLabel),
-              ),
-            ],
+                  ],
+                ),
           ),
     );
   }

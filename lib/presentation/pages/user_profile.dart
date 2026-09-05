@@ -1,9 +1,11 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
 import '../../core/session_store.dart';
 import '../../data/models/user_model.dart';
@@ -28,6 +30,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  PlatformFile? _selectedPhoto;
   bool _saving = false;
   bool _loading = true;
   bool _loaded = false;
@@ -88,16 +91,34 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
     setState(() => _saving = true);
     try {
+      String? uploadedPhotoName;
+      String? uploadedPhotoUrl;
+      if (_selectedPhoto != null) {
+        if (_selectedPhoto!.bytes == null) {
+          _showError('Não foi possível ler a foto selecionada.');
+          return;
+        }
+        final upload = await _authService.uploadFileBytes(
+          kind: 'usuarios/fotos',
+          fileName: _selectedPhoto!.name,
+          bytes: _selectedPhoto!.bytes!,
+        );
+        uploadedPhotoName = upload['file_name']?.toString();
+        uploadedPhotoUrl = upload['file_url']?.toString();
+      }
       final updated = await _authService.updateCurrentUser(
         accessToken: token,
         nome: _nameController.text.trim(),
         sobrenome: _lastNameController.text.trim(),
         telefone: _phoneController.text.trim(),
         endereco: _addressController.text.trim(),
+        userPhotoName: uploadedPhotoName,
+        userPhotoUrl: uploadedPhotoUrl,
       );
       await const SessionStore().updateUserJson(jsonEncode(updated.toJson()));
       ref.read(userProvider.notifier).setUser(updated);
       if (!mounted) return;
+      setState(() => _selectedPhoto = null);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Perfil atualizado.')));
@@ -112,10 +133,24 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
   }
 
+  Future<void> _pickProfilePhoto() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    setState(() => _selectedPhoto = result.files.single);
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
     _hydrate(user);
+    final photoUrl =
+        user?.photoUrl.isNotEmpty == true
+            ? PermitApiService().resolveFileUrl(user!.photoUrl)
+            : '';
 
     return AppScaffold(
       userType: widget.userType,
@@ -136,6 +171,40 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              Center(
+                                child: Column(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 42,
+                                      backgroundImage:
+                                          photoUrl.isNotEmpty
+                                              ? NetworkImage(photoUrl)
+                                              : null,
+                                      child:
+                                          user?.photoUrl.isNotEmpty == true
+                                              ? null
+                                              : const Icon(
+                                                Icons.person_outline,
+                                                size: 42,
+                                              ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    OutlinedButton.icon(
+                                      onPressed:
+                                          _saving ? null : _pickProfilePhoto,
+                                      icon: const Icon(
+                                        Icons.photo_camera_outlined,
+                                      ),
+                                      label: Text(
+                                        _selectedPhoto == null
+                                            ? 'Trocar foto'
+                                            : _selectedPhoto!.name,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 18),
                               Text(
                                 'Dados do usuário',
                                 style: Theme.of(context).textTheme.titleLarge

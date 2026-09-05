@@ -28,6 +28,8 @@ class UserSelfUpdateRequest(BaseModel):
     sobrenome: str | None = Field(default=None, max_length=255)
     telefone: str | None = Field(default=None, max_length=20)
     endereco: str | None = Field(default=None, max_length=255)
+    foto_usuario_nome: str | None = Field(default=None, max_length=255)
+    foto_usuario_url: str | None = Field(default=None, max_length=500)
 
 
 class UserAdminUpdateRequest(UserSelfUpdateRequest):

@@ -275,7 +275,14 @@ class AuthService:
         return TokenResponse(access_token=token, user=session)
 
     def update_current_user(self, user: UserModel, payload: UserSelfUpdateRequest) -> UserResponse:
-        for field in ["nome", "sobrenome", "telefone", "endereco"]:
+        for field in [
+            "nome",
+            "sobrenome",
+            "telefone",
+            "endereco",
+            "foto_usuario_nome",
+            "foto_usuario_url",
+        ]:
             value = getattr(payload, field)
             if value is not None:
                 setattr(user, field, value)

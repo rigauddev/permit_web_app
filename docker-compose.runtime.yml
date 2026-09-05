@@ -44,6 +44,7 @@ services:
       RUN_SEED: ${RUN_SEED:-true}
     volumes:
       - ./permit_system/private:/app/private:ro
+      - permit_uploads_data:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -93,5 +94,6 @@ services:
 
 volumes:
   permit_mysql_data:
+  permit_uploads_data:
   permit_caddy_data:
   permit_caddy_config:

@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/auth_service.dart';
 
@@ -38,7 +39,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
   bool _mfaEmailEnabled = false;
   String _personType = 'PF';
   String _residenceProofType = 'luz';
-  PlatformFile? _userPhoto;
+  XFile? _userPhoto;
   PlatformFile? _residenceProof;
 
   @override
@@ -65,6 +66,10 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
       _showError('Inclua um comprovante de residência de água ou luz.');
       return;
     }
+    if (_residenceProof!.bytes == null) {
+      _showError('Não foi possível ler o comprovante selecionado.');
+      return;
+    }
     if (!_acceptedResponsibilityTerm) {
       _showError('Aceite o termo de responsabilidade para criar a conta');
       return;
@@ -72,6 +77,16 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
 
     setState(() => _isLoading = true);
     try {
+      final photoUpload = await _authService.uploadFileBytes(
+        kind: 'usuarios/fotos',
+        fileName: _userPhoto!.name,
+        bytes: await _userPhoto!.readAsBytes(),
+      );
+      final residenceUpload = await _authService.uploadFileBytes(
+        kind: 'usuarios/comprovantes',
+        fileName: _residenceProof!.name,
+        bytes: _residenceProof!.bytes!,
+      );
       await _authService.registerCitizen(
         tipoPessoa: _personType,
         nome: _nameController.text.trim(),
@@ -87,10 +102,11 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
         telefone: _phoneController.text.trim(),
         endereco: _addressController.text.trim(),
         responsibilityTermAccepted: _acceptedResponsibilityTerm,
-        userPhotoName: _userPhoto!.name,
-        userPhotoUrl: _userPhoto!.path,
-        residenceProofName: _residenceProof!.name,
-        residenceProofUrl: _residenceProof!.path,
+        userPhotoName: photoUpload['file_name']?.toString() ?? _userPhoto!.name,
+        userPhotoUrl: photoUpload['file_url']?.toString(),
+        residenceProofName:
+            residenceUpload['file_name']?.toString() ?? _residenceProof!.name,
+        residenceProofUrl: residenceUpload['file_url']?.toString(),
         residenceProofType: _residenceProofType,
         mfaEmailEnabled:
             _mfaEmailEnabled && _emailController.text.trim().isNotEmpty,
@@ -112,13 +128,13 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
   }
 
   Future<void> _pickUserPhoto() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: false,
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+      maxWidth: 1400,
     );
-    if (result == null || result.files.isEmpty) return;
-    setState(() => _userPhoto = result.files.single);
+    if (photo == null) return;
+    setState(() => _userPhoto = photo);
   }
 
   Future<void> _pickResidenceProof() async {
@@ -126,7 +142,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
       allowMultiple: false,
-      withData: false,
+      withData: true,
     );
     if (result == null || result.files.isEmpty) return;
     setState(() => _residenceProof = result.files.single);
@@ -316,7 +332,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                           ),
                           const SizedBox(height: 8),
                           const Text(
-                            'Inclua uma foto do usuário. Em celulares, você pode tirar uma nova foto ou selecionar uma imagem existente conforme as opções do aparelho.',
+                            'Inclua uma foto tirada pela câmera do aparelho para identificação do usuário.',
                           ),
                           const SizedBox(height: 12),
                           OutlinedButton.icon(
@@ -324,7 +340,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                             icon: const Icon(Icons.photo_camera_outlined),
                             label: Text(
                               _userPhoto == null
-                                  ? 'Tirar ou anexar foto'
+                                  ? 'Tirar foto'
                                   : _userPhoto!.name,
                             ),
                           ),

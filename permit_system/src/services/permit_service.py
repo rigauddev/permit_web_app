@@ -1424,7 +1424,7 @@ class PermitService:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
 
     def _validate_payload(self, payload: PermitCreateRequest) -> None:
-        responsible_required = ["nome", "cpf_cnpj", "telefone", "email", "endereco"]
+        responsible_required = ["nome", "cpf_cnpj", "telefone", "endereco"]
         event_required = [
             "nome_evento",
             "data_evento",

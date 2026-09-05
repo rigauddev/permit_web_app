@@ -8,7 +8,10 @@ RUN flutter pub get
 COPY . .
 
 ARG API_BASE_URL=http://localhost:8000
-RUN flutter build web --dart-define=API_BASE_URL=${API_BASE_URL}
+ARG APP_APK_DOWNLOAD_URL=
+RUN flutter build web \
+    --dart-define=API_BASE_URL=${API_BASE_URL} \
+    --dart-define=APP_APK_DOWNLOAD_URL=${APP_APK_DOWNLOAD_URL}
 
 FROM nginx:1.27-alpine
 
