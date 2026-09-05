@@ -101,6 +101,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     routes: const [
                       '/secretaria-requests',
                       '/inspections',
+                      '/verificar-evento',
                       '/event-map',
                       '/reports',
                     ],
@@ -111,6 +112,10 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                         '/secretaria-requests',
                       ),
                       _DrawerSectionItem('Vistorias', '/inspections'),
+                      _DrawerSectionItem(
+                        'Verificar evento',
+                        '/verificar-evento',
+                      ),
                       _DrawerSectionItem('Mapa de eventos', '/event-map'),
                       _DrawerSectionItem('Relatórios', '/reports'),
                     ],

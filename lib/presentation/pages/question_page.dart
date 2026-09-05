@@ -154,18 +154,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
                       spacing: 16,
                       children: [
                         _buildTextField(
-                          label: 'Chave de identificação',
-                          onChanged: (v) => _key = v,
-                          initialValue: _key,
-                          hintText: 'Exemplo: tem_som',
-                        ),
-                        _buildTextField(
                           label: 'Pergunta',
                           onChanged: (v) {
                             _pergunta = v;
-                            if (_key == null || _key!.isEmpty) {
-                              _key = _generateKeyFromPergunta(v);
-                            }
+                            _key = _generateKeyFromPergunta(v);
                           },
                           initialValue: _pergunta,
                         ),
@@ -404,8 +396,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
         ),
         onChanged: onChanged,
         validator: (value) {
-          if ((label == 'Pergunta' || label == 'Chave de identificação') &&
-              (value == null || value.trim().isEmpty)) {
+          if (label == 'Pergunta' && (value == null || value.trim().isEmpty)) {
             return 'Este campo não pode ficar vazio.';
           }
           return null;
@@ -1054,12 +1045,13 @@ class _PerguntasPageState extends State<PerguntasPage> {
 
   void _adicionarOuAtualizarPergunta() {
     if (!_formKey.currentState!.validate()) return;
-    if (_key == null || _key!.trim().isEmpty) {
-      _showError('Informe uma chave válida para a pergunta.');
-      return;
-    }
     if (_pergunta == null || _pergunta!.trim().isEmpty) {
       _showError('Informe uma pergunta válida.');
+      return;
+    }
+    _key = _generateKeyFromPergunta(_pergunta!);
+    if (_key == null || _key!.trim().isEmpty) {
+      _showError('A pergunta precisa ter ao menos uma letra ou número.');
       return;
     }
     if (_secretaria == null || _secretaria!.isEmpty) {

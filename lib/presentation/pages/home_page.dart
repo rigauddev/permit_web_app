@@ -243,6 +243,13 @@ class _InternalHome extends StatelessWidget {
                         route: '/inspections',
                       ),
                       const _HomeActionCard(
+                        icon: Icons.qr_code_scanner_outlined,
+                        title: 'Verificar evento',
+                        description:
+                            'Leia o QR Code do alvará e registre a fiscalização do evento autorizado.',
+                        route: '/verificar-evento',
+                      ),
+                      const _HomeActionCard(
                         icon: Icons.analytics_outlined,
                         title: 'Relatórios',
                         description:

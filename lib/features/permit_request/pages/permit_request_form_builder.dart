@@ -41,6 +41,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
   late final TextEditingController startTimeController;
   late final TextEditingController endTimeController;
   late final TextEditingController beneficiaryController;
+  late final TextEditingController applicantNotesController;
   late Future<List<Map<String, dynamic>>> _publicRangesFuture;
 
   @override
@@ -99,6 +100,9 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     );
     beneficiaryController = TextEditingController(
       text: state.eventData['instituicao_beneficiada'] ?? '',
+    );
+    applicantNotesController = TextEditingController(
+      text: state.eventData['observacoes_solicitante'] ?? '',
     );
   }
 
@@ -272,6 +276,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     startTimeController.dispose();
     endTimeController.dispose();
     beneficiaryController.dispose();
+    applicantNotesController.dispose();
     super.dispose();
   }
 
@@ -680,7 +685,9 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       );
     }
 
-    if (state.currentStep >= 3 && state.currentStep < state.totalSteps - 1) {
+    final observationsStep = state.totalSteps - 2;
+
+    if (state.currentStep >= 3 && state.currentStep < observationsStep) {
       final questionIndex = state.currentStep - 3;
       final question = state.questions[questionIndex];
       final questionKey = question['key'] as String;
@@ -703,6 +710,44 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       );
     }
 
+    if (state.currentStep == observationsStep) {
+      return ListView(
+        children: [
+          const _StepTitle('Observações finais'),
+          const Text(
+            'Inclua alguma informação complementar sobre o evento, se necessário.',
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: applicantNotesController,
+            minLines: 4,
+            maxLines: 7,
+            maxLength: 1000,
+            decoration: const InputDecoration(
+              labelText: 'Observação opcional',
+              alignLabelWithHint: true,
+            ),
+            onChanged:
+                (value) => controller.updateEventInfo(applicantNotes: value),
+          ),
+          const SizedBox(height: 8),
+          _DocumentRequirementCard(
+            title: 'Anexo complementar',
+            description:
+                'Opcional. Use para enviar um arquivo que ajude a análise do pedido.',
+            icon: Icons.attach_file_outlined,
+            files:
+                [
+                  state.documentAttachments['observacao_anexo'],
+                ].whereType<PlatformFile>().toList(),
+            onPressed: () => _chooseDocumentAttachment('observacao_anexo'),
+            onRemove:
+                () => controller.removeDocumentAttachment('observacao_anexo'),
+          ),
+        ],
+      );
+    }
+
     if (state.currentStep == state.totalSteps - 1) {
       final requirements = controller.previewRequirements();
       final pendingFiles = _pendingQuestionFiles(state);
@@ -714,7 +759,12 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
           _ReviewSection(
             title: 'Documentos',
             values: {
-              'anexos': state.attachments.map((file) => file.name).join(', '),
+              for (final entry in state.documentAttachments.entries)
+                _documentLabel(entry.key): entry.value.name,
+              if (state.attachments.isNotEmpty)
+                'Outros anexos': state.attachments
+                    .map((file) => file.name)
+                    .join(', '),
             },
           ),
           const SizedBox(height: 12),
@@ -1435,6 +1485,29 @@ class _DocumentRequirementCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+String _documentLabel(String key) {
+  switch (key) {
+    case 'documento_identificacao':
+      return 'RG/CNH';
+    case 'documento_identificacao_frente':
+      return 'RG/CNH - frente';
+    case 'documento_identificacao_verso':
+      return 'RG/CNH - verso';
+    case 'comprovante_residencia':
+      return 'Comprovante de residência';
+    case 'alvara_funcionamento_local':
+      return 'Alvará de funcionamento do local';
+    case 'comprovante_endereco_local':
+      return 'Comprovante de endereço do local';
+    case 'documento_entidade_beneficente':
+      return 'Documento da entidade beneficente';
+    case 'observacao_anexo':
+      return 'Anexo das observações finais';
+    default:
+      return key.replaceAll('_', ' ');
   }
 }
 

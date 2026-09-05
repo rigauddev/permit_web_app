@@ -523,11 +523,8 @@ class _SecretariaRequestsPageState
       );
       return;
     }
-    final uri =
-        rawUrl.startsWith('http')
-            ? Uri.parse(rawUrl)
-            : Uri.parse('${Uri.base.origin}$rawUrl');
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final uri = Uri.parse(_api.resolveFileUrl(rawUrl));
+    final opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível abrir o anexo.')),

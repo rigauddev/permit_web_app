@@ -21,7 +21,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       allQuestions: newQuestions,
       questions: newQuestions,
       eventTypes: eventTypes,
-      totalSteps: 4 + newQuestions.length,
+      totalSteps: 5 + newQuestions.length,
       currentStep: 0,
       submittedProtocol: null,
     );
@@ -51,11 +51,11 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         for (final entry in state.answerDetails.entries)
           if (allowedKeys.contains(entry.key)) entry.key: entry.value,
       },
-      totalSteps: 4 + filteredQuestions.length,
+      totalSteps: 5 + filteredQuestions.length,
       currentStep:
           state.currentStep > 2
               ? 2
-              : state.currentStep.clamp(0, 3 + filteredQuestions.length),
+              : state.currentStep.clamp(0, 4 + filteredQuestions.length),
     );
   }
 
@@ -153,6 +153,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? eventTypeName,
     String? eventSpaceType,
     bool? localWithoutPermit,
+    String? applicantNotes,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -180,6 +181,9 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     if (eventSpaceType != null) updated['tipo_espaco_evento'] = eventSpaceType;
     if (localWithoutPermit != null) {
       updated['local_sem_alvara'] = localWithoutPermit.toString();
+    }
+    if (applicantNotes != null) {
+      updated['observacoes_solicitante'] = applicantNotes;
     }
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
@@ -332,7 +336,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
     }
 
-    if (state.currentStep >= 3 && state.currentStep < state.totalSteps - 1) {
+    final observationsStep = state.totalSteps - 2;
+    if (state.currentStep >= 3 && state.currentStep < observationsStep) {
       final question = state.questions[state.currentStep - 3];
       final key = question['key'] as String;
       if (!state.answers.containsKey(key)) {
@@ -389,10 +394,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         answers: state.answers,
         answerDetails: state.answerDetails,
         attachmentNames: state.attachments.map((file) => file.name).toList(),
-        documentAttachmentNames:
-            state.documentAttachments.entries
-                .map((entry) => '${entry.key}:${entry.value.name}')
-                .toList(),
+        documentAttachments: await _uploadInitialDocuments(token),
       );
       final protocolo = response['protocolo'] as String? ?? '';
       state = state.copyWith(isSubmitting: false, submittedProtocol: protocolo);
@@ -411,6 +413,28 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       return null;
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _uploadInitialDocuments(
+    String token,
+  ) async {
+    final api = PermitApiService();
+    final uploads = <Map<String, dynamic>>[];
+    for (final entry in state.documentAttachments.entries) {
+      final upload = await api.uploadFile(
+        accessToken: token,
+        kind: 'solicitacoes/documentos',
+        file: entry.value,
+      );
+      uploads.add({
+        'tipo_documento': entry.key,
+        'nome_arquivo': upload['file_name']?.toString() ?? entry.value.name,
+        'arquivo_url': upload['file_url']?.toString() ?? '',
+        'mime_type': upload['mime_type']?.toString(),
+        'tamanho_bytes': upload['size_bytes'],
+      });
+    }
+    return uploads;
   }
 
   String? _validateRequiredQuestionFields(

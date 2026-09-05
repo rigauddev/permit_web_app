@@ -138,6 +138,18 @@ class PermitService:
         self.db.add(request)
         self.db.flush()
 
+        for attachment in self._initial_attachments_from_payload(payload):
+            self.db.add(
+                AttachmentModel(
+                    permit_request_id=request.id,
+                    tipo_documento=attachment["tipo_documento"],
+                    nome_arquivo=attachment["nome_arquivo"],
+                    arquivo_url=attachment["arquivo_url"],
+                    mime_type=attachment.get("mime_type"),
+                    tamanho_bytes=attachment.get("tamanho_bytes"),
+                )
+            )
+
         for requirement_data in self._build_requirements(payload.respostas):
             secretaria_slug = requirement_data["secretaria_slug"]
             secretaria = self.db.query(SecretariaModel).filter(SecretariaModel.slug == secretaria_slug).first()
@@ -1676,6 +1688,32 @@ class PermitService:
             mime_type=payload.mime_type,
             tamanho_bytes=payload.tamanho_bytes,
         )
+
+    @staticmethod
+    def _initial_attachments_from_payload(payload: PermitCreateRequest) -> list[dict[str, Any]]:
+        raw_attachments = payload.dados_evento.get("anexos_iniciais") or []
+        if not isinstance(raw_attachments, list):
+            return []
+        attachments: list[dict[str, Any]] = []
+        for item in raw_attachments:
+            if not isinstance(item, dict):
+                continue
+            tipo_documento = str(item.get("tipo_documento", "")).strip()
+            nome_arquivo = str(item.get("nome_arquivo", "")).strip()
+            arquivo_url = str(item.get("arquivo_url", "")).strip()
+            if not tipo_documento or not nome_arquivo or not arquivo_url:
+                continue
+            tamanho_bytes = item.get("tamanho_bytes")
+            attachments.append(
+                {
+                    "tipo_documento": tipo_documento[:80],
+                    "nome_arquivo": nome_arquivo[:255],
+                    "arquivo_url": arquivo_url[:500],
+                    "mime_type": str(item.get("mime_type") or "")[:120] or None,
+                    "tamanho_bytes": tamanho_bytes if isinstance(tamanho_bytes, int) else None,
+                }
+            )
+        return attachments
 
     @staticmethod
     def _ensure_pdf_attachment(payload: AttachmentCreateRequest, message: str) -> None:

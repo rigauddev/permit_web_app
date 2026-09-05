@@ -1047,7 +1047,11 @@ class _InspectionRecordFormState extends State<_InspectionRecordForm> {
                         notes: _notesController.text.trim(),
                       ),
               icon: const Icon(Icons.assignment_turned_in_outlined),
-              label: const Text('Registrar fiscalização'),
+              label: Text(
+                _status == 'regular'
+                    ? 'Registrar evento verificado'
+                    : 'Registrar fiscalização',
+              ),
             ),
           ),
         ],
@@ -1168,6 +1172,9 @@ String _verificationLabel(Map<String, dynamic> validation) {
   final count = validation['verification_count'];
   final verifiedAt = validation['verified_at'];
   final countText = count == null ? '1' : count.toString();
+  if (countText == '1') {
+    return 'Evento verificado agora. Primeira conferência registrada.';
+  }
   if (verifiedAt == null || verifiedAt.toString().isEmpty) {
     return 'Evento verificado nesta consulta';
   }

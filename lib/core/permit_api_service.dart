@@ -863,7 +863,7 @@ class PermitApiService {
     required Map<String, bool> answers,
     required Map<String, dynamic> answerDetails,
     required List<String> attachmentNames,
-    List<String> documentAttachmentNames = const [],
+    List<Map<String, dynamic>> documentAttachments = const [],
   }) async {
     final isBeneficente = eventData['is_beneficente'] == 'true';
     final response = await _client.post(
@@ -878,7 +878,14 @@ class PermitApiService {
         'dados_responsavel': responsibleData,
         'dados_evento': {
           ...eventData,
-          'anexos_informados': [...documentAttachmentNames, ...attachmentNames],
+          'anexos_informados': [
+            ...documentAttachments.map(
+              (item) =>
+                  '${item['tipo_documento'] ?? 'documento'}:${item['nome_arquivo'] ?? ''}',
+            ),
+            ...attachmentNames,
+          ],
+          'anexos_iniciais': documentAttachments,
         },
         'respostas': {
           for (final entry in answers.entries)

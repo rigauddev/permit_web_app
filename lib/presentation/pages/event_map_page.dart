@@ -642,7 +642,7 @@ class _OverflowEventList extends StatelessWidget {
   }
 }
 
-class _FullMapView extends StatelessWidget {
+class _FullMapView extends StatefulWidget {
   const _FullMapView({
     required this.events,
     required this.overflowEvents,
@@ -656,8 +656,35 @@ class _FullMapView extends StatelessWidget {
   final ValueChanged<_MapEvent> onSelect;
 
   @override
+  State<_FullMapView> createState() => _FullMapViewState();
+}
+
+class _FullMapViewState extends State<_FullMapView> {
+  late final TransformationController _controller;
+  late _MapEvent? _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TransformationController();
+    _selected =
+        widget.selected ??
+        (widget.events.isNotEmpty ? widget.events.first : null);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _selectEvent(_MapEvent event) {
+    setState(() => _selected = event);
+    widget.onSelect(event);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = TransformationController();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mapa da cidade'),
@@ -673,17 +700,15 @@ class _FullMapView extends StatelessWidget {
         children: [
           Positioned.fill(
             child: InteractiveViewer(
-              transformationController: controller,
+              transformationController: _controller,
               minScale: 1,
               maxScale: 4,
               panEnabled: true,
               scaleEnabled: true,
               child: _OsmMapSurface(
-                events: events,
-                selected: selected,
-                onSelect: (event) {
-                  onSelect(event);
-                },
+                events: widget.events,
+                selected: _selected,
+                onSelect: _selectEvent,
                 fullScreen: true,
               ),
             ),
@@ -693,9 +718,9 @@ class _FullMapView extends StatelessWidget {
             right: 16,
             bottom: 16,
             child: _FullMapEventStrip(
-              events: [...events, ...overflowEvents],
-              selected: selected,
-              onSelect: onSelect,
+              events: [...widget.events, ...widget.overflowEvents],
+              selected: _selected,
+              onSelect: _selectEvent,
             ),
           ),
         ],

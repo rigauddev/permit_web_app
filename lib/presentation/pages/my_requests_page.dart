@@ -380,7 +380,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     if (rawUrl.isEmpty) return;
     final url = _api.resolveFileUrl(rawUrl);
     final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível abrir o arquivo.')),
