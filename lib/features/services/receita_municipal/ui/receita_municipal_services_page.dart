@@ -120,13 +120,11 @@ class _ReceitaMunicipalServicesPageState
       userProfile: widget.userProfile,
       appBar: AppBar(
         title: Text(isCitizen ? 'Serviços municipais' : 'Serviços da área'),
-        actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => _goBack(context),
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ],
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => _goBack(context),
+          icon: const Icon(Icons.arrow_back),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -509,13 +507,11 @@ class _FavoriteServicesPageState extends State<FavoriteServicesPage> {
       userProfile: widget.userProfile,
       appBar: AppBar(
         title: const Text('Serviços favoritos'),
-        actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ],
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+          icon: const Icon(Icons.arrow_back),
+        ),
       ),
       body:
           _loading

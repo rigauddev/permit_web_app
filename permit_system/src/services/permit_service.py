@@ -1424,29 +1424,44 @@ class PermitService:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
 
     def _validate_payload(self, payload: PermitCreateRequest) -> None:
-        responsible_required = ["nome", "cpf_cnpj", "telefone", "endereco"]
-        event_required = [
-            "nome_evento",
-            "data_evento",
-            "endereco_evento",
-            "publico_estimado",
-            "horario_inicio",
-            "horario_termino",
-            "tipo_espaco_evento",
-            "latitude_evento",
-            "longitude_evento",
-        ]
+        responsible_required = {
+            "nome": "nome do responsável",
+            "cpf_cnpj": "CPF/CNPJ",
+            "telefone": "telefone",
+            "endereco": "endereço residencial",
+        }
+        event_required = {
+            "nome_evento": "nome do evento",
+            "data_evento": "data do evento",
+            "endereco_evento": "endereço do evento",
+            "publico_estimado": "expectativa de público",
+            "horario_inicio": "horário de início",
+            "horario_termino": "horário de término",
+            "tipo_espaco_evento": "tipo de espaço do evento",
+            "latitude_evento": "latitude do evento",
+            "longitude_evento": "longitude do evento",
+        }
 
-        if any(not str(payload.dados_responsavel.get(field, "")).strip() for field in responsible_required):
+        missing_responsible = [
+            label
+            for field, label in responsible_required.items()
+            if not str(payload.dados_responsavel.get(field, "")).strip()
+        ]
+        if missing_responsible:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Dados obrigatórios do responsável não foram preenchidos.",
+                detail=f"Preencha os dados do responsável: {', '.join(missing_responsible)}.",
             )
 
-        if any(not str(payload.dados_evento.get(field, "")).strip() for field in event_required):
+        missing_event = [
+            label
+            for field, label in event_required.items()
+            if not str(payload.dados_evento.get(field, "")).strip()
+        ]
+        if missing_event:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Dados obrigatórios do evento não foram preenchidos.",
+                detail=f"Preencha os dados do evento: {', '.join(missing_event)}.",
             )
         if str(payload.dados_evento.get("tipo_espaco_evento", "")).lower() not in {"publico", "privado"}:
             raise HTTPException(
@@ -1459,7 +1474,7 @@ class PermitService:
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Marque o local do evento no mapa para salvar latitude e longitude.",
+                detail="Busque e selecione o endereço do evento para salvar latitude e longitude.",
             )
 
         try:
@@ -1478,10 +1493,39 @@ class PermitService:
             )
 
         attachment_names = payload.dados_evento.get("anexos_informados") or []
-        if not isinstance(attachment_names, list) or len(attachment_names) < 3:
+        attachment_text = " ".join(str(item) for item in attachment_names if item)
+        typed_documents = ":" in attachment_text
+        has_id_document = (
+            "documento_identificacao:" in attachment_text
+            or (
+                "documento_identificacao_frente:" in attachment_text
+                and "documento_identificacao_verso:" in attachment_text
+            )
+        )
+        has_residence_proof = "comprovante_residencia:" in attachment_text
+        local_without_permit = str(payload.dados_evento.get("local_sem_alvara", "")).lower() == "true"
+        has_local_document = (
+            "comprovante_endereco_local:" in attachment_text
+            if local_without_permit
+            else "alvara_funcionamento_local:" in attachment_text
+        )
+        missing_documents = []
+        if not has_id_document:
+            missing_documents.append("RG/CNH")
+        if not has_residence_proof:
+            missing_documents.append("comprovante de residência")
+        if not has_local_document:
+            missing_documents.append(
+                "comprovante de endereço do local"
+                if local_without_permit
+                else "alvará de funcionamento do local"
+            )
+        if not typed_documents and isinstance(attachment_names, list) and len(attachment_names) >= 3:
+            missing_documents = []
+        if not isinstance(attachment_names, list) or missing_documents:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Informe RG/CPF, comprovante de residência e alvará do local.",
+                detail=f"Anexe os documentos obrigatórios: {', '.join(missing_documents)}.",
             )
 
         if payload.is_beneficente and not (payload.instituicao_beneficiada or "").strip():

@@ -91,6 +91,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       answers: _boolMap(draft['answers']),
       answerDetails: _dynamicMap(draft['answerDetails']),
       attachments: const [],
+      documentAttachments: const {},
       submittedProtocol: null,
     );
     final eventTypeKey = state.eventData['tipo_evento'];
@@ -151,6 +152,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? eventTypeKey,
     String? eventTypeName,
     String? eventSpaceType,
+    bool? localWithoutPermit,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -176,6 +178,9 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     if (eventTypeKey != null) updated['tipo_evento'] = eventTypeKey;
     if (eventTypeName != null) updated['tipo_evento_nome'] = eventTypeName;
     if (eventSpaceType != null) updated['tipo_espaco_evento'] = eventSpaceType;
+    if (localWithoutPermit != null) {
+      updated['local_sem_alvara'] = localWithoutPermit.toString();
+    }
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
     }
@@ -198,6 +203,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
               )
               .toList(),
     );
+  }
+
+  void setDocumentAttachment(String key, PlatformFile file) {
+    state = state.copyWith(
+      documentAttachments: {...state.documentAttachments, key: file},
+    );
+  }
+
+  void removeDocumentAttachment(String key) {
+    final updated = Map<String, PlatformFile>.from(state.documentAttachments)
+      ..remove(key);
+    state = state.copyWith(documentAttachments: updated);
   }
 
   void nextStep() {
@@ -252,8 +269,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
     }
 
-    if (state.currentStep == 1 && state.attachments.length < 3) {
-      return 'Anexe RG/CPF, comprovante de residência e alvará do local.';
+    if (state.currentStep == 1) {
+      final docs = state.documentAttachments;
+      final hasSingleId = docs.containsKey('documento_identificacao');
+      final hasPhotoId =
+          docs.containsKey('documento_identificacao_frente') &&
+          docs.containsKey('documento_identificacao_verso');
+      if (!hasSingleId && !hasPhotoId) {
+        return 'Anexe RG/CNH em arquivo único ou tire foto da frente e do verso.';
+      }
+      if (!docs.containsKey('comprovante_residencia')) {
+        return 'Anexe ou tire foto do comprovante de residência.';
+      }
     }
 
     if (state.currentStep == 2) {
@@ -277,7 +304,16 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       if (double.tryParse(state.eventData['latitude_evento'] ?? '') == null ||
           double.tryParse(state.eventData['longitude_evento'] ?? '') == null) {
-        return 'Marque o local do evento no mapa para salvar latitude e longitude.';
+        return 'Busque e selecione o endereço do evento para salvar latitude e longitude.';
+      }
+      final docs = state.documentAttachments;
+      final usesAddressProof = state.eventData['local_sem_alvara'] == 'true';
+      if (usesAddressProof) {
+        if (!docs.containsKey('comprovante_endereco_local')) {
+          return 'Anexe o comprovante de endereço do local do evento.';
+        }
+      } else if (!docs.containsKey('alvara_funcionamento_local')) {
+        return 'Anexe o alvará de funcionamento do local ou marque que usará comprovante de endereço.';
       }
       final eventDate = DateTime.tryParse(state.eventData['data_evento'] ?? '');
       if (eventDate == null) {
@@ -353,6 +389,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         answers: state.answers,
         answerDetails: state.answerDetails,
         attachmentNames: state.attachments.map((file) => file.name).toList(),
+        documentAttachmentNames:
+            state.documentAttachments.entries
+                .map((entry) => '${entry.key}:${entry.value.name}')
+                .toList(),
       );
       final protocolo = response['protocolo'] as String? ?? '';
       state = state.copyWith(isSubmitting: false, submittedProtocol: protocolo);

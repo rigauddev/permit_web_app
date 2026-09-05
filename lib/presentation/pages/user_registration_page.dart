@@ -1,8 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/permit_api_service.dart';
 
 class UserRegistrationPage extends StatefulWidget {
   const UserRegistrationPage({super.key});
@@ -148,6 +150,21 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
     setState(() => _residenceProof = result.files.single);
   }
 
+  Future<void> _searchAddress() async {
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder:
+          (context) => _AddressSearchDialog(
+            initialQuery: _addressController.text.trim(),
+          ),
+    );
+    if (selected == null) return;
+    setState(() {
+      _addressController.text =
+          selected['display_name']?.toString() ?? _addressController.text;
+    });
+  }
+
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -246,6 +263,12 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                               labelText: _personType == 'PJ' ? 'CNPJ' : 'CPF',
                             ),
                             keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              _CpfCnpjInputFormatter(
+                                isCnpj: _personType == 'PJ',
+                              ),
+                            ],
                             validator: (value) {
                               final digits = _onlyDigits(value ?? '');
                               if (digits.isEmpty) return 'Informe o documento';
@@ -262,26 +285,43 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                           TextFormField(
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              _PhoneInputFormatter(),
+                            ],
                             decoration: const InputDecoration(
                               labelText: 'Telefone',
                             ),
-                            validator:
-                                (value) =>
-                                    (value ?? '').trim().isEmpty
-                                        ? 'Informe o telefone'
-                                        : null,
+                            validator: (value) {
+                              final digits = _onlyDigits(value ?? '');
+                              if (digits.isEmpty) return 'Informe o telefone';
+                              return digits.length < 10
+                                  ? 'Informe um telefone válido'
+                                  : null;
+                            },
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: _addressController,
                             decoration: const InputDecoration(
                               labelText: 'Endereço',
+                              helperText:
+                                  'Informe rua, bairro, cidade, CEP e estado.',
                             ),
                             validator:
                                 (value) =>
                                     (value ?? '').trim().isEmpty
                                         ? 'Informe o endereço'
                                         : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: _searchAddress,
+                              icon: const Icon(Icons.search),
+                              label: const Text('Buscar endereço completo'),
+                            ),
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
@@ -296,7 +336,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                             validator: (value) {
                               final email = (value ?? '').trim();
                               if (email.isEmpty) return null;
-                              return email.contains('@')
+                              return _isValidEmail(email)
                                   ? null
                                   : 'Informe um e-mail válido';
                             },
@@ -544,4 +584,213 @@ bool _isValidCnpj(String value) {
     if (digit != numbers[12 + step]) return false;
   }
   return true;
+}
+
+bool _isValidEmail(String email) {
+  return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
+}
+
+class _CpfCnpjInputFormatter extends TextInputFormatter {
+  _CpfCnpjInputFormatter({required this.isCnpj});
+
+  final bool isCnpj;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final maxLength = isCnpj ? 14 : 11;
+    final digits = _onlyDigits(newValue.text);
+    final limited =
+        digits.length > maxLength ? digits.substring(0, maxLength) : digits;
+    final formatted = isCnpj ? _formatCnpj(limited) : _formatCpf(limited);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  String _formatCpf(String value) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < value.length; i++) {
+      if (i == 3 || i == 6) buffer.write('.');
+      if (i == 9) buffer.write('-');
+      buffer.write(value[i]);
+    }
+    return buffer.toString();
+  }
+
+  String _formatCnpj(String value) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < value.length; i++) {
+      if (i == 2 || i == 5) buffer.write('.');
+      if (i == 8) buffer.write('/');
+      if (i == 12) buffer.write('-');
+      buffer.write(value[i]);
+    }
+    return buffer.toString();
+  }
+}
+
+class _PhoneInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = _onlyDigits(newValue.text);
+    final limited = digits.length > 11 ? digits.substring(0, 11) : digits;
+    final formatted = _formatPhone(limited);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  String _formatPhone(String value) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < value.length; i++) {
+      if (i == 0) buffer.write('(');
+      if (i == 2) buffer.write(') ');
+      if ((value.length <= 10 && i == 6) || (value.length > 10 && i == 7)) {
+        buffer.write('-');
+      }
+      buffer.write(value[i]);
+    }
+    return buffer.toString();
+  }
+}
+
+class _AddressSearchDialog extends StatefulWidget {
+  const _AddressSearchDialog({required this.initialQuery});
+
+  final String initialQuery;
+
+  @override
+  State<_AddressSearchDialog> createState() => _AddressSearchDialogState();
+}
+
+class _AddressSearchDialogState extends State<_AddressSearchDialog> {
+  late final TextEditingController _controller;
+  List<Map<String, dynamic>> _results = const [];
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialQuery);
+    if (widget.initialQuery.trim().length >= 3) {
+      Future.microtask(_search);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.length < 3) {
+      setState(() => _error = 'Digite pelo menos 3 caracteres.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final results = await PermitApiService().searchEventAddresses(query);
+      if (!mounted) return;
+      setState(() => _results = results);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Não foi possível buscar o endereço.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Buscar endereço'),
+      content: SizedBox(
+        width: 620,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _controller,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                labelText: 'Rua, bairro ou local',
+                suffixIcon:
+                    _loading
+                        ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                        : IconButton(
+                          tooltip: 'Buscar',
+                          onPressed: _search,
+                          icon: const Icon(Icons.search),
+                        ),
+              ),
+              onSubmitted: (_) => _search(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 340),
+              child:
+                  _results.isEmpty
+                      ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text('Busque e selecione uma opção.'),
+                        ),
+                      )
+                      : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _results.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final item = _results[index];
+                          return ListTile(
+                            leading: const Icon(Icons.place_outlined),
+                            title: Text(
+                              item['display_name']?.toString() ?? '',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => Navigator.pop(context, item),
+                          );
+                        },
+                      ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
 }

@@ -56,12 +56,12 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       userType: widget.userType,
       appBar: AppBar(
         title: const Text('Minhas solicitações'),
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => _goBack(context),
+          icon: const Icon(Icons.arrow_back),
+        ),
         actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => _goBack(context),
-            icon: const Icon(Icons.arrow_back),
-          ),
           IconButton(
             tooltip: 'Atualizar',
             onPressed: _refresh,

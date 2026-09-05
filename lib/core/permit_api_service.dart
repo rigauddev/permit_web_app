@@ -54,6 +54,31 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<List<Map<String, dynamic>>> searchEventAddresses(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 3) return const [];
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      'q': '$trimmed, Valença, Bahia, Brasil',
+      'format': 'jsonv2',
+      'addressdetails': '1',
+      'limit': '8',
+      'countrycodes': 'br',
+    });
+    final response = await _client.get(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'User-Agent': 'CentralDeServicosValenca/1.0',
+      },
+    );
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw PermitApiException('Não foi possível buscar o endereço.');
+    }
+    if (decoded is! List) return const [];
+    return decoded.whereType<Map<String, dynamic>>().toList();
+  }
+
   static const List<Map<String, dynamic>> eventPermitQuestions = [
     {
       'id': 1,
@@ -838,6 +863,7 @@ class PermitApiService {
     required Map<String, bool> answers,
     required Map<String, dynamic> answerDetails,
     required List<String> attachmentNames,
+    List<String> documentAttachmentNames = const [],
   }) async {
     final isBeneficente = eventData['is_beneficente'] == 'true';
     final response = await _client.post(
@@ -850,7 +876,10 @@ class PermitApiService {
         'is_beneficente': isBeneficente,
         'instituicao_beneficiada': eventData['instituicao_beneficiada'],
         'dados_responsavel': responsibleData,
-        'dados_evento': {...eventData, 'anexos_informados': attachmentNames},
+        'dados_evento': {
+          ...eventData,
+          'anexos_informados': [...documentAttachmentNames, ...attachmentNames],
+        },
         'respostas': {
           for (final entry in answers.entries)
             entry.key:
