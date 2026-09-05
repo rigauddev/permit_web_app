@@ -5,6 +5,7 @@ from src.api.dependencies import get_current_user, require_roles
 from src.infra.database.models import UserModel
 from src.infra.database.mysql_db import get_db
 from src.schemas.auth_schema import (
+    ChangePasswordRequest,
     EmailVerificationConfirmRequest,
     EmailVerificationConfirmResponse,
     EmailVerificationStartRequest,
@@ -88,6 +89,15 @@ def update_me(
     current_user: UserModel = Depends(get_current_user),
 ):
     return AuthService(db).update_current_user(current_user, payload)
+
+
+@router.post("/change-password", response_model=TokenResponse)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    return AuthService(db).change_password(current_user, payload)
 
 
 @router.get("/users", response_model=list[UserResponse])

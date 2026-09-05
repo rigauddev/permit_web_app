@@ -13,12 +13,14 @@ import 'package:permit_web_app/data/models/user_model.dart';
 import 'package:permit_web_app/presentation/pages/question_page.dart';
 import 'package:permit_web_app/presentation/pages/user_alvara_dashboard.dart';
 import 'package:permit_web_app/presentation/pages/event_credential_page.dart';
+import 'package:permit_web_app/presentation/pages/event_qr_scanner_page.dart';
 
 import '../../features/permit_request/pages/permit_request_page.dart';
 
 class AppRoutes {
   static const String login = '/';
   static const String recoveryPassword = '/recovery-password';
+  static const String changePassword = '/change-password';
   static const String home = '/home';
   static const String profile = '/profile';
   static const String users = '/users';
@@ -40,6 +42,7 @@ class AppRoutes {
   static const String permitDashboard = '/permit-dashboard';
   static const String eventPermit = '/event-permit';
   static const String validateEvent = '/validar-evento';
+  static const String verifyEvent = '/verificar-evento';
 
   static Route<dynamic>? generateRoute(
     RouteSettings settings,
@@ -55,6 +58,8 @@ class AppRoutes {
               publicCode:
                   uri.pathSegments.length > 1 ? uri.pathSegments[1] : '',
               token: uri.queryParameters['t'],
+              userType: user?.userType ?? '',
+              userProfile: user?.profile ?? '',
             ),
       );
     }
@@ -122,7 +127,23 @@ class AppRoutes {
       case validateEvent:
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const EventCredentialPage(),
+          builder:
+              (_) => EventCredentialPage(
+                userType: user?.userType ?? '',
+                userProfile: user?.profile ?? '',
+              ),
+        );
+      case verifyEvent:
+        if (user == null || user.role == 'cidadao') {
+          return _blockedRoute(user);
+        }
+        return MaterialPageRoute(
+          settings: settings,
+          builder:
+              (_) => EventQrScannerPage(
+                userType: user.userType,
+                userProfile: user.profile,
+              ),
         );
 
       default:

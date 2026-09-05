@@ -11,6 +11,7 @@ import 'package:permit_web_app/data/providers/user_provider.dart';
 
 import 'features/services/receita_municipal/ui/receita_municipal_services_page.dart';
 import 'presentation/pages/login_page.dart';
+import 'presentation/pages/change_password_page.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/home_content_page.dart';
 import 'presentation/pages/event_map_page.dart';
@@ -36,9 +37,7 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(userProvider);
-
-    return _SessionBootstrap(user: user, child: _AppRouter(user: user));
+    return const _SessionBootstrap();
   }
 }
 
@@ -69,6 +68,17 @@ class _AppRouter extends StatelessWidget {
       routes: {
         AppRoutes.login: (context) => const LoginPage(),
         AppRoutes.recoveryPassword: (context) => RecoveryPassword(),
+        AppRoutes.changePassword:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+                'cidadao',
+              },
+              child: const ChangePasswordPage(),
+            ),
         AppRoutes.home:
             (context) => _GuardedRoute(
               user: user,
@@ -205,10 +215,7 @@ class _AppRouter extends StatelessWidget {
 }
 
 class _SessionBootstrap extends ConsumerStatefulWidget {
-  const _SessionBootstrap({required this.user, required this.child});
-
-  final UserModel? user;
-  final Widget child;
+  const _SessionBootstrap();
 
   @override
   ConsumerState<_SessionBootstrap> createState() => _SessionBootstrapState();
@@ -232,7 +239,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       if (mounted) setState(() => _checked = true);
       return;
     }
-    if (widget.user == null) {
+    if (ref.read(userProvider) == null) {
       ref
           .read(userProvider.notifier)
           .setUser(
@@ -252,7 +259,8 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
         home: Scaffold(body: Center(child: CircularProgressIndicator())),
       );
     }
-    return widget.child;
+    final user = ref.watch(userProvider);
+    return _AppRouter(user: user);
   }
 }
 

@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +22,7 @@ class SessionStore {
   static const accessTokenKey = 'access_token';
   static const userKey = 'user';
   static const sessionExpiresAtKey = 'session_expires_at';
+  static const _secureStorageTimeout = Duration(milliseconds: 800);
 
   final FlutterSecureStorage _secureStorage;
 
@@ -29,18 +31,23 @@ class SessionStore {
     required String userJson,
     required String expiresAt,
   }) async {
-    try {
-      await _secureStorage.write(key: accessTokenKey, value: accessToken);
-      await _secureStorage.write(key: userKey, value: userJson);
-      await _secureStorage.write(key: sessionExpiresAtKey, value: expiresAt);
-    } catch (_) {
-      // No web, persistimos abaixo em SharedPreferences como fallback.
-    }
-    if (!kIsWeb) return;
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(accessTokenKey, accessToken);
     await preferences.setString(userKey, userJson);
     await preferences.setString(sessionExpiresAtKey, expiresAt);
+    try {
+      await _secureStorage
+          .write(key: accessTokenKey, value: accessToken)
+          .timeout(_secureStorageTimeout);
+      await _secureStorage
+          .write(key: userKey, value: userJson)
+          .timeout(_secureStorageTimeout);
+      await _secureStorage
+          .write(key: sessionExpiresAtKey, value: expiresAt)
+          .timeout(_secureStorageTimeout);
+    } catch (_) {
+      // SharedPreferences mantém a sessão como fallback quando o storage seguro falha.
+    }
   }
 
   Future<SavedSession?> read() async {
@@ -49,30 +56,43 @@ class SessionStore {
     final expiresAtText = await _readValue(sessionExpiresAtKey);
     final expiresAt =
         expiresAtText == null ? null : DateTime.tryParse(expiresAtText);
-    if (accessToken == null || userJson == null || expiresAt == null) {
+    if (accessToken == null || userJson == null) {
       return null;
+    }
+    final effectiveExpiresAt =
+        expiresAt ?? DateTime.now().toUtc().add(const Duration(days: 5));
+    final effectiveExpiresAtText = effectiveExpiresAt.toUtc().toIso8601String();
+    if (expiresAt == null) {
+      await save(
+        accessToken: accessToken,
+        userJson: userJson,
+        expiresAt: effectiveExpiresAtText,
+      );
     }
     await _syncSecureStorage(
       accessToken: accessToken,
       userJson: userJson,
-      expiresAt: expiresAtText!,
+      expiresAt: effectiveExpiresAtText,
     );
     return SavedSession(
       accessToken: accessToken,
       userJson: userJson,
-      expiresAt: expiresAt,
+      expiresAt: effectiveExpiresAt,
     );
   }
 
   Future<void> clear() async {
     try {
-      await _secureStorage.delete(key: accessTokenKey);
-      await _secureStorage.delete(key: userKey);
-      await _secureStorage.delete(key: sessionExpiresAtKey);
+      await _secureStorage
+          .delete(key: accessTokenKey)
+          .timeout(_secureStorageTimeout);
+      await _secureStorage.delete(key: userKey).timeout(_secureStorageTimeout);
+      await _secureStorage
+          .delete(key: sessionExpiresAtKey)
+          .timeout(_secureStorageTimeout);
     } catch (_) {
-      // No web, fallback storage below is the source of truth when secure storage fails.
+      // O fallback abaixo também precisa ser limpo.
     }
-    if (!kIsWeb) return;
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(accessTokenKey);
     await preferences.remove(userKey);
@@ -96,11 +116,13 @@ class SessionStore {
   Future<String?> _readValue(String key) async {
     String? secureValue;
     try {
-      secureValue = await _secureStorage.read(key: key);
+      secureValue = await _secureStorage
+          .read(key: key)
+          .timeout(_secureStorageTimeout);
     } catch (_) {
       secureValue = null;
     }
-    if (!kIsWeb || (secureValue != null && secureValue.isNotEmpty)) {
+    if (secureValue != null && secureValue.isNotEmpty) {
       return secureValue;
     }
     final preferences = await SharedPreferences.getInstance();
@@ -113,11 +135,16 @@ class SessionStore {
     required String userJson,
     required String expiresAt,
   }) async {
-    if (!kIsWeb) return;
     try {
-      await _secureStorage.write(key: accessTokenKey, value: accessToken);
-      await _secureStorage.write(key: userKey, value: userJson);
-      await _secureStorage.write(key: sessionExpiresAtKey, value: expiresAt);
+      await _secureStorage
+          .write(key: accessTokenKey, value: accessToken)
+          .timeout(_secureStorageTimeout);
+      await _secureStorage
+          .write(key: userKey, value: userJson)
+          .timeout(_secureStorageTimeout);
+      await _secureStorage
+          .write(key: sessionExpiresAtKey, value: expiresAt)
+          .timeout(_secureStorageTimeout);
     } catch (_) {
       // SharedPreferences already preserved the web session.
     }

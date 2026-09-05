@@ -1,8 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/permit_api_service.dart';
@@ -42,6 +41,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
   late final TextEditingController startTimeController;
   late final TextEditingController endTimeController;
   late final TextEditingController beneficiaryController;
+  late final TextEditingController applicantNotesController;
   late Future<List<Map<String, dynamic>>> _publicRangesFuture;
 
   @override
@@ -101,6 +101,9 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     beneficiaryController = TextEditingController(
       text: state.eventData['instituicao_beneficiada'] ?? '',
     );
+    applicantNotesController = TextEditingController(
+      text: state.eventData['observacoes_solicitante'] ?? '',
+    );
   }
 
   Future<List<Map<String, dynamic>>> _loadPublicRanges() async {
@@ -113,48 +116,150 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     }
   }
 
-  Future<void> _openEventAddressMap() async {
-    final address = eventAddressController.text.trim();
-    if (address.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Informe o endereço do evento antes de abrir o mapa.'),
-        ),
-      );
-      return;
-    }
-    final query = Uri.encodeComponent('$address, Valença, BA');
-    final uri = Uri.parse('https://www.openstreetmap.org/search?query=$query');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  Future<void> _pickEventLocation() async {
-    final state = ref.read(permitRequestControllerProvider);
-    final initialLat = double.tryParse(
-      state.eventData['latitude_evento'] ?? '',
-    );
-    final initialLng = double.tryParse(
-      state.eventData['longitude_evento'] ?? '',
-    );
-    final result = await showDialog<({double latitude, double longitude})>(
+  Future<void> _searchEventAddress() async {
+    final initialQuery = eventAddressController.text.trim();
+    final selected = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder:
-          (context) => _AddressMapPickerDialog(
-            initialLatitude: initialLat,
-            initialLongitude: initialLng,
-          ),
+      builder: (context) => _AddressSearchDialog(initialQuery: initialQuery),
     );
-    if (result == null) return;
+    if (selected == null) return;
+    final address =
+        selected['display_name']?.toString() ?? eventAddressController.text;
+    final latitude = double.tryParse(selected['lat']?.toString() ?? '');
+    final longitude = double.tryParse(selected['lon']?.toString() ?? '');
+    eventAddressController.text = address;
     ref
         .read(permitRequestControllerProvider.notifier)
         .updateEventInfo(
-          eventLatitude: result.latitude.toStringAsFixed(6),
-          eventLongitude: result.longitude.toStringAsFixed(6),
+          eventAddress: address,
+          eventLatitude: latitude?.toStringAsFixed(6),
+          eventLongitude: longitude?.toStringAsFixed(6),
         );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Local do evento marcado no mapa.')),
+  }
+
+  Future<PlatformFile?> _pickSingleDocument() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+      allowMultiple: false,
+      withData: true,
     );
+    if (result == null || result.files.isEmpty) return null;
+    return result.files.single;
+  }
+
+  Future<PlatformFile?> _takeDocumentPhoto(String fileName) async {
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+      maxWidth: 1600,
+    );
+    if (photo == null) return null;
+    final bytes = await photo.readAsBytes();
+    return PlatformFile(name: fileName, size: bytes.length, bytes: bytes);
+  }
+
+  Future<void> _chooseIdentificationDocument() async {
+    final controller = ref.read(permitRequestControllerProvider.notifier);
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      builder:
+          (context) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'RG/CNH',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    leading: const Icon(Icons.upload_file_outlined),
+                    title: const Text('Anexar arquivo único'),
+                    subtitle: const Text('PDF ou imagem com frente e verso.'),
+                    onTap: () => Navigator.pop(context, 'file'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: const Text('Tirar foto da frente e do verso'),
+                    onTap: () => Navigator.pop(context, 'camera'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+    if (mode == 'file') {
+      final file = await _pickSingleDocument();
+      if (file == null) return;
+      controller
+        ..removeDocumentAttachment('documento_identificacao_frente')
+        ..removeDocumentAttachment('documento_identificacao_verso')
+        ..setDocumentAttachment('documento_identificacao', file);
+    } else if (mode == 'camera') {
+      final front = await _takeDocumentPhoto('documento_frente.jpg');
+      if (front == null) return;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Agora tire a foto do verso.')),
+      );
+      final back = await _takeDocumentPhoto('documento_verso.jpg');
+      if (back == null) return;
+      controller
+        ..removeDocumentAttachment('documento_identificacao')
+        ..setDocumentAttachment('documento_identificacao_frente', front)
+        ..setDocumentAttachment('documento_identificacao_verso', back);
+    }
+  }
+
+  Future<void> _chooseResidenceProof() async {
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      builder:
+          (context) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.upload_file_outlined),
+                    title: const Text('Anexar arquivo'),
+                    onTap: () => Navigator.pop(context, 'file'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: const Text('Tirar foto'),
+                    onTap: () => Navigator.pop(context, 'camera'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+    final file =
+        mode == 'camera'
+            ? await _takeDocumentPhoto('comprovante_residencia.jpg')
+            : mode == 'file'
+            ? await _pickSingleDocument()
+            : null;
+    if (file == null) return;
+    ref
+        .read(permitRequestControllerProvider.notifier)
+        .setDocumentAttachment('comprovante_residencia', file);
+  }
+
+  Future<void> _chooseDocumentAttachment(String key) async {
+    final file = await _pickSingleDocument();
+    if (file == null) return;
+    ref
+        .read(permitRequestControllerProvider.notifier)
+        .setDocumentAttachment(key, file);
   }
 
   @override
@@ -171,6 +276,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     startTimeController.dispose();
     endTimeController.dispose();
     beneficiaryController.dispose();
+    applicantNotesController.dispose();
     super.dispose();
   }
 
@@ -228,7 +334,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
             readOnly: true,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
-              labelText: 'E-mail',
+              labelText: 'E-mail (opcional)',
               prefixIcon: Icon(Icons.lock_outline),
             ),
           ),
@@ -246,38 +352,47 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     }
 
     if (state.currentStep == 1) {
+      final docs = state.documentAttachments;
       return ListView(
         children: [
           const _StepTitle('Documentos obrigatórios'),
           const Text(
-            'Anexe RG/CPF, comprovante de residência e alvará do local.',
+            'Separe os documentos principais antes de informar os dados do evento.',
           ),
           const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: () async {
-              final result = await FilePicker.platform.pickFiles(
-                allowMultiple: true,
-                type: FileType.custom,
-                allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-              );
-              if (result != null) {
-                controller.addAttachments(result.files);
-              }
+          _DocumentRequirementCard(
+            title: 'RG ou CNH',
+            description:
+                'Anexe um arquivo único com frente e verso ou tire duas fotos separadas.',
+            icon: Icons.badge_outlined,
+            files:
+                [
+                  docs['documento_identificacao'],
+                  docs['documento_identificacao_frente'],
+                  docs['documento_identificacao_verso'],
+                ].whereType<PlatformFile>().toList(),
+            onPressed: _chooseIdentificationDocument,
+            onRemove: () {
+              controller
+                ..removeDocumentAttachment('documento_identificacao')
+                ..removeDocumentAttachment('documento_identificacao_frente')
+                ..removeDocumentAttachment('documento_identificacao_verso');
             },
-            icon: const Icon(Icons.upload_file),
-            label: const Text('Selecionar arquivos'),
           ),
           const SizedBox(height: 10),
-          ...state.attachments.map(
-            (file) => ListTile(
-              leading: const Icon(Icons.insert_drive_file),
-              title: Text(file.name),
-              trailing: IconButton(
-                tooltip: 'Remover anexo',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => controller.removeAttachment(file),
-              ),
-            ),
+          _DocumentRequirementCard(
+            title: 'Comprovante de residência',
+            description: 'Conta de água ou luz em nome do usuário, pai ou mãe.',
+            icon: Icons.home_work_outlined,
+            files:
+                [
+                  docs['comprovante_residencia'],
+                ].whereType<PlatformFile>().toList(),
+            onPressed: _chooseResidenceProof,
+            onRemove:
+                () => controller.removeDocumentAttachment(
+                  'comprovante_residencia',
+                ),
           ),
         ],
       );
@@ -290,33 +405,10 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       return ListView(
         children: [
           const _StepTitle('Dados do evento'),
-          DropdownButtonFormField<String>(
-            initialValue:
-                (state.eventData['tipo_evento'] ?? '').isEmpty
-                    ? null
-                    : state.eventData['tipo_evento'],
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Tipo de evento',
-              helperText:
-                  'A seleção define quais perguntas e documentos serão exibidos.',
-            ),
-            items:
-                eventTypes
-                    .map(
-                      (eventType) => DropdownMenuItem<String>(
-                        value: eventType['key']?.toString() ?? '',
-                        child: Text(eventType['name']?.toString() ?? ''),
-                      ),
-                    )
-                    .toList(),
-            onChanged: (value) {
-              if (value == null || value.isEmpty) return;
-              final eventType = eventTypes.firstWhere(
-                (item) => item['key']?.toString() == value,
-              );
-              controller.selectEventType(eventType);
-            },
+          _EventTypeSelectorButton(
+            eventTypes: eventTypes,
+            selectedEventType: selectedEventType,
+            onSelected: controller.selectEventType,
           ),
           if (selectedEventType != null) ...[
             const SizedBox(height: 12),
@@ -411,6 +503,30 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
             onTap: _pickDate,
           ),
           const SizedBox(height: 12),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'publico',
+                icon: Icon(Icons.account_balance_outlined),
+                label: Text('Espaço público'),
+              ),
+              ButtonSegment(
+                value: 'privado',
+                icon: Icon(Icons.storefront_outlined),
+                label: Text('Espaço privado'),
+              ),
+            ],
+            selected:
+                (state.eventData['tipo_espaco_evento'] ?? '').isEmpty
+                    ? const <String>{}
+                    : {state.eventData['tipo_espaco_evento']!},
+            emptySelectionAllowed: true,
+            onSelectionChanged: (value) {
+              if (value.isEmpty) return;
+              controller.updateEventInfo(eventSpaceType: value.first);
+            },
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: eventAddressController,
             minLines: 1,
@@ -433,18 +549,66 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
               runSpacing: 8,
               children: [
                 TextButton.icon(
-                  onPressed: _pickEventLocation,
-                  icon: const Icon(Icons.add_location_alt_outlined),
-                  label: const Text('Marcar no mapa gratuito'),
-                ),
-                TextButton.icon(
-                  onPressed: _openEventAddressMap,
-                  icon: const Icon(Icons.map_outlined),
-                  label: const Text('Conferir endereço'),
+                  onPressed: _searchEventAddress,
+                  icon: const Icon(Icons.search),
+                  label: const Text('Buscar endereço'),
                 ),
               ],
             ),
           ),
+          _LocationStatusCard(
+            latitude: state.eventData['latitude_evento'],
+            longitude: state.eventData['longitude_evento'],
+          ),
+          const SizedBox(height: 12),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: state.eventData['local_sem_alvara'] == 'true',
+            onChanged:
+                (value) => controller.updateEventInfo(
+                  localWithoutPermit: value ?? false,
+                ),
+            title: const Text('O local não possui alvará de funcionamento'),
+            subtitle: const Text(
+              'Nesse caso, anexe uma conta de água ou luz do endereço do local.',
+            ),
+          ),
+          _DocumentRequirementCard(
+            title:
+                state.eventData['local_sem_alvara'] == 'true'
+                    ? 'Comprovante de endereço do local'
+                    : 'Alvará de funcionamento do local',
+            description:
+                state.eventData['local_sem_alvara'] == 'true'
+                    ? 'Use conta de água ou luz do local do evento.'
+                    : 'Se o local não tiver alvará, marque a opção acima e envie comprovante do endereço.',
+            icon:
+                state.eventData['local_sem_alvara'] == 'true'
+                    ? Icons.home_work_outlined
+                    : Icons.verified_outlined,
+            tooltip:
+                'Se o local não estiver regularizado com alvará, inclua documento que comprove o endereço do local, como conta de água ou luz.',
+            files:
+                [
+                  state.eventData['local_sem_alvara'] == 'true'
+                      ? state.documentAttachments['comprovante_endereco_local']
+                      : state.documentAttachments['alvara_funcionamento_local'],
+                ].whereType<PlatformFile>().toList(),
+            onPressed:
+                () => _chooseDocumentAttachment(
+                  state.eventData['local_sem_alvara'] == 'true'
+                      ? 'comprovante_endereco_local'
+                      : 'alvara_funcionamento_local',
+                ),
+            onRemove:
+                () => controller.removeDocumentAttachment(
+                  state.eventData['local_sem_alvara'] == 'true'
+                      ? 'comprovante_endereco_local'
+                      : 'alvara_funcionamento_local',
+                ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -497,12 +661,33 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
                   (value) =>
                       controller.updateEventInfo(instituicaoBeneficiada: value),
             ),
+            const SizedBox(height: 12),
+            _DocumentRequirementCard(
+              title: 'Documento da entidade beneficiada',
+              description:
+                  'Opcional nesta etapa. A prefeitura poderá solicitar validação durante a análise.',
+              icon: Icons.volunteer_activism_outlined,
+              files:
+                  [
+                    state.documentAttachments['documento_entidade_beneficente'],
+                  ].whereType<PlatformFile>().toList(),
+              onPressed:
+                  () => _chooseDocumentAttachment(
+                    'documento_entidade_beneficente',
+                  ),
+              onRemove:
+                  () => controller.removeDocumentAttachment(
+                    'documento_entidade_beneficente',
+                  ),
+            ),
           ],
         ],
       );
     }
 
-    if (state.currentStep >= 3 && state.currentStep < state.totalSteps - 1) {
+    final observationsStep = state.totalSteps - 2;
+
+    if (state.currentStep >= 3 && state.currentStep < observationsStep) {
       final questionIndex = state.currentStep - 3;
       final question = state.questions[questionIndex];
       final questionKey = question['key'] as String;
@@ -514,6 +699,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
         questionText: question['pergunta'] as String,
         descricao: question['descricao'] as String?,
         tiposResposta: List<String>.from(question['tipos_resposta'] ?? []),
+        opcoesResposta: List<String>.from(question['opcoes_resposta'] ?? []),
         camposObrigatorios:
             (question['campos_obrigatorios'] as Map<String, dynamic>?) ??
             const {},
@@ -521,6 +707,44 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
         modeloDocumentoUrl: question['modelo_documento_url'] as String?,
         onChanged: (value) => controller.updateAnswer(questionKey, value),
         currentValue: state.answerDetails[questionKey],
+      );
+    }
+
+    if (state.currentStep == observationsStep) {
+      return ListView(
+        children: [
+          const _StepTitle('Observações finais'),
+          const Text(
+            'Inclua alguma informação complementar sobre o evento, se necessário.',
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: applicantNotesController,
+            minLines: 4,
+            maxLines: 7,
+            maxLength: 1000,
+            decoration: const InputDecoration(
+              labelText: 'Observação opcional',
+              alignLabelWithHint: true,
+            ),
+            onChanged:
+                (value) => controller.updateEventInfo(applicantNotes: value),
+          ),
+          const SizedBox(height: 8),
+          _DocumentRequirementCard(
+            title: 'Anexo complementar',
+            description:
+                'Opcional. Use para enviar um arquivo que ajude a análise do pedido.',
+            icon: Icons.attach_file_outlined,
+            files:
+                [
+                  state.documentAttachments['observacao_anexo'],
+                ].whereType<PlatformFile>().toList(),
+            onPressed: () => _chooseDocumentAttachment('observacao_anexo'),
+            onRemove:
+                () => controller.removeDocumentAttachment('observacao_anexo'),
+          ),
+        ],
       );
     }
 
@@ -535,7 +759,12 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
           _ReviewSection(
             title: 'Documentos',
             values: {
-              'anexos': state.attachments.map((file) => file.name).join(', '),
+              for (final entry in state.documentAttachments.entries)
+                _documentLabel(entry.key): entry.value.name,
+              if (state.attachments.isNotEmpty)
+                'Outros anexos': state.attachments
+                    .map((file) => file.name)
+                    .join(', '),
             },
           ),
           const SizedBox(height: 12),
@@ -902,6 +1131,122 @@ class _TermStatus extends StatelessWidget {
   }
 }
 
+class _EventTypeSelectorButton extends StatelessWidget {
+  const _EventTypeSelectorButton({
+    required this.eventTypes,
+    required this.selectedEventType,
+    required this.onSelected,
+  });
+
+  final List<Map<String, dynamic>> eventTypes;
+  final Map<String, dynamic>? selectedEventType;
+  final ValueChanged<Map<String, dynamic>> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedName = selectedEventType?['name']?.toString();
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: eventTypes.isEmpty ? null : () => _openSelector(context),
+          icon: const Icon(Icons.category_outlined),
+          label: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              selectedName == null || selectedName.isEmpty
+                  ? 'Selecionar tipo de evento'
+                  : selectedName,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+            foregroundColor: colorScheme.primary,
+            side: BorderSide(
+              color:
+                  selectedEventType == null
+                      ? colorScheme.outline
+                      : colorScheme.primary,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'A seleção define quais perguntas e documentos serão exibidos.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openSelector(BuildContext context) async {
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder:
+          (context) => SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.72,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: eventTypes.length + 1,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Tipo de evento',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    );
+                  }
+                  final eventType = eventTypes[index - 1];
+                  final key = eventType['key']?.toString() ?? '';
+                  final isSelected =
+                      key == selectedEventType?['key']?.toString();
+                  final description =
+                      (eventType['description'] ?? eventType['descricao'])
+                          ?.toString()
+                          .trim();
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    title: Text(eventType['name']?.toString() ?? key),
+                    subtitle: Text(
+                      description != null && description.isNotEmpty
+                          ? description
+                          : eventType['examples']?.toString() ??
+                              'Sem descrição cadastrada.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.pop(context, eventType),
+                  );
+                },
+              ),
+            ),
+          ),
+    );
+    if (selected != null) onSelected(selected);
+  }
+}
+
 class _EventTypeRequirementsCard extends StatelessWidget {
   const _EventTypeRequirementsCard({required this.eventType});
 
@@ -992,6 +1337,313 @@ class _StepTitle extends StatelessWidget {
   }
 }
 
+class _LocationStatusCard extends StatelessWidget {
+  const _LocationStatusCard({required this.latitude, required this.longitude});
+
+  final String? latitude;
+  final String? longitude;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLocation =
+        double.tryParse(latitude ?? '') != null &&
+        double.tryParse(longitude ?? '') != null;
+    final color =
+        hasLocation ? const Color(0xFF0E7C3A) : const Color(0xFFB7791F);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            hasLocation ? Icons.check_circle_outline : Icons.location_searching,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              hasLocation
+                  ? 'Local marcado: latitude $latitude e longitude $longitude.'
+                  : 'Busque e selecione o endereço para registrar latitude e longitude do evento.',
+              style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentRequirementCard extends StatelessWidget {
+  const _DocumentRequirementCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.files,
+    required this.onPressed,
+    required this.onRemove,
+    this.tooltip,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final List<PlatformFile> files;
+  final VoidCallback onPressed;
+  final VoidCallback onRemove;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFiles = files.isNotEmpty;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            hasFiles
+                ? const Color(0xFFF3FAF6)
+                : Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: hasFiles ? const Color(0xFFB7DEC8) : const Color(0xFFE0E7E2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        if (tooltip != null)
+                          Tooltip(
+                            message: tooltip!,
+                            child: const Icon(Icons.info_outline, size: 18),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(description),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (files.isNotEmpty)
+            ...files.map(
+              (file) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.attach_file, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(file.name, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onPressed,
+                icon: Icon(hasFiles ? Icons.edit_outlined : Icons.upload_file),
+                label: Text(hasFiles ? 'Trocar documento' : 'Anexar documento'),
+              ),
+              if (hasFiles)
+                TextButton.icon(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Remover'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _documentLabel(String key) {
+  switch (key) {
+    case 'documento_identificacao':
+      return 'RG/CNH';
+    case 'documento_identificacao_frente':
+      return 'RG/CNH - frente';
+    case 'documento_identificacao_verso':
+      return 'RG/CNH - verso';
+    case 'comprovante_residencia':
+      return 'Comprovante de residência';
+    case 'alvara_funcionamento_local':
+      return 'Alvará de funcionamento do local';
+    case 'comprovante_endereco_local':
+      return 'Comprovante de endereço do local';
+    case 'documento_entidade_beneficente':
+      return 'Documento da entidade beneficente';
+    case 'observacao_anexo':
+      return 'Anexo das observações finais';
+    default:
+      return key.replaceAll('_', ' ');
+  }
+}
+
+class _AddressSearchDialog extends StatefulWidget {
+  const _AddressSearchDialog({required this.initialQuery});
+
+  final String initialQuery;
+
+  @override
+  State<_AddressSearchDialog> createState() => _AddressSearchDialogState();
+}
+
+class _AddressSearchDialogState extends State<_AddressSearchDialog> {
+  late final TextEditingController _controller;
+  List<Map<String, dynamic>> _results = const [];
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialQuery);
+    if (widget.initialQuery.trim().length >= 3) {
+      Future.microtask(_search);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.length < 3) {
+      setState(() => _error = 'Digite pelo menos 3 caracteres.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final results = await PermitApiService().searchEventAddresses(query);
+      if (!mounted) return;
+      setState(() => _results = results);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Não foi possível buscar o endereço.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Buscar endereço'),
+      content: SizedBox(
+        width: 620,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _controller,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                labelText: 'Rua, bairro ou local',
+                suffixIcon:
+                    _loading
+                        ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                        : IconButton(
+                          tooltip: 'Buscar',
+                          onPressed: _search,
+                          icon: const Icon(Icons.search),
+                        ),
+              ),
+              onSubmitted: (_) => _search(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 340),
+              child:
+                  _results.isEmpty
+                      ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text('Busque e selecione uma opção.'),
+                        ),
+                      )
+                      : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _results.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final item = _results[index];
+                          return ListTile(
+                            leading: const Icon(Icons.place_outlined),
+                            title: Text(
+                              item['display_name']?.toString() ?? '',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => Navigator.pop(context, item),
+                          );
+                        },
+                      ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+}
+
 class _ReviewSection extends StatelessWidget {
   const _ReviewSection({required this.title, required this.values});
 
@@ -1025,179 +1677,5 @@ class _ReviewSection extends StatelessWidget {
           RegExp(r'^[a-z]'),
           (match) => match[0]!.toUpperCase(),
         );
-  }
-}
-
-class _AddressMapPickerDialog extends StatefulWidget {
-  const _AddressMapPickerDialog({
-    required this.initialLatitude,
-    required this.initialLongitude,
-  });
-
-  final double? initialLatitude;
-  final double? initialLongitude;
-
-  @override
-  State<_AddressMapPickerDialog> createState() =>
-      _AddressMapPickerDialogState();
-}
-
-class _AddressMapPickerDialogState extends State<_AddressMapPickerDialog> {
-  static const _zoom = 14;
-  static const _centerLat = -13.3704;
-  static const _centerLng = -39.0733;
-
-  late double _latitude = widget.initialLatitude ?? _centerLat;
-  late double _longitude = widget.initialLongitude ?? _centerLng;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog.fullscreen(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Marcar endereço do evento'),
-          actions: [
-            TextButton(
-              onPressed:
-                  () => Navigator.pop(context, (
-                    latitude: _latitude,
-                    longitude: _longitude,
-                  )),
-              child: const Text('Salvar'),
-            ),
-            IconButton(
-              tooltip: 'Fechar',
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close),
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: Text(
-                'Toque no mapa para marcar o local do evento. Use o endereço digitado como referência.',
-              ),
-            ),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final size = Size(
-                    constraints.maxWidth,
-                    constraints.maxHeight,
-                  );
-                  final center = _project(_centerLat, _centerLng, _zoom);
-                  final selected = _project(_latitude, _longitude, _zoom);
-                  final markerLeft = selected.dx - center.dx + size.width / 2;
-                  final markerTop = selected.dy - center.dy + size.height / 2;
-                  return GestureDetector(
-                    onTapUp: (details) {
-                      final point = Offset(
-                        center.dx - size.width / 2 + details.localPosition.dx,
-                        center.dy - size.height / 2 + details.localPosition.dy,
-                      );
-                      final coordinates = _unproject(point, _zoom);
-                      setState(() {
-                        _latitude = coordinates.$1;
-                        _longitude = coordinates.$2;
-                      });
-                    },
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ..._tiles(size, center),
-                        Positioned(
-                          left:
-                              markerLeft.clamp(16, size.width - 48).toDouble(),
-                          top: markerTop.clamp(16, size.height - 56).toDouble(),
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Color(0xFF0E7C3A),
-                            size: 42,
-                          ),
-                        ),
-                        Positioned(
-                          left: 12,
-                          bottom: 12,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.92),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Text(
-                                'Lat ${_latitude.toStringAsFixed(6)} | Lng ${_longitude.toStringAsFixed(6)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _tiles(Size size, Offset center) {
-    final topLeft = Offset(
-      center.dx - size.width / 2,
-      center.dy - size.height / 2,
-    );
-    final bottomRight = Offset(
-      center.dx + size.width / 2,
-      center.dy + size.height / 2,
-    );
-    final minX = (topLeft.dx / 256).floor() - 1;
-    final maxX = (bottomRight.dx / 256).ceil() + 1;
-    final minY = (topLeft.dy / 256).floor() - 1;
-    final maxY = (bottomRight.dy / 256).ceil() + 1;
-    final widgets = <Widget>[];
-    for (var x = minX; x <= maxX; x++) {
-      for (var y = minY; y <= maxY; y++) {
-        widgets.add(
-          Positioned(
-            left: x * 256 - topLeft.dx,
-            top: y * 256 - topLeft.dy,
-            width: 256,
-            height: 256,
-            child: Image.network(
-              'https://tile.openstreetmap.org/$_zoom/$x/$y.png',
-              fit: BoxFit.cover,
-              errorBuilder:
-                  (_, __, ___) => Container(color: const Color(0xFFE8F2EC)),
-            ),
-          ),
-        );
-      }
-    }
-    return widgets;
-  }
-
-  static Offset _project(double lat, double lng, int zoom) {
-    final scale = 256 * math.pow(2, zoom).toDouble();
-    final x = (lng + 180) / 360 * scale;
-    final sinLat = math.sin(lat * math.pi / 180);
-    final y =
-        (0.5 - math.log((1 + sinLat) / (1 - sinLat)) / (4 * math.pi)) * scale;
-    return Offset(x, y);
-  }
-
-  static (double, double) _unproject(Offset point, int zoom) {
-    final scale = 256 * math.pow(2, zoom).toDouble();
-    final lng = point.dx / scale * 360 - 180;
-    final n = math.pi - 2 * math.pi * point.dy / scale;
-    final sinh = (math.exp(n) - math.exp(-n)) / 2;
-    final lat = 180 / math.pi * math.atan(sinh);
-    return (lat, lng);
   }
 }

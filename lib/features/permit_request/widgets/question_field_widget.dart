@@ -11,6 +11,7 @@ class QuestionFieldWidget extends StatefulWidget {
   final String questionText;
   final String? descricao;
   final List<String> tiposResposta;
+  final List<String> opcoesResposta;
   final Map<String, dynamic> camposObrigatorios;
   final String? modeloDocumentoNome;
   final String? modeloDocumentoUrl;
@@ -24,6 +25,7 @@ class QuestionFieldWidget extends StatefulWidget {
     required this.questionText,
     this.descricao,
     required this.tiposResposta,
+    this.opcoesResposta = const [],
     this.camposObrigatorios = const {},
     this.modeloDocumentoNome,
     this.modeloDocumentoUrl,
@@ -38,12 +40,14 @@ class QuestionFieldWidget extends StatefulWidget {
 class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   String? respostaSimNao;
   final TextEditingController textoController = TextEditingController();
+  final Map<String, TextEditingController> customControllers = {};
   final List<_StreetSegmentControllers> percursoControllers = [];
   DateTime? dataSelecionada;
   TimeOfDay? horaSelecionada;
   String? arquivoSelecionado;
   String? assinaturaSelecionada;
   String? percursoUrl;
+  final Set<String> opcoesSelecionadas = {};
 
   @override
   void initState() {
@@ -67,7 +71,12 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
     arquivoSelecionado = null;
     assinaturaSelecionada = null;
     percursoUrl = null;
+    opcoesSelecionadas.clear();
     _resetRouteControllers();
+    for (final controller in customControllers.values) {
+      controller.dispose();
+    }
+    customControllers.clear();
 
     if (widget.currentValue is Map) {
       respostaSimNao = widget.currentValue['resposta'];
@@ -77,17 +86,34 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       arquivoSelecionado = widget.currentValue['arquivo'];
       assinaturaSelecionada = widget.currentValue['assinatura'];
       percursoUrl = widget.currentValue['percurso_url'];
+      final selectedOptions =
+          widget.currentValue['opcoes_selecionadas'] ??
+          widget.currentValue['Opções selecionáveis'];
+      if (selectedOptions is List) {
+        opcoesSelecionadas.addAll(
+          selectedOptions.map((item) => item.toString()),
+        );
+      }
       _loadRouteSegments(widget.currentValue['percurso_ruas']);
+      for (final label in _customResponseLabels) {
+        customControllers[label] = TextEditingController(
+          text: widget.currentValue[label]?.toString() ?? '',
+        );
+      }
     }
 
     if (_usesRouteAnswer && percursoControllers.isEmpty) {
       _addRouteSegmentControllers();
     }
+    _syncCustomControllers();
   }
 
   @override
   void dispose() {
     textoController.dispose();
+    for (final controller in customControllers.values) {
+      controller.dispose();
+    }
     _disposeRouteControllers();
     super.dispose();
   }
@@ -101,9 +127,15 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
       'arquivo': arquivoSelecionado,
       'assinatura': assinaturaSelecionada,
     };
+    for (final entry in customControllers.entries) {
+      payload[entry.key] = entry.value.text.trim();
+    }
     if (_usesRouteAnswer) {
       payload['percurso_ruas'] = _routeSegments();
       payload['percurso_url'] = percursoUrl;
+    }
+    if (widget.tiposResposta.contains('Opções selecionáveis')) {
+      payload['opcoes_selecionadas'] = opcoesSelecionadas.toList();
     }
     widget.onChanged(payload);
   }
@@ -111,6 +143,35 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   bool get _isRouteQuestion => widget.questionKey == 'bloqueia_via';
   bool get _usesRouteAnswer =>
       _isRouteQuestion || widget.tiposResposta.contains('Rota do Evento');
+  List<String> get _customResponseLabels =>
+      widget.tiposResposta
+          .where(
+            (field) =>
+                field != 'Sim/Não' &&
+                field != 'Texto' &&
+                field != 'Anexar Documento' &&
+                field != 'Calendário' &&
+                field != 'Rota do Evento' &&
+                field != 'Opções selecionáveis' &&
+                field != 'Botão de Baixar' &&
+                field != 'Assinatura impressa' &&
+                field != 'Assinatura gov.br',
+          )
+          .toList();
+
+  void _syncCustomControllers() {
+    final labels = _customResponseLabels.toSet();
+    final removedLabels =
+        customControllers.keys
+            .where((label) => !labels.contains(label))
+            .toList();
+    for (final label in removedLabels) {
+      customControllers.remove(label)?.dispose();
+    }
+    for (final label in labels) {
+      customControllers.putIfAbsent(label, () => TextEditingController());
+    }
+  }
 
   void _loadRouteSegments(dynamic rawSegments) {
     if (rawSegments is! List) return;
@@ -277,6 +338,21 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
               ),
               onChanged: (_) => salvarResposta(),
             ),
+          ],
+          for (final label in _customResponseLabels) ...[
+            TextFormField(
+              controller: customControllers[label],
+              maxLength: 255,
+              decoration: InputDecoration(
+                labelText: _labelWithRequired(label, label),
+              ),
+              onChanged: (_) => salvarResposta(),
+            ),
+          ],
+          if (widget.tiposResposta.contains('Opções selecionáveis') &&
+              widget.opcoesResposta.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildSelectableOptions(),
           ],
           if (_usesRouteAnswer) ...[
             const SizedBox(height: 10),
@@ -530,6 +606,53 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectableOptions() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAF7),
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _labelWithRequired(
+              'Selecione as opções aplicáveis',
+              'Opções selecionáveis',
+            ),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                widget.opcoesResposta.map((option) {
+                  final selected = opcoesSelecionadas.contains(option);
+                  return FilterChip(
+                    label: Text(option),
+                    selected: selected,
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          opcoesSelecionadas.add(option);
+                        } else {
+                          opcoesSelecionadas.remove(option);
+                        }
+                        salvarResposta();
+                      });
+                    },
+                  );
+                }).toList(),
+          ),
         ],
       ),
     );

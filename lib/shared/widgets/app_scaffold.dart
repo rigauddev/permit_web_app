@@ -66,7 +66,7 @@ class AppScaffold extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    if (appBar != null) appBar!,
+                    if (appBar != null) _buildDesktopAppBar(appBar!),
                     Expanded(child: body),
                   ],
                 ),
@@ -112,6 +112,35 @@ class AppScaffold extends StatelessWidget {
         title: appBar.title,
         actions: appBar.actions,
         hideDrawerButton: !canNavigateBack,
+      );
+    }
+
+    return appBar;
+  }
+
+  PreferredSizeWidget _buildDesktopAppBar(PreferredSizeWidget appBar) {
+    if (appBar is AppBar) {
+      return AppBar(
+        title: appBar.title,
+        leading: appBar.leading,
+        actions: appBar.actions,
+        centerTitle: appBar.centerTitle,
+        elevation: appBar.elevation,
+        backgroundColor: appBar.backgroundColor,
+        foregroundColor: appBar.foregroundColor,
+        iconTheme: appBar.iconTheme,
+        titleTextStyle: appBar.titleTextStyle,
+        toolbarHeight: appBar.toolbarHeight,
+        bottom: appBar.bottom,
+        automaticallyImplyLeading: false,
+      );
+    }
+
+    if (appBar is CustomAppBar) {
+      return CustomAppBar(
+        title: appBar.title,
+        actions: appBar.actions,
+        hideDrawerButton: true,
       );
     }
 

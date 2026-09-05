@@ -107,6 +107,21 @@ class AuthService {
   final http.Client _client;
   final String _baseUrl;
 
+  Future<Map<String, dynamic>> uploadFileBytes({
+    required String kind,
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$_baseUrl/uploads'))
+          ..fields['kind'] = kind
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+          );
+    final response = await http.Response.fromStream(await request.send());
+    return _decodeResponse(response);
+  }
+
   Future<LoginChallenge> startLogin(
     String identifier,
     String password, {
@@ -242,18 +257,34 @@ class AuthService {
     return UserModel.fromApiUser(response);
   }
 
+  Future<AuthSession> changePassword({
+    required String accessToken,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _post('/auth/change-password', {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    }, accessToken: accessToken);
+    return AuthSession.fromJson(response);
+  }
+
   Future<UserModel> updateCurrentUser({
     required String accessToken,
     required String nome,
     String? sobrenome,
     String? telefone,
     String? endereco,
+    String? userPhotoName,
+    String? userPhotoUrl,
   }) async {
     final response = await _patch('/auth/me', {
       'nome': nome,
       'sobrenome': sobrenome,
       'telefone': telefone,
       'endereco': endereco,
+      'foto_usuario_nome': userPhotoName,
+      'foto_usuario_url': userPhotoUrl,
     }, accessToken: accessToken);
     return UserModel.fromApiUser(response);
   }

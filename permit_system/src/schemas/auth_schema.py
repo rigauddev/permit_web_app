@@ -16,6 +16,8 @@ class UserSessionResponse(BaseModel):
     role: str
     secretaria: str | None = None
     permissions: list[str] = Field(default_factory=list)
+    foto_usuario_url: str | None = None
+    must_change_password: bool = False
 
 
 class LoginStartResponse(BaseModel):
@@ -74,3 +76,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserSessionResponse
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)

@@ -120,13 +120,11 @@ class _ReceitaMunicipalServicesPageState
       userProfile: widget.userProfile,
       appBar: AppBar(
         title: Text(isCitizen ? 'Serviços municipais' : 'Serviços da área'),
-        actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => _goBack(context),
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ],
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => _goBack(context),
+          icon: const Icon(Icons.arrow_back),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -145,7 +143,7 @@ class _ReceitaMunicipalServicesPageState
                 const SizedBox(height: 6),
                 Text(
                   isCitizen
-                      ? 'Os serviços estão organizados por categoria. Nesta primeira entrega, o serviço ativo é o Alvará de Evento.'
+                      ? 'Serviço disponível para solicitar autorização de festas e eventos.'
                       : 'Acompanhe as solicitações relacionadas ao serviço de Alvará de Evento.',
                 ),
                 const SizedBox(height: 18),
@@ -168,34 +166,6 @@ class _ReceitaMunicipalServicesPageState
                       onToggleFavorite:
                           () => _toggleFavorite(favoriteEventPermitServiceKey),
                       onTap: _openEventPermit,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const _ServiceCategorySection(
-                  title: 'Secretarias',
-                  description:
-                      'Na v2, cada secretaria terá seus próprios serviços neste catálogo.',
-                  children: [
-                    _FutureServiceCard(
-                      title: 'Meio Ambiente',
-                      description:
-                          'Serviços ambientais serão adicionados em versões futuras.',
-                    ),
-                    _FutureServiceCard(
-                      title: 'Infraestrutura',
-                      description:
-                          'Vistorias e serviços técnicos serão organizados aqui.',
-                    ),
-                    _FutureServiceCard(
-                      title: 'DMTRAN',
-                      description:
-                          'Serviços de mobilidade e trânsito serão incluídos na v2.',
-                    ),
-                    _FutureServiceCard(
-                      title: 'Vigilância Sanitária',
-                      description:
-                          'Serviços sanitários ficarão separados por secretaria.',
                     ),
                   ],
                 ),
@@ -483,49 +453,6 @@ class _ServiceCard extends StatelessWidget {
   }
 }
 
-class _FutureServiceCard extends StatelessWidget {
-  const _FutureServiceCard({required this.title, required this.description});
-
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              Icons.lock_clock_outlined,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    description,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class FavoriteServicesPage extends StatefulWidget {
   const FavoriteServicesPage({
     super.key,
@@ -580,13 +507,11 @@ class _FavoriteServicesPageState extends State<FavoriteServicesPage> {
       userProfile: widget.userProfile,
       appBar: AppBar(
         title: const Text('Serviços favoritos'),
-        actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ],
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+          icon: const Icon(Icons.arrow_back),
+        ),
       ),
       body:
           _loading

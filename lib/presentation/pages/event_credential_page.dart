@@ -84,6 +84,20 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
     return profile == 'admin' || profile == 'gestor_secretaria';
   }
 
+  bool get _canInspectCredential {
+    final userType = widget.userType;
+    final profile = widget.userProfile;
+    if (widget.publicCode != null && userType.isEmpty) return false;
+    return userType != 'cidadao' &&
+        userType != 'user' &&
+        (profile == 'admin' ||
+            profile == 'gestor_secretaria' ||
+            profile == 'operador_secretaria' ||
+            userType == 'admin' ||
+            userType == 'gestor' ||
+            userType == 'operador');
+  }
+
   int? get _requestId {
     final value = widget.permitForm?['formId'];
     return value is int ? value : int.tryParse(value.toString());
@@ -215,10 +229,42 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       _authorization = authorization;
       _message = null;
     });
+  }
+
+  Future<void> _inspectCredential({
+    required String status,
+    String? notes,
+  }) async {
     final publicCode = _publicCodeController.text.trim();
     final token = _tokenController.text.trim();
-    if (publicCode.isNotEmpty && token.isNotEmpty) {
-      Future.microtask(_validateCredential);
+    if (publicCode.isEmpty || token.isEmpty) {
+      setState(() => _message = 'Informe o código público e o token.');
+      return;
+    }
+    setState(() {
+      _validatingCredential = true;
+      _message = null;
+    });
+    try {
+      final accessToken = await _readAccessToken();
+      final validation = await _api.inspectEventCredential(
+        accessToken: accessToken,
+        publicCode: publicCode,
+        token: token,
+        status: status,
+        notes: notes,
+      );
+      setState(() => _validation = validation);
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      setState(() => _message = error.message);
+    } catch (_) {
+      setState(() => _message = 'Não foi possível registrar a fiscalização.');
+    } finally {
+      if (mounted) setState(() => _validatingCredential = false);
     }
   }
 
@@ -226,14 +272,14 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
   Widget build(BuildContext context) {
     final form = widget.permitForm;
     final appBar = AppBar(
-      title: const Text('Credencial do Evento'),
-      actions: [
-        IconButton(
-          tooltip: 'Voltar',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back),
-        ),
-      ],
+      title: Text(
+        _canInspectCredential ? 'Fiscalização do evento' : 'Alvará do evento',
+      ),
+      leading: IconButton(
+        tooltip: 'Voltar',
+        onPressed: () => _goBack(context),
+        icon: const Icon(Icons.arrow_back),
+      ),
     );
     final content = SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -263,13 +309,16 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-              _ValidationPanel(
-                publicCodeController: _publicCodeController,
-                tokenController: _tokenController,
-                loading: _validatingCredential,
-                validation: _validation,
-                onValidate: _validateCredential,
-              ),
+              if (widget.publicCode != null || _canInspectCredential)
+                _ValidationPanel(
+                  publicCodeController: _publicCodeController,
+                  tokenController: _tokenController,
+                  loading: _validatingCredential,
+                  validation: _validation,
+                  onValidate: _validateCredential,
+                  canInspect: _canInspectCredential,
+                  onInspect: _inspectCredential,
+                ),
             ],
           ),
         ),
@@ -464,19 +513,18 @@ class _AuthorizationDocument extends StatelessWidget {
     final theme = Theme.of(context);
     final status = form['status']?.toString() ?? '';
     final isAuthorized = status == 'autorizada' || status == 'isenta_dam';
+    final eventData = form['dados_evento'] as Map<String, dynamic>? ?? {};
+    final authorizationTitle = _spaceAuthorizationTitle(eventData);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              runSpacing: 12,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 560;
+                final headerInfo = Row(
                   children: [
                     Image.asset(
                       'assets/images/logo_prefeitura_1.png',
@@ -484,21 +532,26 @@ class _AuthorizationDocument extends StatelessWidget {
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Autorização de Evento',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Secretaria de Desenvolvimento Econômico',
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        Text('Protocolo ${form['protocolo'] ?? '-'}'),
-                      ],
+                          Text(authorizationTitle, softWrap: true),
+                          Text('Protocolo ${form['protocolo'] ?? '-'}'),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-                Wrap(
+                );
+                final actions = Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -520,8 +573,26 @@ class _AuthorizationDocument extends StatelessWidget {
                       ),
                     _StatusChip(label: _statusLabel(status), status: status),
                   ],
-                ),
-              ],
+                );
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      headerInfo,
+                      const SizedBox(height: 12),
+                      Align(alignment: Alignment.centerLeft, child: actions),
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: headerInfo),
+                    const SizedBox(width: 12),
+                    actions,
+                  ],
+                );
+              },
             ),
             const Divider(height: 28),
             Text(
@@ -606,18 +677,48 @@ class _DocumentDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsible =
+        form['dados_responsavel'] as Map<String, dynamic>? ?? {};
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _DetailRow(label: 'Evento', value: form['nome_do_evento']),
-        _DetailRow(label: 'Responsável', value: form['responsavel']),
+        const _DocumentSectionTitle('Dados do Evento'),
+        _DetailRow(label: 'Nome do evento', value: form['nome_do_evento']),
         _DetailRow(label: 'Data', value: form['data_do_evento']),
         _DetailRow(
-          label: 'Horário',
+          label: 'Início/fim',
           value: _timeRange(form['horario_inicio'], form['horario_termino']),
         ),
-        _DetailRow(label: 'Local', value: form['local_evento']),
-        _DetailRow(label: 'DAM', value: _damLabel(form['dam_status'])),
+        _DetailRow(label: 'Público estimado', value: form['publico_estimado']),
+        const SizedBox(height: 12),
+        const _DocumentSectionTitle('Dados do Solicitante'),
+        _DetailRow(label: 'Nome', value: form['responsavel']),
+        _DetailRow(label: 'CPF/CNPJ', value: responsible['cpf_cnpj']),
+        _DetailRow(label: 'Endereço', value: responsible['endereco']),
+        _DetailRow(
+          label: 'Contato',
+          value: _contactLabel(responsible['telefone'], responsible['email']),
+        ),
       ],
+    );
+  }
+}
+
+class _DocumentSectionTitle extends StatelessWidget {
+  final String label;
+
+  const _DocumentSectionTitle(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        label,
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+      ),
     );
   }
 }
@@ -664,7 +765,7 @@ class _QrBox extends StatelessWidget {
               height: 160,
               child: Center(
                 child: Text(
-                  'QR Code disponível após emissão da credencial.',
+                  'QR Code disponível após emissão do alvará.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -690,6 +791,7 @@ class _SignatureFields extends StatelessWidget {
         final fields = [
           _SignatureLine(label: 'Responsável pelo evento'),
           _SignatureLine(label: 'Central de Eventos / Prefeitura'),
+          _SignatureLine(label: 'Secretaria fiscalizadora, quando exigido'),
         ];
         if (constraints.maxWidth >= 680) {
           return Row(
@@ -697,11 +799,19 @@ class _SignatureFields extends StatelessWidget {
               Expanded(child: fields[0]),
               const SizedBox(width: 18),
               Expanded(child: fields[1]),
+              const SizedBox(width: 18),
+              Expanded(child: fields[2]),
             ],
           );
         }
         return Column(
-          children: [fields[0], const SizedBox(height: 12), fields[1]],
+          children: [
+            fields[0],
+            const SizedBox(height: 12),
+            fields[1],
+            const SizedBox(height: 12),
+            fields[2],
+          ],
         );
       },
     );
@@ -778,6 +888,9 @@ class _ValidationPanel extends StatelessWidget {
   final bool loading;
   final Map<String, dynamic>? validation;
   final VoidCallback onValidate;
+  final bool canInspect;
+  final Future<void> Function({required String status, String? notes})
+  onInspect;
 
   const _ValidationPanel({
     required this.publicCodeController,
@@ -785,6 +898,8 @@ class _ValidationPanel extends StatelessWidget {
     required this.loading,
     required this.validation,
     required this.onValidate,
+    required this.canInspect,
+    required this.onInspect,
   });
 
   @override
@@ -839,8 +954,107 @@ class _ValidationPanel extends StatelessWidget {
               const SizedBox(height: 16),
               _ValidationResult(validation: validation!),
             ],
+            if (canInspect) ...[
+              const SizedBox(height: 16),
+              _InspectionRecordForm(loading: loading, onInspect: onInspect),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InspectionRecordForm extends StatefulWidget {
+  const _InspectionRecordForm({required this.loading, required this.onInspect});
+
+  final bool loading;
+  final Future<void> Function({required String status, String? notes})
+  onInspect;
+
+  @override
+  State<_InspectionRecordForm> createState() => _InspectionRecordFormState();
+}
+
+class _InspectionRecordFormState extends State<_InspectionRecordForm> {
+  final _notesController = TextEditingController();
+  String _status = 'regular';
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Registro de fiscalização',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: _status,
+            decoration: const InputDecoration(
+              labelText: 'Resultado',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'regular', child: Text('Regular')),
+              DropdownMenuItem(
+                value: 'irregular',
+                child: Text('Irregularidade'),
+              ),
+              DropdownMenuItem(value: 'multa', child: Text('Aplicar multa')),
+              DropdownMenuItem(
+                value: 'encerrado',
+                child: Text('Encerrar evento'),
+              ),
+            ],
+            onChanged:
+                widget.loading
+                    ? null
+                    : (value) => setState(() => _status = value ?? 'regular'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _notesController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Justificativa/observações',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ElevatedButton.icon(
+              onPressed:
+                  widget.loading
+                      ? null
+                      : () => widget.onInspect(
+                        status: _status,
+                        notes: _notesController.text.trim(),
+                      ),
+              icon: const Icon(Icons.assignment_turned_in_outlined),
+              label: Text(
+                _status == 'regular'
+                    ? 'Registrar evento verificado'
+                    : 'Registrar fiscalização',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -905,6 +1119,25 @@ class _ValidationResult extends StatelessWidget {
               label: 'Verificação',
               value: _verificationLabel(validation),
             ),
+          if ((validation['verified_secretaria']?.toString() ?? '').isNotEmpty)
+            _DetailRow(
+              label: 'Secretaria',
+              value: validation['verified_secretaria'],
+            ),
+          if ((validation['verified_by']?.toString() ?? '').isNotEmpty)
+            _DetailRow(label: 'Fiscal', value: validation['verified_by']),
+          if ((validation['verification_status']?.toString() ?? '').isNotEmpty)
+            _DetailRow(
+              label: 'Resultado',
+              value: _inspectionStatusLabel(
+                validation['verification_status']?.toString() ?? '',
+              ),
+            ),
+          if ((validation['verification_notes']?.toString() ?? '').isNotEmpty)
+            _DetailRow(
+              label: 'Observações',
+              value: validation['verification_notes'],
+            ),
           if (validation['dam_attachment'] != null)
             _DetailRow(
               label: 'Arquivo DAM',
@@ -939,10 +1172,28 @@ String _verificationLabel(Map<String, dynamic> validation) {
   final count = validation['verification_count'];
   final verifiedAt = validation['verified_at'];
   final countText = count == null ? '1' : count.toString();
+  if (countText == '1') {
+    return 'Evento verificado agora. Primeira conferência registrada.';
+  }
   if (verifiedAt == null || verifiedAt.toString().isEmpty) {
     return 'Evento verificado nesta consulta';
   }
   return 'Evento verificado em $verifiedAt. Consultas: $countText';
+}
+
+String _inspectionStatusLabel(String status) {
+  switch (status) {
+    case 'regular':
+      return 'Regular';
+    case 'irregular':
+      return 'Irregularidade registrada';
+    case 'multa':
+      return 'Irregularidade com possibilidade de multa';
+    case 'encerrado':
+      return 'Evento encerrado';
+    default:
+      return status;
+  }
 }
 
 class _DetailRow extends StatelessWidget {
@@ -1064,6 +1315,23 @@ String _timeRange(Object? start, Object? end) {
   return '$startText às $endText';
 }
 
+String _spaceAuthorizationTitle(Map<String, dynamic> eventData) {
+  final type = eventData['tipo_espaco_evento']?.toString().toLowerCase() ?? '';
+  if (type == 'privado') {
+    return 'Autorização de evento em espaço privado';
+  }
+  return 'Autorização de evento em espaço público';
+}
+
+String _contactLabel(Object? phone, Object? email) {
+  final parts =
+      [
+        phone?.toString().trim() ?? '',
+        email?.toString().trim() ?? '',
+      ].where((value) => value.isNotEmpty).toList();
+  return parts.isEmpty ? '-' : parts.join(' | ');
+}
+
 String _tokenFromUrl(String url) {
   final uri = Uri.tryParse(url);
   return uri?.queryParameters['t'] ?? '';
@@ -1085,6 +1353,8 @@ Future<Uint8List> _buildAuthorizationPdf({
   final document = pw.Document();
   final requirements = _pdfRequirements(form, validation);
   final isValid = validation?['valid'] == true;
+  final eventData = form['dados_evento'] as Map<String, dynamic>? ?? {};
+  final authorizationTitle = _spaceAuthorizationTitle(eventData);
   final logoBytes =
       (await rootBundle.load(
         'assets/images/logo_prefeitura_1.png',
@@ -1119,8 +1389,12 @@ Future<Uint8List> _buildAuthorizationPdf({
                           ),
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            'Central de Eventos - Alvará de Autorização de Evento',
+                            'Secretaria de Desenvolvimento Econômico',
                             style: const pw.TextStyle(fontSize: 12),
+                          ),
+                          pw.Text(
+                            authorizationTitle,
+                            style: const pw.TextStyle(fontSize: 11),
                           ),
                         ],
                       ),
@@ -1170,19 +1444,39 @@ Future<Uint8List> _buildAuthorizationPdf({
                   child: pw.Column(
                     children: [
                       _pdfRow('Protocolo', form['protocolo']),
-                      _pdfRow('Evento', form['nome_do_evento']),
-                      _pdfRow('Responsável', form['responsavel']),
+                      _pdfSectionTitle('DADOS DO EVENTO'),
+                      _pdfRow('Nome do evento', form['nome_do_evento']),
                       _pdfRow('Data', form['data_do_evento']),
                       _pdfRow(
-                        'Horário',
+                        'Início/fim',
                         _timeRange(
                           form['horario_inicio'],
                           form['horario_termino'],
                         ),
                       ),
-                      _pdfRow('Local', form['local_evento']),
                       _pdfRow('Público estimado', form['publico_estimado']),
-                      _pdfRow('DAM', _damLabel(form['dam_status'])),
+                      pw.SizedBox(height: 10),
+                      _pdfSectionTitle('DADOS DO SOLICITANTE'),
+                      _pdfRow('Nome', form['responsavel']),
+                      _pdfRow(
+                        'CPF/CNPJ',
+                        (form['dados_responsavel']
+                            as Map<String, dynamic>?)?['cpf_cnpj'],
+                      ),
+                      _pdfRow(
+                        'Endereço',
+                        (form['dados_responsavel']
+                            as Map<String, dynamic>?)?['endereco'],
+                      ),
+                      _pdfRow(
+                        'Contato',
+                        _contactLabel(
+                          (form['dados_responsavel']
+                              as Map<String, dynamic>?)?['telefone'],
+                          (form['dados_responsavel']
+                              as Map<String, dynamic>?)?['email'],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1217,6 +1511,8 @@ Future<Uint8List> _buildAuthorizationPdf({
                 pw.Expanded(
                   child: _pdfSignature('Central de Eventos / Prefeitura'),
                 ),
+                pw.SizedBox(width: 24),
+                pw.Expanded(child: _pdfSignature('Secretaria fiscalizadora')),
               ],
             ),
             if (requirements.isNotEmpty) ...[
@@ -1279,6 +1575,16 @@ pw.Widget _pdfRow(String label, Object? value) {
         ),
         pw.Expanded(child: pw.Text(text.isEmpty ? '-' : text)),
       ],
+    ),
+  );
+}
+
+pw.Widget _pdfSectionTitle(String label) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.only(top: 6, bottom: 4),
+    child: pw.Text(
+      label,
+      style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
     ),
   );
 }

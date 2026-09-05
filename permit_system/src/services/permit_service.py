@@ -22,6 +22,7 @@ from src.infra.database.models import (
     UserModel,
 )
 from src.schemas.permit_schema import (
+    AdditionalRequirementRequest,
     AttachmentResponse,
     AttachmentCreateRequest,
     AuthorizationTemplateRequest,
@@ -29,6 +30,7 @@ from src.schemas.permit_schema import (
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
+    EventCredentialInspectionRequest,
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
@@ -40,6 +42,7 @@ from src.schemas.permit_schema import (
     InspectionScheduleRequest,
     PermitCancelRequest,
     PermitCreateRequest,
+    PermitReclassifyRequest,
     PermitResponse,
     QuestionCreateRequest,
     QuestionResponse,
@@ -134,6 +137,18 @@ class PermitService:
         )
         self.db.add(request)
         self.db.flush()
+
+        for attachment in self._initial_attachments_from_payload(payload):
+            self.db.add(
+                AttachmentModel(
+                    permit_request_id=request.id,
+                    tipo_documento=attachment["tipo_documento"],
+                    nome_arquivo=attachment["nome_arquivo"],
+                    arquivo_url=attachment["arquivo_url"],
+                    mime_type=attachment.get("mime_type"),
+                    tamanho_bytes=attachment.get("tamanho_bytes"),
+                )
+            )
 
         for requirement_data in self._build_requirements(payload.respostas):
             secretaria_slug = requirement_data["secretaria_slug"]
@@ -715,10 +730,68 @@ class PermitService:
             status_solicitacao=request.status,
             dam_status=request.dam_status,
             verified_at=credential.verified_at,
+            verified_by=credential.verifier.nome if credential.verifier else None,
+            verified_secretaria=credential.verified_secretaria,
+            verification_status=credential.verification_status,
+            verification_notes=credential.verification_notes,
             verification_count=credential.verification_count or 0,
             requirements=[self._requirement_to_response(item) for item in request.requirements],
             dam_attachment=self._attachment_to_response(dam_attachment) if dam_attachment else None,
         )
+
+    def inspect_event_credential(
+        self,
+        codigo_publico: str,
+        payload: EventCredentialInspectionRequest,
+        current_user: UserModel,
+    ) -> EventCredentialValidationResponse:
+        result = self.validate_event_credential(codigo_publico, payload.token)
+        if not result.valid:
+            return result
+
+        credential = (
+            self.db.query(EventCredentialModel)
+            .filter(EventCredentialModel.codigo_publico == codigo_publico)
+            .first()
+        )
+        if not credential:
+            return EventCredentialValidationResponse(valid=False, reason="Credencial não encontrada")
+
+        secretaria_nome = current_user.secretaria.nome if current_user.secretaria else current_user.role.nome
+        credential.verified_by = current_user.id
+        credential.verified_secretaria = secretaria_nome
+        credential.verification_status = payload.status
+        credential.verification_notes = payload.notes
+
+        status_label = {
+            "regular": "evento regular",
+            "irregular": "irregularidade registrada",
+            "multa": "irregularidade com possibilidade de multa",
+            "encerrado": "evento encerrado pela fiscalização",
+        }.get(payload.status, payload.status)
+        message = f"Fiscalização registrou {status_label}."
+        if payload.notes:
+            message = f"{message} Justificativa: {payload.notes}"
+        self._add_comment(
+            credential.permit_request_id,
+            current_user,
+            message,
+        )
+        if payload.status != "regular" and payload.notify_owner:
+            self._notify_citizen_event_irregularity(
+                credential.permit_request,
+                current_user,
+                status_label,
+                payload.notes,
+            )
+        self.db.commit()
+        self.db.refresh(credential)
+        result.verified_by = current_user.nome
+        result.verified_secretaria = secretaria_nome
+        result.verification_status = credential.verification_status
+        result.verification_notes = credential.verification_notes
+        result.verification_count = credential.verification_count or result.verification_count
+        return result
 
     def revoke_event_credential(
         self,
@@ -862,6 +935,7 @@ class PermitService:
             secretaria_dam=payload.secretaria_dam,
             tipos_resposta=payload.tipos_resposta,
             campos_obrigatorios=payload.campos_obrigatorios,
+            opcoes_resposta=self._normalized_selectable_options(payload),
             modelo_documento_nome=payload.modelo_documento_nome,
             modelo_documento_url=payload.modelo_documento_url,
             requer_vistoria=payload.requer_vistoria,
@@ -875,6 +949,75 @@ class PermitService:
         self.db.commit()
         self.db.refresh(question)
         return self._question_to_response(question)
+
+    def create_additional_requirement(
+        self,
+        request_id: int,
+        payload: AdditionalRequirementRequest,
+        current_user: UserModel,
+    ) -> RequirementResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if not self._can_view_request(request, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        if request.status != "autorizada":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Só é possível incluir perguntas em solicitações autorizadas.",
+            )
+        secretaria_id = current_user.secretaria_id
+        if current_user.role.slug == "admin" and not secretaria_id:
+            secretaria = self.db.query(SecretariaModel).filter_by(slug="desenvolvimento_economico").first()
+            secretaria_id = secretaria.id if secretaria else None
+        if not secretaria_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Usuário sem secretaria vinculada para criar exigência.",
+            )
+        requirement = PermitRequirementModel(
+            permit_request_id=request.id,
+            secretaria_id=secretaria_id,
+            tipo_exigencia=payload.pergunta.strip(),
+            status="aguardando_analise",
+            observacoes=payload.observacoes,
+            due_date=PermitService._add_business_days(date.today(), payload.prazo_resposta_dias_uteis),
+            requires_inspection=payload.requires_inspection,
+            inspection_checklist=payload.checklist_vistoria,
+            inspection_requires_photo=payload.inspection_requires_photo,
+            inspection_status="nao_agendada",
+        )
+        self.db.add(requirement)
+        request.status = "em_analise"
+        self.db.commit()
+        self.db.refresh(requirement)
+        return self._requirement_to_response(requirement)
+
+    def reclassify_request_event_type(
+        self,
+        request_id: int,
+        payload: PermitReclassifyRequest,
+        current_user: UserModel,
+    ) -> PermitResponse:
+        request = self.db.query(PermitRequestModel).filter(PermitRequestModel.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada")
+        if not self._can_view_request(request, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
+        event_type = (
+            self.db.query(EventTypeModel)
+            .filter(EventTypeModel.key == payload.event_type_key, EventTypeModel.is_active.is_(True))
+            .first()
+        )
+        event_data = dict(request.dados_evento or {})
+        event_data["tipo_evento"] = payload.event_type_key
+        event_data["tipo_evento_nome"] = (
+            event_type.name if event_type else payload.event_type_name or payload.event_type_key
+        )
+        request.dados_evento = event_data
+        self.db.commit()
+        self.db.refresh(request)
+        return self.to_response(request)
 
     def update_question_definition(self, question_id: int, payload: QuestionCreateRequest, current_user: UserModel) -> QuestionResponse:
         question = self.db.query(QuestionDefinitionModel).filter(QuestionDefinitionModel.id == question_id).first()
@@ -901,6 +1044,7 @@ class PermitService:
         question.secretaria_dam = payload.secretaria_dam
         question.tipos_resposta = payload.tipos_resposta
         question.campos_obrigatorios = payload.campos_obrigatorios
+        question.opcoes_resposta = self._normalized_selectable_options(payload)
         question.modelo_documento_nome = payload.modelo_documento_nome
         question.modelo_documento_url = payload.modelo_documento_url
         question.requer_vistoria = payload.requer_vistoria
@@ -934,6 +1078,7 @@ class PermitService:
             secretaria_dam=question.secretaria_dam,
             tipos_resposta=question.tipos_resposta,
             campos_obrigatorios=question.campos_obrigatorios,
+            opcoes_resposta=question.opcoes_resposta or [],
             modelo_documento_nome=question.modelo_documento_nome,
             modelo_documento_url=question.modelo_documento_url,
             requer_vistoria=question.requer_vistoria,
@@ -979,6 +1124,22 @@ class PermitService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Informe o modelo do documento para download quando houver assinatura ou botão de baixar.",
             )
+        options = [item.strip() for item in payload.opcoes_resposta]
+        if any(not item for item in options):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Opções selecionáveis não podem ficar vazias.",
+            )
+        if "Opções selecionáveis" in payload.tipos_resposta and not options:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Inclua ao menos uma opção selecionável.",
+            )
+        if len(options) != len(set(options)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Opções selecionáveis não podem ser repetidas.",
+            )
         unknown_required_fields = set(payload.campos_obrigatorios) - set(payload.tipos_resposta)
         if unknown_required_fields:
             raise HTTPException(
@@ -996,6 +1157,12 @@ class PermitService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Itens de checklist não podem ficar vazios.",
             )
+
+    @staticmethod
+    def _normalized_selectable_options(payload: QuestionCreateRequest) -> list[str]:
+        if "Opções selecionáveis" not in payload.tipos_resposta:
+            return []
+        return [item.strip() for item in payload.opcoes_resposta]
 
     def _ensure_can_manage_question_definition(self, secretaria_name: str, current_user: UserModel) -> None:
         if current_user.role.slug == "admin":
@@ -1269,26 +1436,57 @@ class PermitService:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permissão insuficiente")
 
     def _validate_payload(self, payload: PermitCreateRequest) -> None:
-        responsible_required = ["nome", "cpf_cnpj", "telefone", "email", "endereco"]
-        event_required = [
-            "nome_evento",
-            "data_evento",
-            "endereco_evento",
-            "publico_estimado",
-            "horario_inicio",
-            "horario_termino",
-        ]
+        responsible_required = {
+            "nome": "nome do responsável",
+            "cpf_cnpj": "CPF/CNPJ",
+            "telefone": "telefone",
+            "endereco": "endereço residencial",
+        }
+        event_required = {
+            "nome_evento": "nome do evento",
+            "data_evento": "data do evento",
+            "endereco_evento": "endereço do evento",
+            "publico_estimado": "expectativa de público",
+            "horario_inicio": "horário de início",
+            "horario_termino": "horário de término",
+            "tipo_espaco_evento": "tipo de espaço do evento",
+            "latitude_evento": "latitude do evento",
+            "longitude_evento": "longitude do evento",
+        }
 
-        if any(not str(payload.dados_responsavel.get(field, "")).strip() for field in responsible_required):
+        missing_responsible = [
+            label
+            for field, label in responsible_required.items()
+            if not str(payload.dados_responsavel.get(field, "")).strip()
+        ]
+        if missing_responsible:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Dados obrigatórios do responsável não foram preenchidos.",
+                detail=f"Preencha os dados do responsável: {', '.join(missing_responsible)}.",
             )
 
-        if any(not str(payload.dados_evento.get(field, "")).strip() for field in event_required):
+        missing_event = [
+            label
+            for field, label in event_required.items()
+            if not str(payload.dados_evento.get(field, "")).strip()
+        ]
+        if missing_event:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Dados obrigatórios do evento não foram preenchidos.",
+                detail=f"Preencha os dados do evento: {', '.join(missing_event)}.",
+            )
+        if str(payload.dados_evento.get("tipo_espaco_evento", "")).lower() not in {"publico", "privado"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe se o evento será em espaço público ou privado.",
+            )
+        try:
+            float(str(payload.dados_evento.get("latitude_evento", "")).replace(",", "."))
+            float(str(payload.dados_evento.get("longitude_evento", "")).replace(",", "."))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Busque e selecione o endereço do evento para salvar latitude e longitude.",
             )
 
         try:
@@ -1307,10 +1505,39 @@ class PermitService:
             )
 
         attachment_names = payload.dados_evento.get("anexos_informados") or []
-        if not isinstance(attachment_names, list) or len(attachment_names) < 3:
+        attachment_text = " ".join(str(item) for item in attachment_names if item)
+        typed_documents = ":" in attachment_text
+        has_id_document = (
+            "documento_identificacao:" in attachment_text
+            or (
+                "documento_identificacao_frente:" in attachment_text
+                and "documento_identificacao_verso:" in attachment_text
+            )
+        )
+        has_residence_proof = "comprovante_residencia:" in attachment_text
+        local_without_permit = str(payload.dados_evento.get("local_sem_alvara", "")).lower() == "true"
+        has_local_document = (
+            "comprovante_endereco_local:" in attachment_text
+            if local_without_permit
+            else "alvara_funcionamento_local:" in attachment_text
+        )
+        missing_documents = []
+        if not has_id_document:
+            missing_documents.append("RG/CNH")
+        if not has_residence_proof:
+            missing_documents.append("comprovante de residência")
+        if not has_local_document:
+            missing_documents.append(
+                "comprovante de endereço do local"
+                if local_without_permit
+                else "alvará de funcionamento do local"
+            )
+        if not typed_documents and isinstance(attachment_names, list) and len(attachment_names) >= 3:
+            missing_documents = []
+        if not isinstance(attachment_names, list) or missing_documents:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Informe RG/CPF, comprovante de residência e alvará do local.",
+                detail=f"Anexe os documentos obrigatórios: {', '.join(missing_documents)}.",
             )
 
         if payload.is_beneficente and not (payload.instituicao_beneficiada or "").strip():
@@ -1463,6 +1690,32 @@ class PermitService:
         )
 
     @staticmethod
+    def _initial_attachments_from_payload(payload: PermitCreateRequest) -> list[dict[str, Any]]:
+        raw_attachments = payload.dados_evento.get("anexos_iniciais") or []
+        if not isinstance(raw_attachments, list):
+            return []
+        attachments: list[dict[str, Any]] = []
+        for item in raw_attachments:
+            if not isinstance(item, dict):
+                continue
+            tipo_documento = str(item.get("tipo_documento", "")).strip()
+            nome_arquivo = str(item.get("nome_arquivo", "")).strip()
+            arquivo_url = str(item.get("arquivo_url", "")).strip()
+            if not tipo_documento or not nome_arquivo or not arquivo_url:
+                continue
+            tamanho_bytes = item.get("tamanho_bytes")
+            attachments.append(
+                {
+                    "tipo_documento": tipo_documento[:80],
+                    "nome_arquivo": nome_arquivo[:255],
+                    "arquivo_url": arquivo_url[:500],
+                    "mime_type": str(item.get("mime_type") or "")[:120] or None,
+                    "tamanho_bytes": tamanho_bytes if isinstance(tamanho_bytes, int) else None,
+                }
+            )
+        return attachments
+
+    @staticmethod
     def _ensure_pdf_attachment(payload: AttachmentCreateRequest, message: str) -> None:
         file_name = payload.nome_arquivo.lower()
         mime_type = (payload.mime_type or "").lower()
@@ -1552,6 +1805,25 @@ class PermitService:
             mensagem=(
                 f"A vistoria da exigência '{requirement.tipo_exigencia}' foi confirmada para {schedule_label}. "
                 "Acompanhe a solicitação pelo sistema."
+            ),
+        )
+
+    def _notify_citizen_event_irregularity(
+        self,
+        request: PermitRequestModel,
+        actor: UserModel,
+        status_label: str,
+        notes: str | None,
+    ) -> None:
+        self._record_email_notification(
+            request,
+            actor,
+            destinatario=str((request.dados_responsavel or {}).get("email") or request.solicitante.email),
+            assunto="Registro de fiscalização do evento",
+            link=f"{PUBLIC_BASE_URL}/my-requests",
+            mensagem=(
+                f"A fiscalização registrou {status_label} para o evento da solicitação {request.protocolo}. "
+                f"{'Justificativa: ' + notes if notes else 'Acompanhe os detalhes pelo sistema.'}"
             ),
         )
 
@@ -1774,6 +2046,10 @@ class PermitService:
             valid_until=credential.valid_until,
             issued_at=credential.issued_at,
             verified_at=credential.verified_at,
+            verified_by=credential.verifier.nome if credential.verifier else None,
+            verified_secretaria=credential.verified_secretaria,
+            verification_status=credential.verification_status,
+            verification_notes=credential.verification_notes,
             verification_count=credential.verification_count or 0,
             validation_url=validation_url,
         )

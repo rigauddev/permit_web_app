@@ -56,12 +56,12 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       userType: widget.userType,
       appBar: AppBar(
         title: const Text('Minhas solicitações'),
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => _goBack(context),
+          icon: const Icon(Icons.arrow_back),
+        ),
         actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => _goBack(context),
-            icon: const Icon(Icons.arrow_back),
-          ),
           IconButton(
             tooltip: 'Atualizar',
             onPressed: _refresh,
@@ -380,7 +380,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     if (rawUrl.isEmpty) return;
     final url = _api.resolveFileUrl(rawUrl);
     final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível abrir o arquivo.')),
@@ -406,100 +406,99 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     required String description,
     required List<String> allowedExtensions,
   }) {
-    final fileController = TextEditingController();
-    final urlController = TextEditingController();
-    final mimeController = TextEditingController(text: 'application/pdf');
+    var uploading = false;
     return showDialog<_AttachmentInput>(
       context: context,
       builder:
-          (context) => AlertDialog(
-            title: Text(title),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(description),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: fileController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nome do arquivo',
-                    border: OutlineInputBorder(),
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: Text(title),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(description),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              uploading
+                                  ? null
+                                  : () async {
+                                    final result = await FilePicker.platform
+                                        .pickFiles(
+                                          type: FileType.custom,
+                                          allowedExtensions: allowedExtensions,
+                                          withData: true,
+                                        );
+                                    final file =
+                                        result == null || result.files.isEmpty
+                                            ? null
+                                            : result.files.single;
+                                    if (file == null) return;
+                                    final extension =
+                                        file.name.split('.').last.toLowerCase();
+                                    if (!allowedExtensions.contains(
+                                      extension,
+                                    )) {
+                                      return;
+                                    }
+                                    setDialogState(() => uploading = true);
+                                    final token =
+                                        await SessionExpiration.readAccessToken();
+                                    if (token == null || token.isEmpty) {
+                                      if (context.mounted) {
+                                        Navigator.pop(context);
+                                      }
+                                      return;
+                                    }
+                                    final upload = await _api.uploadFile(
+                                      accessToken: token,
+                                      kind: 'solicitacoes/anexos',
+                                      file: file,
+                                    );
+                                    if (!context.mounted) return;
+                                    Navigator.pop(
+                                      context,
+                                      _AttachmentInput(
+                                        fileName:
+                                            upload['file_name']?.toString() ??
+                                            file.name,
+                                        fileUrl:
+                                            upload['file_url']?.toString() ??
+                                            '',
+                                        mimeType:
+                                            upload['mime_type']?.toString(),
+                                      ),
+                                    );
+                                  },
+                          icon:
+                              uploading
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Icon(Icons.upload_file),
+                          label: Text(
+                            uploading ? 'Enviando...' : 'Selecionar arquivo',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(
-                    labelText: 'URL ou referência do arquivo',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: allowedExtensions,
-                    );
-                    final file =
-                        result == null || result.files.isEmpty
-                            ? null
-                            : result.files.single;
-                    if (file == null) return;
-                    fileController.text = file.name;
-                    urlController.text = file.path ?? file.name;
-                    final extension = file.name.split('.').last.toLowerCase();
-                    mimeController.text =
-                        extension == 'pdf'
-                            ? 'application/pdf'
-                            : extension == 'png'
-                            ? 'image/png'
-                            : 'image/jpeg';
-                  },
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('Selecionar arquivo'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: mimeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Tipo MIME',
-                    helperText: 'Use application/pdf, image/jpeg ou image/png',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  final fileName = fileController.text.trim();
-                  final fileUrl = urlController.text.trim();
-                  final mimeType = mimeController.text.trim();
-                  final extension = fileName.split('.').last.toLowerCase();
-
-                  if (fileName.length < 3 || fileUrl.length < 3) return;
-                  if (!allowedExtensions.contains(extension)) return;
-                  if (mimeType.isEmpty) return;
-
-                  Navigator.pop(
-                    context,
-                    _AttachmentInput(
-                      fileName: fileName,
-                      fileUrl: fileUrl,
-                      mimeType: mimeType,
+                  actions: [
+                    TextButton(
+                      onPressed:
+                          uploading ? null : () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Enviar comprovante'),
-              ),
-            ],
+                  ],
+                ),
           ),
     );
   }
@@ -718,7 +717,7 @@ class _RequestListTile extends StatelessWidget {
                   if (finalPermit != null)
                     IconButton(
                       tooltip: 'Visualizar ou baixar alvará',
-                      onPressed: () => onOpenAttachment(finalPermit),
+                      onPressed: () => onOpenCredential(request),
                       icon: const Icon(Icons.picture_as_pdf_outlined),
                     ),
                   if (finalPermit != null)
@@ -730,7 +729,9 @@ class _RequestListTile extends StatelessWidget {
                   if (canOpenCredential)
                     IconButton(
                       tooltip:
-                          verified ? 'Evento verificado' : 'Validar evento',
+                          verified
+                              ? 'Ver alvará verificado'
+                              : 'Ver alvará com QR Code',
                       onPressed: () => onOpenCredential(request),
                       icon: const Icon(Icons.qr_code_2),
                     ),
@@ -1061,7 +1062,7 @@ class _RequestDetailsPage extends StatelessWidget {
                         ),
                       if (finalPermit != null)
                         OutlinedButton.icon(
-                          onPressed: () => onOpenAttachment(finalPermit),
+                          onPressed: () => onOpenCredential(request),
                           icon: const Icon(Icons.picture_as_pdf_outlined),
                           label: const Text('Visualizar alvará'),
                         ),
@@ -1076,7 +1077,9 @@ class _RequestDetailsPage extends StatelessWidget {
                           onPressed: () => onOpenCredential(request),
                           icon: const Icon(Icons.qr_code_2),
                           label: Text(
-                            verified ? 'Ver credencial' : 'Validar evento',
+                            verified
+                                ? 'Ver alvará verificado'
+                                : 'Ver alvará com QR Code',
                           ),
                         ),
                       if (!canAttachPayment &&
