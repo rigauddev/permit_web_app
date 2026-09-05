@@ -120,6 +120,22 @@ docker compose --profile https up -d --build
 docker compose ps
 ```
 
+Em VPS pequena, o build do Flutter dentro do Docker pode demorar bastante porque baixa uma imagem grande e compila o web no servidor. Para homologação, prefira compilar o Flutter fora da VPS e subir somente os arquivos prontos:
+
+```bash
+flutter build web --dart-define=API_BASE_URL=https://app.seu-dominio.com/api
+rsync -avz --delete build/web/ ubuntu@IP_DA_INSTANCIA:/home/ubuntu/permit_web_app/build/web/
+```
+
+Na VPS, suba usando o compose runtime:
+
+```bash
+docker compose -f docker-compose.runtime.yml --profile https up -d --build
+docker compose -f docker-compose.runtime.yml --profile https ps
+```
+
+Esse modo não baixa a imagem Flutter no servidor. Ele usa apenas Nginx para servir `build/web`.
+
 Validar localmente na instância:
 
 ```bash
