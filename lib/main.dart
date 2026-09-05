@@ -37,9 +37,7 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(userProvider);
-
-    return _SessionBootstrap(user: user, child: _AppRouter(user: user));
+    return const _SessionBootstrap();
   }
 }
 
@@ -218,10 +216,7 @@ class _AppRouter extends StatelessWidget {
 }
 
 class _SessionBootstrap extends ConsumerStatefulWidget {
-  const _SessionBootstrap({required this.user, required this.child});
-
-  final UserModel? user;
-  final Widget child;
+  const _SessionBootstrap();
 
   @override
   ConsumerState<_SessionBootstrap> createState() => _SessionBootstrapState();
@@ -245,7 +240,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       if (mounted) setState(() => _checked = true);
       return;
     }
-    if (widget.user == null) {
+    if (ref.read(userProvider) == null) {
       ref
           .read(userProvider.notifier)
           .setUser(
@@ -265,7 +260,8 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
         home: Scaffold(body: Center(child: CircularProgressIndicator())),
       );
     }
-    return widget.child;
+    final user = ref.watch(userProvider);
+    return _AppRouter(user: user);
   }
 }
 

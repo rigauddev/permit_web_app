@@ -228,7 +228,7 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
             readOnly: true,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
-              labelText: 'E-mail',
+              labelText: 'E-mail (opcional)',
               prefixIcon: Icon(Icons.lock_outline),
             ),
           ),
@@ -290,33 +290,10 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       return ListView(
         children: [
           const _StepTitle('Dados do evento'),
-          DropdownButtonFormField<String>(
-            initialValue:
-                (state.eventData['tipo_evento'] ?? '').isEmpty
-                    ? null
-                    : state.eventData['tipo_evento'],
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Tipo de evento',
-              helperText:
-                  'A seleção define quais perguntas e documentos serão exibidos.',
-            ),
-            items:
-                eventTypes
-                    .map(
-                      (eventType) => DropdownMenuItem<String>(
-                        value: eventType['key']?.toString() ?? '',
-                        child: Text(eventType['name']?.toString() ?? ''),
-                      ),
-                    )
-                    .toList(),
-            onChanged: (value) {
-              if (value == null || value.isEmpty) return;
-              final eventType = eventTypes.firstWhere(
-                (item) => item['key']?.toString() == value,
-              );
-              controller.selectEventType(eventType);
-            },
+          _EventTypeSelectorButton(
+            eventTypes: eventTypes,
+            selectedEventType: selectedEventType,
+            onSelected: controller.selectEventType,
           ),
           if (selectedEventType != null) ...[
             const SizedBox(height: 12),
@@ -924,6 +901,122 @@ class _TermStatus extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _EventTypeSelectorButton extends StatelessWidget {
+  const _EventTypeSelectorButton({
+    required this.eventTypes,
+    required this.selectedEventType,
+    required this.onSelected,
+  });
+
+  final List<Map<String, dynamic>> eventTypes;
+  final Map<String, dynamic>? selectedEventType;
+  final ValueChanged<Map<String, dynamic>> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedName = selectedEventType?['name']?.toString();
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: eventTypes.isEmpty ? null : () => _openSelector(context),
+          icon: const Icon(Icons.category_outlined),
+          label: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              selectedName == null || selectedName.isEmpty
+                  ? 'Selecionar tipo de evento'
+                  : selectedName,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+            foregroundColor: colorScheme.primary,
+            side: BorderSide(
+              color:
+                  selectedEventType == null
+                      ? colorScheme.outline
+                      : colorScheme.primary,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'A seleção define quais perguntas e documentos serão exibidos.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openSelector(BuildContext context) async {
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder:
+          (context) => SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.72,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: eventTypes.length + 1,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Tipo de evento',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    );
+                  }
+                  final eventType = eventTypes[index - 1];
+                  final key = eventType['key']?.toString() ?? '';
+                  final isSelected =
+                      key == selectedEventType?['key']?.toString();
+                  final description =
+                      (eventType['description'] ?? eventType['descricao'])
+                          ?.toString()
+                          .trim();
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    title: Text(eventType['name']?.toString() ?? key),
+                    subtitle: Text(
+                      description != null && description.isNotEmpty
+                          ? description
+                          : eventType['examples']?.toString() ??
+                              'Sem descrição cadastrada.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.pop(context, eventType),
+                  );
+                },
+              ),
+            ),
+          ),
+    );
+    if (selected != null) onSelected(selected);
   }
 }
 

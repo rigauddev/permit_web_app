@@ -245,13 +245,7 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
 
   String? validateCurrentStep() {
     if (state.currentStep == 0) {
-      for (final field in [
-        'nome',
-        'cpf_cnpj',
-        'telefone',
-        'email',
-        'endereco',
-      ]) {
+      for (final field in ['nome', 'cpf_cnpj', 'telefone', 'endereco']) {
         if ((state.responsibleData[field] ?? '').trim().isEmpty) {
           return 'Preencha todos os dados do responsável.';
         }

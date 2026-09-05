@@ -275,13 +275,11 @@ class _EventCredentialPageState extends State<EventCredentialPage> {
       title: Text(
         _canInspectCredential ? 'Fiscalização do evento' : 'Alvará do evento',
       ),
-      actions: [
-        IconButton(
-          tooltip: 'Voltar',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back),
-        ),
-      ],
+      leading: IconButton(
+        tooltip: 'Voltar',
+        onPressed: () => _goBack(context),
+        icon: const Icon(Icons.arrow_back),
+      ),
     );
     final content = SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -523,13 +521,10 @@ class _AuthorizationDocument extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              runSpacing: 12,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 560;
+                final headerInfo = Row(
                   children: [
                     Image.asset(
                       'assets/images/logo_prefeitura_1.png',
@@ -537,22 +532,26 @@ class _AuthorizationDocument extends StatelessWidget {
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Secretaria de Desenvolvimento Econômico',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Secretaria de Desenvolvimento Econômico',
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        Text(authorizationTitle),
-                        Text('Protocolo ${form['protocolo'] ?? '-'}'),
-                      ],
+                          Text(authorizationTitle, softWrap: true),
+                          Text('Protocolo ${form['protocolo'] ?? '-'}'),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-                Wrap(
+                );
+                final actions = Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -574,8 +573,26 @@ class _AuthorizationDocument extends StatelessWidget {
                       ),
                     _StatusChip(label: _statusLabel(status), status: status),
                   ],
-                ),
-              ],
+                );
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      headerInfo,
+                      const SizedBox(height: 12),
+                      Align(alignment: Alignment.centerLeft, child: actions),
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: headerInfo),
+                    const SizedBox(width: 12),
+                    actions,
+                  ],
+                );
+              },
             ),
             const Divider(height: 28),
             Text(
