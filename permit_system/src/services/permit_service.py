@@ -1433,6 +1433,8 @@ class PermitService:
             "horario_inicio",
             "horario_termino",
             "tipo_espaco_evento",
+            "latitude_evento",
+            "longitude_evento",
         ]
 
         if any(not str(payload.dados_responsavel.get(field, "")).strip() for field in responsible_required):
@@ -1450,6 +1452,14 @@ class PermitService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Informe se o evento será em espaço público ou privado.",
+            )
+        try:
+            float(str(payload.dados_evento.get("latitude_evento", "")).replace(",", "."))
+            float(str(payload.dados_evento.get("longitude_evento", "")).replace(",", "."))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Marque o local do evento no mapa para salvar latitude e longitude.",
             )
 
         try:

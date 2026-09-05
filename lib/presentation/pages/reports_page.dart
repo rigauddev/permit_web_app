@@ -196,6 +196,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
   Widget build(BuildContext context) {
     final events = _visibleEvents;
     final stats = _ReportStats(events);
+    final compact = MediaQuery.sizeOf(context).width < 700;
     return AppScaffold(
       userType: widget.userType,
       appBar: AppBar(
@@ -223,79 +224,84 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
       body: RefreshIndicator(
         onRefresh: _loadReports,
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(compact ? 12 : 20),
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1180),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _Header(total: events.length),
-                  const SizedBox(height: 16),
-                  _Filters(
-                    mode: _filterMode,
-                    period: _period,
-                    year: _selectedYear,
-                    years: _availableYears,
-                    eventType: _selectedEventType,
-                    eventTypes: _eventTypeOptions,
-                    onModeChanged:
-                        (value) => setState(() {
-                          _filterMode = value;
-                          _eventsPage = 0;
-                        }),
-                    onPickPeriod: _pickPeriod,
-                    onYearChanged:
-                        (value) => setState(() {
-                          _selectedYear = value;
-                          _eventsPage = 0;
-                        }),
-                    onEventTypeChanged:
-                        (value) => setState(() {
-                          _selectedEventType = value;
-                          _eventsPage = 0;
-                        }),
-                  ),
-                  const SizedBox(height: 18),
-                  if (_loading)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator(),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Header(total: events.length),
+                      const SizedBox(height: 16),
+                      _Filters(
+                        mode: _filterMode,
+                        period: _period,
+                        year: _selectedYear,
+                        years: _availableYears,
+                        eventType: _selectedEventType,
+                        eventTypes: _eventTypeOptions,
+                        onModeChanged:
+                            (value) => setState(() {
+                              _filterMode = value;
+                              _eventsPage = 0;
+                            }),
+                        onPickPeriod: _pickPeriod,
+                        onYearChanged:
+                            (value) => setState(() {
+                              _selectedYear = value;
+                              _eventsPage = 0;
+                            }),
+                        onEventTypeChanged:
+                            (value) => setState(() {
+                              _selectedEventType = value;
+                              _eventsPage = 0;
+                            }),
                       ),
-                    )
-                  else if (_error != null)
-                    _MessagePanel(
-                      icon: Icons.error_outline,
-                      title: _error!,
-                      actionLabel: 'Tentar novamente',
-                      onPressed: _loadReports,
-                    )
-                  else if (events.isEmpty)
-                    const _MessagePanel(
-                      icon: Icons.analytics_outlined,
-                      title:
-                          'Nenhum evento encontrado para os filtros selecionados.',
-                    )
-                  else ...[
-                    _KpiGrid(stats: stats),
-                    const SizedBox(height: 16),
-                    _ChartsGrid(stats: stats),
-                    const SizedBox(height: 16),
-                    _EventsTable(
-                      events: events,
-                      currentPage: _eventsPage,
-                      rowsPerPage: _eventsPerPage,
-                      onPageChanged:
-                          (value) => setState(() => _eventsPage = value),
-                      onRowsPerPageChanged:
-                          (value) => setState(() {
-                            _eventsPerPage = value;
-                            _eventsPage = 0;
-                          }),
-                    ),
-                  ],
-                ],
+                      const SizedBox(height: 18),
+                      if (_loading)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (_error != null)
+                        _MessagePanel(
+                          icon: Icons.error_outline,
+                          title: _error!,
+                          actionLabel: 'Tentar novamente',
+                          onPressed: _loadReports,
+                        )
+                      else if (events.isEmpty)
+                        const _MessagePanel(
+                          icon: Icons.analytics_outlined,
+                          title:
+                              'Nenhum evento encontrado para os filtros selecionados.',
+                        )
+                      else ...[
+                        _KpiGrid(stats: stats),
+                        const SizedBox(height: 16),
+                        _ChartsGrid(stats: stats),
+                        const SizedBox(height: 16),
+                        _EventsTable(
+                          events: events,
+                          currentPage: _eventsPage,
+                          rowsPerPage: _eventsPerPage,
+                          onPageChanged:
+                              (value) => setState(() => _eventsPage = value),
+                          onRowsPerPageChanged:
+                              (value) => setState(() {
+                                _eventsPerPage = value;
+                                _eventsPage = 0;
+                              }),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -356,10 +362,17 @@ class _Header extends ConsumerWidget {
         user?.userType == 'admin'
             ? 'Todas as secretarias'
             : _formatSecretaria(user?.secretaria);
+    final compact = MediaQuery.sizeOf(context).width < 560;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Image.asset('assets/images/logo_prefeitura_1.png', height: 64),
-        const SizedBox(width: 16),
+        Image.asset(
+          'assets/images/logo_prefeitura_1.png',
+          height: compact ? 46 : 64,
+          width: compact ? 74 : null,
+          fit: BoxFit.contain,
+        ),
+        SizedBox(width: compact ? 10 : 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,82 +421,98 @@ class _Filters extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'period',
-                  icon: Icon(Icons.date_range),
-                  label: Text('Período'),
-                ),
-                ButtonSegment(
-                  value: 'year',
-                  icon: Icon(Icons.calendar_today),
-                  label: Text('Ano'),
-                ),
-              ],
-              selected: {mode},
-              onSelectionChanged: (value) => onModeChanged(value.first),
-            ),
-            if (mode == 'period')
-              OutlinedButton.icon(
-                onPressed: onPickPeriod,
-                icon: const Icon(Icons.tune),
-                label: Text(_formatPeriod(period)),
-              )
-            else
-              SizedBox(
-                width: 160,
-                child: DropdownButtonFormField<int>(
-                  initialValue: year,
-                  decoration: const InputDecoration(
-                    labelText: 'Ano',
-                    border: OutlineInputBorder(),
+        padding: const EdgeInsets.all(14),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 560;
+            final fullWidth = constraints.maxWidth;
+            final filterWidth = compact ? fullWidth : 280.0;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: compact ? fullWidth : null,
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'period',
+                        icon: Icon(Icons.date_range),
+                        label: Text('Período'),
+                      ),
+                      ButtonSegment(
+                        value: 'year',
+                        icon: Icon(Icons.calendar_today),
+                        label: Text('Ano'),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (value) => onModeChanged(value.first),
                   ),
-                  items:
-                      years
-                          .map(
-                            (item) => DropdownMenuItem<int>(
-                              value: item,
-                              child: Text(item.toString()),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (value) {
-                    if (value != null) onYearChanged(value);
-                  },
                 ),
-              ),
-            SizedBox(
-              width: 280,
-              child: DropdownButtonFormField<String>(
-                initialValue: eventType,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de evento',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: '',
-                    child: Text('Todos os tipos'),
-                  ),
-                  ...eventTypes.map(
-                    (item) => DropdownMenuItem<String>(
-                      value: item.key,
-                      child: Text(item.value),
+                if (mode == 'period')
+                  SizedBox(
+                    width: filterWidth,
+                    child: OutlinedButton.icon(
+                      onPressed: onPickPeriod,
+                      icon: const Icon(Icons.tune),
+                      label: Text(
+                        _formatPeriod(period),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: compact ? fullWidth : 160,
+                    child: DropdownButtonFormField<int>(
+                      initialValue: year,
+                      decoration: const InputDecoration(
+                        labelText: 'Ano',
+                        border: OutlineInputBorder(),
+                      ),
+                      items:
+                          years
+                              .map(
+                                (item) => DropdownMenuItem<int>(
+                                  value: item,
+                                  child: Text(item.toString()),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        if (value != null) onYearChanged(value);
+                      },
                     ),
                   ),
-                ],
-                onChanged: onEventTypeChanged,
-              ),
-            ),
-          ],
+                SizedBox(
+                  width: filterWidth,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: eventType,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Tipo de evento',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: '',
+                        child: Text('Todos os tipos'),
+                      ),
+                      ...eventTypes.map(
+                        (item) => DropdownMenuItem<String>(
+                          value: item.key,
+                          child: Text(item.value),
+                        ),
+                      ),
+                    ],
+                    onChanged: onEventTypeChanged,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -664,79 +693,83 @@ class _BarChart extends StatelessWidget {
         values.isEmpty
             ? 1
             : values.map((item) => item.value).reduce((a, b) => a > b ? a : b);
-    return Card(
-      color: colorScheme.surfaceContainerLowest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (values.isEmpty)
-              const Expanded(child: Center(child: Text('Sem dados.')))
-            else
-              Expanded(
-                child: ListView.separated(
-                  itemCount: values.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final item = values[index];
-                    final ratio = item.value / maxValue;
-                    final color = _chartColors[index % _chartColors.length];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item.key,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Text(
-                              item.value.toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 5),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: Stack(
+    final compact = MediaQuery.sizeOf(context).width < 700;
+    return SizedBox(
+      height: compact ? 300 : null,
+      child: Card(
+        color: colorScheme.surfaceContainerLowest,
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 14 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              if (values.isEmpty)
+                const Expanded(child: Center(child: Text('Sem dados.')))
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: values.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final item = values[index];
+                      final ratio = item.value / maxValue;
+                      final color = _chartColors[index % _chartColors.length];
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Container(
-                                height: 12,
-                                color: color.withValues(alpha: 0.12),
+                              Expanded(
+                                child: Text(
+                                  item.key,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              FractionallySizedBox(
-                                widthFactor: ratio.clamp(0.0, 1.0),
-                                child: Container(
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
+                              Text(
+                                item.value.toString(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    );
-                  },
+                          const SizedBox(height: 5),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(999),
+                            child: Stack(
+                              children: [
+                                Container(
+                                  height: 12,
+                                  color: color.withValues(alpha: 0.12),
+                                ),
+                                FractionallySizedBox(
+                                  widthFactor: ratio.clamp(0.0, 1.0),
+                                  child: Container(
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -753,49 +786,55 @@ class _NeighborhoodTypesPanel extends StatelessWidget {
     final neighborhood = stats.topNeighborhood?.key;
     final values = stats.topNeighborhoodTypes;
     final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      color: colorScheme.surfaceContainerLowest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              neighborhood == null
-                  ? 'Tipos por bairro'
-                  : 'Tipos de evento em $neighborhood',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (values.isEmpty)
-              const Expanded(child: Center(child: Text('Sem dados.')))
-            else
-              Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      values.asMap().entries.map((entry) {
-                        final color =
-                            _chartColors[entry.key % _chartColors.length];
-                        final item = entry.value;
-                        return Chip(
-                          avatar: CircleAvatar(
-                            backgroundColor: color,
-                            foregroundColor: Colors.white,
-                            child: Text(
-                              item.value.toString(),
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                          ),
-                          label: Text(item.key),
-                        );
-                      }).toList(),
-                ),
+    final compact = MediaQuery.sizeOf(context).width < 700;
+    return SizedBox(
+      height: compact ? 260 : null,
+      child: Card(
+        color: colorScheme.surfaceContainerLowest,
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 14 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                neighborhood == null
+                    ? 'Tipos por bairro'
+                    : 'Tipos de evento em $neighborhood',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-          ],
+              const SizedBox(height: 12),
+              if (values.isEmpty)
+                const Expanded(child: Center(child: Text('Sem dados.')))
+              else
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children:
+                          values.asMap().entries.map((entry) {
+                            final color =
+                                _chartColors[entry.key % _chartColors.length];
+                            final item = entry.value;
+                            return Chip(
+                              avatar: CircleAvatar(
+                                backgroundColor: color,
+                                foregroundColor: Colors.white,
+                                child: Text(
+                                  item.value.toString(),
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                              label: Text(item.key),
+                            );
+                          }).toList(),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -850,6 +889,9 @@ class _EventsTable extends StatelessWidget {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
+                headingRowHeight: 42,
+                dataRowMinHeight: 48,
+                dataRowMaxHeight: 58,
                 columns: const [
                   DataColumn(label: Text('Data')),
                   DataColumn(label: Text('Evento')),
@@ -1361,6 +1403,18 @@ Future<Uint8List> _buildReportPdf({
               ],
             ),
             pw.SizedBox(height: 18),
+            _pdfChartSummary('Eventos por área/secretaria', stats.byArea),
+            _pdfChartSummary('Solicitações por tipo de evento', stats.byType),
+            _pdfChartSummary('Bairros com mais eventos', stats.byNeighborhood),
+            _pdfChartSummary(
+              stats.topNeighborhood == null
+                  ? 'Tipos por bairro'
+                  : 'Tipos de evento em ${stats.topNeighborhood!.key}',
+              stats.topNeighborhoodTypes,
+            ),
+            _pdfChartSummary('Eventos por mês', stats.byMonth),
+            _pdfChartSummary('Eventos mais frequentes', stats.byEventName),
+            pw.SizedBox(height: 10),
             pw.Text(
               'Eventos listados',
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
@@ -1450,6 +1504,63 @@ pw.Widget _pdfKpi(String label, String value) {
   );
 }
 
+pw.Widget _pdfChartSummary(String title, List<MapEntry<String, int>> values) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: 12),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 5),
+        if (values.isEmpty)
+          pw.Text('Sem dados.', style: const pw.TextStyle(fontSize: 8))
+        else
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(2.8),
+              1: pw.FlexColumnWidth(0.7),
+              2: pw.FlexColumnWidth(1.2),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  _pdfCell('Legenda', bold: true),
+                  _pdfCell('Qtd.', bold: true),
+                  _pdfCell('Cor', bold: true),
+                ],
+              ),
+              ...values.asMap().entries.map((entry) {
+                final color =
+                    _pdfChartColors[entry.key % _pdfChartColors.length];
+                return pw.TableRow(
+                  children: [
+                    _pdfCell(entry.value.key),
+                    _pdfCell(entry.value.value),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(5),
+                      child: pw.Row(
+                        children: [
+                          pw.Container(width: 22, height: 8, color: color),
+                          pw.SizedBox(width: 5),
+                          pw.Text(
+                            '#${color.toHex()}',
+                            style: const pw.TextStyle(fontSize: 8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ],
+          ),
+      ],
+    ),
+  );
+}
+
 pw.Widget _pdfCell(Object? value, {bool bold = false}) {
   return pw.Padding(
     padding: const pw.EdgeInsets.all(5),
@@ -1462,3 +1573,14 @@ pw.Widget _pdfCell(Object? value, {bool bold = false}) {
     ),
   );
 }
+
+const _pdfChartColors = [
+  PdfColor.fromInt(0xFF1B8A5A),
+  PdfColor.fromInt(0xFF2563EB),
+  PdfColor.fromInt(0xFFE11D48),
+  PdfColor.fromInt(0xFFF59E0B),
+  PdfColor.fromInt(0xFF7C3AED),
+  PdfColor.fromInt(0xFF0891B2),
+  PdfColor.fromInt(0xFF65A30D),
+  PdfColor.fromInt(0xFFDB2777),
+];

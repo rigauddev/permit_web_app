@@ -268,10 +268,16 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         'horario_inicio',
         'horario_termino',
         'tipo_espaco_evento',
+        'latitude_evento',
+        'longitude_evento',
       ]) {
         if ((state.eventData[field] ?? '').trim().isEmpty) {
           return 'Preencha todos os dados obrigatórios do evento.';
         }
+      }
+      if (double.tryParse(state.eventData['latitude_evento'] ?? '') == null ||
+          double.tryParse(state.eventData['longitude_evento'] ?? '') == null) {
+        return 'Marque o local do evento no mapa para salvar latitude e longitude.';
       }
       final eventDate = DateTime.tryParse(state.eventData['data_evento'] ?? '');
       if (eventDate == null) {

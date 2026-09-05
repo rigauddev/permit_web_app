@@ -446,6 +446,11 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
               ],
             ),
           ),
+          _LocationStatusCard(
+            latitude: state.eventData['latitude_evento'],
+            longitude: state.eventData['longitude_evento'],
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -1105,6 +1110,49 @@ class _StepTitle extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+class _LocationStatusCard extends StatelessWidget {
+  const _LocationStatusCard({required this.latitude, required this.longitude});
+
+  final String? latitude;
+  final String? longitude;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLocation =
+        double.tryParse(latitude ?? '') != null &&
+        double.tryParse(longitude ?? '') != null;
+    final color =
+        hasLocation ? const Color(0xFF0E7C3A) : const Color(0xFFB7791F);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            hasLocation ? Icons.check_circle_outline : Icons.location_searching,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              hasLocation
+                  ? 'Local marcado: latitude $latitude e longitude $longitude.'
+                  : 'Marque o local no mapa para registrar latitude e longitude do evento.',
+              style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }
