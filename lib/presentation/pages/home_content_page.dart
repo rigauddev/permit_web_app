@@ -334,6 +334,30 @@ class _HomeContentPageState extends State<HomeContentPage> {
                                         .titleMedium
                                         ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                          .withValues(alpha: .45),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: const Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.aspect_ratio_outlined),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'Carrossel principal — recomendado: 1600 x 600 px para web e 1080 x 1350 px para mobile. O tamanho não é obrigatório. Como a imagem se adapta à tela, mantenha textos, pessoas e logos na área central para evitar cortes.',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                   const SizedBox(height: 14),
                                   DropdownButtonFormField<String>(
                                     initialValue: _selectedScope,

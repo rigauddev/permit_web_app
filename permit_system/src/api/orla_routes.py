@@ -347,6 +347,14 @@ def inn_data(inn):
     }
 
 
+def public_inn_data(inn):
+    return {
+        'id': inn.id,
+        'name': inn.name,
+        'beachfront': bool(inn.beachfront),
+    }
+
+
 def guest_pass_data(row, inn: OrlaInn | None = None):
     stay_allowed, stay_message = _period_allows_orla_access(row.stay_start, row.stay_end)
     inn_allowed, inn_message = _inn_status_allows_orla_access(inn)
@@ -392,8 +400,14 @@ def guest_pass_data(row, inn: OrlaInn | None = None):
     }
 
 
+@router.get('/inns/public')
+def public_inns(db: Session = Depends(get_db)):
+    rows = db.query(OrlaInn).filter(OrlaInn.approval_status == 'approved').order_by(OrlaInn.name).all()
+    return [public_inn_data(inn) for inn in rows]
+
+
 @router.get('/inns')
-def inns(include_pending: bool = False, db: Session = Depends(get_db)):
+def inns(include_pending: bool = False, db: Session = Depends(get_db), user=Depends(require_staff)):
     query = db.query(OrlaInn)
     if not include_pending:
         query = query.filter(OrlaInn.approval_status == 'approved')
@@ -420,7 +434,7 @@ def create_inn(payload: InnInput, db: Session = Depends(get_db)):
     db.add(inn)
     db.commit()
     db.refresh(inn)
-    return inn_data(inn)
+    return public_inn_data(inn)
 
 
 @router.put('/inns/{inn_id}/approval')

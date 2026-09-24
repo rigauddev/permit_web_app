@@ -112,6 +112,15 @@ def update_home_content(
     return ContentService(db).update_card(card_id, payload, current_user)
 
 
+@router.delete("/{card_id}", status_code=204)
+def delete_home_content(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    ContentService(db).delete_card(card_id, current_user)
+
+
 @router.get("/services", response_model=list[ServiceConfigResponse])
 def list_services(
     db: Session = Depends(get_db),

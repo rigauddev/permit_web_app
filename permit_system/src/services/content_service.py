@@ -163,6 +163,14 @@ class ContentService:
         self.db.refresh(card)
         return self.to_response(card)
 
+    def delete_card(self, card_id: int, current_user: UserModel) -> None:
+        card = self.db.query(HomeContentCardModel).filter(HomeContentCardModel.id == card_id).first()
+        if not card:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Banner não encontrado")
+        self._ensure_can_manage_scope(card.scope, current_user)
+        self.db.delete(card)
+        self.db.commit()
+
     def get_settings(self, current_user: UserModel) -> ContentSettingsResponse:
         self._ensure_default_settings()
         values = {row.key: row.value for row in self.db.query(ContentSettingModel).all()}

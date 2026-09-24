@@ -14,7 +14,7 @@ from src.api.orla_routes import router
 from src.api.dependencies import get_current_user
 from src.infra.database.mysql_db import get_db
 from src.infra.database.models import Base, RoleModel, SecretariaModel, UserModel
-from src.infra.database.models.orla_model import OrlaAccess
+from src.infra.database.models.orla_model import OrlaAccess, OrlaInn
 
 
 class OrlaTest(unittest.TestCase):
@@ -107,6 +107,24 @@ class OrlaTest(unittest.TestCase):
         self.assertEqual(self.client.put(url, json={'vehicle_limit': 3}).status_code, 200)
         self.current = self.ids['citizen']
         self.assertEqual(self.client.get('/orla/me').json()['vehicle_limit'], 3)
+
+    def test_public_inn_catalog_does_not_expose_management_data(self):
+        with self.Session() as db:
+            db.add(OrlaInn(
+                name='Pousada Teste', address='Rua protegida, 10', cep='45400-000',
+                latitude='-13.28', longitude='-38.96', capacity=20,
+                beachfront=True, approval_status='approved',
+            ))
+            db.commit()
+        public = self.client.get('/orla/inns/public')
+        self.assertEqual(public.status_code, 200)
+        self.assertEqual(set(public.json()[0]), {'id', 'name', 'beachfront'})
+        self.current = self.ids['citizen']
+        self.assertEqual(self.client.get('/orla/inns?include_pending=true').status_code, 403)
+        self.current = self.ids['manager']
+        managed = self.client.get('/orla/inns?include_pending=true')
+        self.assertEqual(managed.status_code, 200)
+        self.assertEqual(managed.json()[0]['address'], 'Rua protegida, 10')
 
     def test_movements_and_revocation(self):
         v = self.register().json()

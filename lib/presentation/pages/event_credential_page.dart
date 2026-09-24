@@ -528,7 +528,7 @@ class _AuthorizationDocument extends StatelessWidget {
                   children: [
                     Image.asset(
                       'assets/images/logo_prefeitura_1.png',
-                      width: 74,
+                      width: compact ? 74 : 112,
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 14),

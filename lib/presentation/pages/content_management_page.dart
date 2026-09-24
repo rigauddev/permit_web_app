@@ -260,6 +260,8 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _eventMapCard(),
+                        const SizedBox(height: 16),
+                        _tourismImageGuide(),
                         if (_isAdmin) ...[
                           const SizedBox(height: 16),
                           _tourismForm(),
@@ -345,6 +347,37 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
               ),
             ),
           ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _tourismImageGuide() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.map_outlined,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Arte do mapa turístico',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                SizedBox(height: 5),
+                Text(
+                  'Tamanhos recomendados: 1920 x 1080 px para web e 1080 x 1350 px para mobile. A arte deve deixar espaço livre para os marcadores e manter a faixa costeira e os pontos principais dentro da área central. O tamanho é apenas uma orientação.',
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     ),

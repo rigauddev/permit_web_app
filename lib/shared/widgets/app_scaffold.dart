@@ -187,16 +187,16 @@ class _SystemFooter extends StatelessWidget {
         runSpacing: 4,
         children: [
           Text(
-            'Sistema desenvolvido por SEMOP - Secretaria de Mobilidade Pública',
+            'Secretaria de Mobilidade Pública - SEMOP',
             style: textStyle,
             textAlign: TextAlign.center,
           ),
           Text(
-            'Desenvolvedor: Matheus Rigaud',
+            'Desenvolvido por: Matheus Rigaud',
             style: textStyle,
             textAlign: TextAlign.center,
           ),
-          Text('Direção: Rael', style: textStyle, textAlign: TextAlign.center),
+          Text('Diretor: Rael Costa', style: textStyle, textAlign: TextAlign.center),
         ],
       ),
     );

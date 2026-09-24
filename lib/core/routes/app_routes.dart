@@ -28,7 +28,7 @@ class AppRoutes {
   static const String orlaBanners = '/orla/banners';
   static const String login = '/';
   static const String serverLogin = '/servidor';
-  static const String adminLogin = '/admin';
+  static const String adminLogin = '/administrativo';
   static const String recoveryPassword = '/recovery-password';
   static const String changePassword = '/change-password';
   static const String home = '/home';

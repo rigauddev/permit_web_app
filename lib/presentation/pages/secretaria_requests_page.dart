@@ -1075,7 +1075,10 @@ class _Header extends StatelessWidget {
             : _formatSecretaria(user?.secretaria);
     return Row(
       children: [
-        Image.asset('assets/images/logo_prefeitura_1.png', height: 64),
+        Image.asset(
+          'assets/images/logo_prefeitura_1.png',
+          height: MediaQuery.sizeOf(context).width >= 900 ? 96 : 64,
+        ),
         const SizedBox(width: 16),
         Expanded(
           child: Column(

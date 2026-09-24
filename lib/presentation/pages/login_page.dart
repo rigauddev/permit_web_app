@@ -480,7 +480,7 @@ class LoginPage extends HookConsumerWidget {
                 const SizedBox(height: 28),
                 Image.asset(
                   'assets/images/logo_prefeitura_1.png',
-                  width: size.width < 600 ? size.width * 0.62 : 280,
+                  width: size.width < 600 ? size.width * 0.68 : 360,
                 ),
                 const SizedBox(height: 24),
                 ConstrainedBox(

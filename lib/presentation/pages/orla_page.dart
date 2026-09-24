@@ -86,6 +86,8 @@ class _OrlaPageState extends State<OrlaPage> {
   List<Map<String, dynamic>> _businessBanners = [];
   PlatformFile? _bannerFile;
   String? _bannerImageUrl;
+  String? _bannerImageDimensions;
+  int? _editingBannerId;
   bool _busy = false;
   String? _error;
   int _offset = 0;
@@ -242,7 +244,9 @@ class _OrlaPageState extends State<OrlaPage> {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
+          constraints: BoxConstraints(
+            maxWidth: widget.section == OrlaSection.access ? 1440 : 1180,
+          ),
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -470,101 +474,105 @@ class _OrlaPageState extends State<OrlaPage> {
     );
   }
 
-  Widget _orlaServiceBanner(BuildContext context) => Card(
-    clipBehavior: Clip.antiAlias,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: 220,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.network(
-                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80',
-                fit: BoxFit.cover,
-                errorBuilder:
-                    (_, __, ___) => const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF3DB6D3), Color(0xFF0E5F2F)],
+  Widget _orlaServiceBanner(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 220,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.network(
+                  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80',
+                  fit: BoxFit.cover,
+                  errorBuilder:
+                      (_, __, ___) => const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF3DB6D3), Color(0xFF0E5F2F)],
+                          ),
                         ),
                       ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: .10),
+                        Colors.black.withValues(alpha: .62),
+                      ],
                     ),
-              ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: .10),
-                      Colors.black.withValues(alpha: .62),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Acesso à Orla de Guaibim',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Cadastre seus veículos, gere QR Code e acompanhe os registros de entrada autorizada na área da orla.',
+                        style: TextStyle(color: Colors.white, fontSize: 15),
+                      ),
                     ],
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Acesso à Orla de Guaibim',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Cadastre seus veículos, gere QR Code e acompanhe os registros de entrada autorizada na área da orla.',
-                      style: TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                  ],
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed:
+                      _busy ||
+                              ((_me?['vehicles'] as List?) ?? const [])
+                                      .length >=
+                                  ((_me?['vehicle_limit'] as int?) ?? 0)
+                          ? null
+                          : _register,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Cadastrar veículo'),
                 ),
-              ),
-            ],
+                OutlinedButton.icon(
+                  onPressed:
+                      () => Navigator.pushReplacementNamed(
+                        context,
+                        '/orla/veiculos',
+                      ),
+                  icon: const Icon(Icons.directions_car),
+                  label: const Text('Meus veículos'),
+                ),
+                const Text(
+                  'Banner, título e descrição poderão ser substituídos na gestão do sistema.',
+                ),
+              ],
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              FilledButton.icon(
-                onPressed:
-                    _busy ||
-                            ((_me?['vehicles'] as List?) ?? const []).length >=
-                                ((_me?['vehicle_limit'] as int?) ?? 0)
-                        ? null
-                        : _register,
-                icon: const Icon(Icons.add),
-                label: const Text('Cadastrar veículo'),
-              ),
-              OutlinedButton.icon(
-                onPressed:
-                    () => Navigator.pushReplacementNamed(
-                      context,
-                      '/orla/veiculos',
-                    ),
-                icon: const Icon(Icons.directions_car),
-                label: const Text('Meus veículos'),
-              ),
-              const Text(
-                'Banner, título e descrição poderão ser substituídos na gestão do sistema.',
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 
@@ -854,26 +862,83 @@ class _OrlaPageState extends State<OrlaPage> {
     if (bytes == null) {
       throw PermitApiException('Não foi possível ler a imagem selecionada.');
     }
-    final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    final width = frame.image.width;
-    final height = frame.image.height;
-    frame.image.dispose();
-    codec.dispose();
-    if (width != 1600 || height != 600) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'A imagem possui $width x $height px. Envie no tamanho exato de 1600 x 600 px.',
-          ),
-        ),
-      );
-      return;
+    String? dimensions;
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      dimensions = '${frame.image.width} x ${frame.image.height} px';
+      frame.image.dispose();
+      codec.dispose();
+    } catch (_) {
+      dimensions = null;
     }
     setState(() {
       _bannerFile = file;
       _bannerImageUrl = null;
+      _bannerImageDimensions = dimensions;
+    });
+  }
+
+  void _editBusinessBanner(Map<String, dynamic> card) {
+    setState(() {
+      _editingBannerId = card['id'] as int?;
+      _bannerTitle.text = card['title']?.toString() ?? '';
+      _bannerBody.text = card['body']?.toString() ?? '';
+      _bannerImageUrl = card['image_url']?.toString();
+      _bannerFile = null;
+      _bannerImageDimensions = null;
+    });
+  }
+
+  void _clearBusinessBannerForm() {
+    setState(() {
+      _editingBannerId = null;
+      _bannerTitle.clear();
+      _bannerBody.clear();
+      _bannerFile = null;
+      _bannerImageUrl = null;
+      _bannerImageDimensions = null;
+    });
+  }
+
+  Future<void> _deleteBusinessBanner(Map<String, dynamic> card) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Excluir banner?'),
+            content: Text(
+              'O banner “${card['title'] ?? ''}” será removido da sua lista e da página inicial.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Excluir'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) return;
+    await _run(() async {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) {
+        throw PermitApiException('Sessão expirada. Faça login novamente.');
+      }
+      await PermitApiService().deleteHomeContent(
+        accessToken: token,
+        cardId: card['id'] as int,
+      );
+      final cards = await PermitApiService().listHomeContent(token, mine: true);
+      if (!mounted) return;
+      setState(() => _businessBanners = cards);
+      if (_editingBannerId == card['id']) _clearBusinessBannerForm();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Banner excluído.')));
     });
   }
 
@@ -915,28 +980,48 @@ class _OrlaPageState extends State<OrlaPage> {
       if (imageUrl == null || imageUrl.isEmpty) {
         throw PermitApiException('Faça upload da imagem do banner.');
       }
-      await PermitApiService().createHomeContent(
-        accessToken: token,
-        scope: 'establishment',
-        title: title,
-        body: body,
-        imageUrl: imageUrl,
-        displayOrder: _businessBanners.length,
-        isActive: false,
-      );
-      _bannerTitle.clear();
-      _bannerBody.clear();
+      final editingId = _editingBannerId;
+      if (editingId == null) {
+        await PermitApiService().createHomeContent(
+          accessToken: token,
+          scope: 'establishment',
+          title: title,
+          body: body,
+          imageUrl: imageUrl,
+          displayOrder: _businessBanners.length,
+          isActive: false,
+        );
+      } else {
+        await PermitApiService().updateHomeContent(
+          accessToken: token,
+          cardId: editingId,
+          scope: 'establishment',
+          title: title,
+          body: body,
+          imageUrl: imageUrl,
+          displayOrder: _businessBanners.indexWhere(
+            (card) => card['id'] == editingId,
+          ),
+          isActive: false,
+        );
+      }
       final cards = await PermitApiService().listHomeContent(token, mine: true);
       if (mounted) {
         setState(() {
           _businessBanners = cards;
+          _editingBannerId = null;
+          _bannerTitle.clear();
+          _bannerBody.clear();
           _bannerFile = null;
           _bannerImageUrl = null;
+          _bannerImageDimensions = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Banner enviado para aprovação. Ele aparecerá na página inicial após a liberação do administrador.',
+              editingId == null
+                  ? 'Banner enviado para aprovação. Ele aparecerá na página inicial após a liberação do administrador.'
+                  : 'Banner atualizado e enviado novamente para aprovação.',
             ),
           ),
         );
@@ -1001,7 +1086,7 @@ class _OrlaPageState extends State<OrlaPage> {
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Tamanho obrigatório: 1600 x 600 px (proporção 8:3). Formatos aceitos: JPG ou PNG.',
+                      'Tamanhos recomendados para divulgação: web 1200 x 675 px (16:9) e mobile 1080 x 1080 px (quadrado). JPG ou PNG. Mantenha textos e logos no centro da imagem para evitar cortes.',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1010,6 +1095,13 @@ class _OrlaPageState extends State<OrlaPage> {
                   ),
                   const SizedBox(height: 12),
                   row,
+                  if (_bannerImageDimensions != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Imagem selecionada: $_bannerImageDimensions. O envio não será bloqueado por tamanho.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: _bannerBody,
@@ -1020,13 +1112,30 @@ class _OrlaPageState extends State<OrlaPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _busy ? null : _saveBusinessBanner,
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
-                      label: const Text('Publicar banner'),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_editingBannerId != null) ...[
+                        TextButton(
+                          onPressed: _busy ? null : _clearBusinessBannerForm,
+                          child: const Text('Cancelar edição'),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      FilledButton.icon(
+                        onPressed: _busy ? null : _saveBusinessBanner,
+                        icon: Icon(
+                          _editingBannerId == null
+                              ? Icons.add_photo_alternate_outlined
+                              : Icons.save_outlined,
+                        ),
+                        label: Text(
+                          _editingBannerId == null
+                              ? 'Enviar para aprovação'
+                              : 'Salvar e reenviar',
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               );
@@ -1058,6 +1167,23 @@ class _OrlaPageState extends State<OrlaPage> {
                     '${card['body']?.toString() ?? ''}\n${card['approval_status'] == 'aprovado' ? 'Aprovado e visível na página inicial' : 'Aguardando aprovação'}',
                   ),
                   isThreeLine: true,
+                  trailing: Wrap(
+                    spacing: 4,
+                    children: [
+                      IconButton(
+                        tooltip: 'Editar banner',
+                        onPressed:
+                            _busy ? null : () => _editBusinessBanner(card),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Excluir banner',
+                        onPressed:
+                            _busy ? null : () => _deleteBusinessBanner(card),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

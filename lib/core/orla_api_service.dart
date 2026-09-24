@@ -69,7 +69,7 @@ class OrlaApiService {
 
   Future<List<Map<String, dynamic>>> listInns() async {
     final response = await http
-        .get(Uri.parse('$_base/orla/inns'))
+        .get(Uri.parse('$_base/orla/inns/public'))
         .timeout(const Duration(seconds: 30));
     final decoded = _decode(response);
     if (decoded is! List) return const [];

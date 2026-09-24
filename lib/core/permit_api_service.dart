@@ -469,6 +469,19 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<void> deleteHomeContent({
+    required String accessToken,
+    required int cardId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/home-content/$cardId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
   Future<Map<String, dynamic>> approveHomeContent({
     required String accessToken,
     required int cardId,

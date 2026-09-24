@@ -368,7 +368,7 @@ class _Header extends ConsumerWidget {
       children: [
         Image.asset(
           'assets/images/logo_prefeitura_1.png',
-          height: compact ? 46 : 64,
+          height: compact ? 58 : 96,
           width: compact ? 74 : null,
           fit: BoxFit.contain,
         ),

@@ -175,12 +175,7 @@ class _CitizenHome extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Image.asset(
-                  'assets/images/logo_prefeitura_1.png',
-                  height: 86,
-                ),
-              ),
+              const _MunicipalBrandHeader(),
               const SizedBox(height: 18),
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: contentFuture,
@@ -345,6 +340,80 @@ class _HomeServicesCard extends StatelessWidget {
   }
 }
 
+class _MunicipalBrandHeader extends StatelessWidget {
+  const _MunicipalBrandHeader();
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact = constraints.maxWidth < 620;
+      final logo = Image.asset(
+        'assets/images/logo_prefeitura_1.png',
+        width: compact ? 150 : 220,
+        height: compact ? 105 : 145,
+        fit: BoxFit.contain,
+      );
+      final text = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment:
+            compact ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Prefeitura de Valença',
+            textAlign: compact ? TextAlign.center : TextAlign.start,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: const Color(0xFF174F32),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Serviços municipais, turismo e informações em um só lugar.',
+            textAlign: compact ? TextAlign.center : TextAlign.start,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: const Color(0xFF315A48),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      );
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 18 : 34,
+          vertical: compact ? 18 : 22,
+        ),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFEAF7F0), Color(0xFFFFF7D6), Color(0xFFE7F4FA)],
+          ),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xFFC9E2D3)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF174F32).withValues(alpha: .08),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child:
+            compact
+                ? Column(children: [logo, const SizedBox(height: 8), text])
+                : Row(
+                  children: [
+                    logo,
+                    const SizedBox(width: 30),
+                    Expanded(child: text),
+                  ],
+                ),
+      );
+    },
+  );
+}
+
 class _MiniServiceCard extends StatelessWidget {
   const _MiniServiceCard({
     required this.title,
@@ -440,33 +509,45 @@ class _InternalHome extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Image.asset(
-                    'assets/images/logo_prefeitura_1.png',
-                    height: 72,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEAF7F0), Color(0xFFFFF7D6)],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user?.userType == 'admin'
-                              ? 'Dashboard administrativo'
-                              : 'Dashboard da secretaria',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(
-                          user?.userType == 'admin'
-                              ? 'Acompanhe serviços, usuários e conteúdos de todas as secretarias.'
-                              : 'Área de trabalho: $secretaria',
-                        ),
-                      ],
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFC9E2D3)),
+                ),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      'assets/images/logo_prefeitura_1.png',
+                      height:
+                          MediaQuery.sizeOf(context).width >= 900 ? 118 : 82,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user?.userType == 'admin'
+                                ? 'Dashboard administrativo'
+                                : 'Dashboard da secretaria',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            user?.userType == 'admin'
+                                ? 'Acompanhe serviços, usuários e conteúdos de todas as secretarias.'
+                                : 'Área de trabalho: $secretaria',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               _InternalOperationsPreview(
@@ -1592,6 +1673,7 @@ class _EstablishmentHighlightsCarouselState
   @override
   Widget build(BuildContext context) {
     final cards = widget.cards;
+    final compact = MediaQuery.sizeOf(context).width < 680;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -1611,7 +1693,7 @@ class _EstablishmentHighlightsCarouselState
             ),
             const SizedBox(height: 14),
             SizedBox(
-              height: 260,
+              height: compact ? 390 : 300,
               child: PageView.builder(
                 controller: _controller,
                 itemCount: cards.length,
@@ -1731,10 +1813,11 @@ class _HomeCarouselState extends State<_HomeCarousel> {
   Widget build(BuildContext context) {
     final cards = widget.cards;
     if (cards.isEmpty) return const SizedBox.shrink();
+    final compact = MediaQuery.sizeOf(context).width < 620;
     return Column(
       children: [
         SizedBox(
-          height: 340,
+          height: compact ? 420 : 360,
           child: PageView.builder(
             controller: _controller,
             itemCount: cards.length,
