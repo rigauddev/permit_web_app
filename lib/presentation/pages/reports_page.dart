@@ -694,8 +694,10 @@ class _BarChart extends StatelessWidget {
             ? 1
             : values.map((item) => item.value).reduce((a, b) => a > b ? a : b);
     final compact = MediaQuery.sizeOf(context).width < 700;
+    final chartHeight =
+        compact ? (92 + values.length.clamp(3, 8) * 48.0) : null;
     return SizedBox(
-      height: compact ? 300 : null,
+      height: chartHeight,
       child: Card(
         color: colorScheme.surfaceContainerLowest,
         child: Padding(
@@ -1505,6 +1507,10 @@ pw.Widget _pdfKpi(String label, String value) {
 }
 
 pw.Widget _pdfChartSummary(String title, List<MapEntry<String, int>> values) {
+  final maxValue =
+      values.isEmpty
+          ? 1
+          : values.map((item) => item.value).reduce((a, b) => a > b ? a : b);
   return pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: 12),
     child: pw.Column(
@@ -1515,46 +1521,71 @@ pw.Widget _pdfChartSummary(String title, List<MapEntry<String, int>> values) {
         if (values.isEmpty)
           pw.Text('Sem dados.', style: const pw.TextStyle(fontSize: 8))
         else
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.grey300),
-            columnWidths: const {
-              0: pw.FlexColumnWidth(2.8),
-              1: pw.FlexColumnWidth(0.7),
-              2: pw.FlexColumnWidth(1.2),
-            },
-            children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                children: [
-                  _pdfCell('Legenda', bold: true),
-                  _pdfCell('Qtd.', bold: true),
-                  _pdfCell('Cor', bold: true),
-                ],
-              ),
-              ...values.asMap().entries.map((entry) {
-                final color =
-                    _pdfChartColors[entry.key % _pdfChartColors.length];
-                return pw.TableRow(
-                  children: [
-                    _pdfCell(entry.value.key),
-                    _pdfCell(entry.value.value),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(5),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300),
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Column(
+              children:
+                  values.asMap().entries.map((entry) {
+                    final item = entry.value;
+                    final color =
+                        _pdfChartColors[entry.key % _pdfChartColors.length];
+                    final ratio = item.value / maxValue;
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.only(bottom: 6),
                       child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
-                          pw.Container(width: 22, height: 8, color: color),
-                          pw.SizedBox(width: 5),
+                          pw.Container(width: 8, height: 8, color: color),
+                          pw.SizedBox(width: 6),
+                          pw.SizedBox(
+                            width: 110,
+                            child: pw.Text(
+                              item.key,
+                              maxLines: 1,
+                              overflow: pw.TextOverflow.clip,
+                              style: const pw.TextStyle(fontSize: 8),
+                            ),
+                          ),
+                          pw.SizedBox(width: 6),
+                          pw.SizedBox(
+                            width: 220,
+                            child: pw.Stack(
+                              children: [
+                                pw.Container(
+                                  height: 10,
+                                  decoration: pw.BoxDecoration(
+                                    color: PdfColors.grey200,
+                                    borderRadius: pw.BorderRadius.circular(5),
+                                  ),
+                                ),
+                                pw.Container(
+                                  width: 220 * ratio.clamp(0.0, 1.0).toDouble(),
+                                  height: 10,
+                                  decoration: pw.BoxDecoration(
+                                    color: color,
+                                    borderRadius: pw.BorderRadius.circular(5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          pw.SizedBox(width: 8),
                           pw.Text(
-                            '#${color.toHex()}',
-                            style: const pw.TextStyle(fontSize: 8),
+                            item.value.toString(),
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                );
-              }),
-            ],
+                    );
+                  }).toList(),
+            ),
           ),
       ],
     ),

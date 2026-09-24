@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -69,6 +70,10 @@ class SessionStore {
         expiresAt: effectiveExpiresAtText,
       );
     }
+    if (effectiveExpiresAt.toUtc().isBefore(DateTime.now().toUtc())) {
+      await clear();
+      return null;
+    }
     await _syncSecureStorage(
       accessToken: accessToken,
       userJson: userJson,
@@ -114,6 +119,12 @@ class SessionStore {
   }
 
   Future<String?> _readValue(String key) async {
+    final preferences = await SharedPreferences.getInstance();
+    final preferencesValue = preferences.getString(key);
+    if (kIsWeb && preferencesValue != null && preferencesValue.isNotEmpty) {
+      return preferencesValue;
+    }
+
     String? secureValue;
     try {
       secureValue = await _secureStorage
@@ -125,9 +136,9 @@ class SessionStore {
     if (secureValue != null && secureValue.isNotEmpty) {
       return secureValue;
     }
-    final preferences = await SharedPreferences.getInstance();
-    final webValue = preferences.getString(key);
-    return webValue == null || webValue.isEmpty ? null : webValue;
+    return preferencesValue == null || preferencesValue.isEmpty
+        ? null
+        : preferencesValue;
   }
 
   Future<void> _syncSecureStorage({

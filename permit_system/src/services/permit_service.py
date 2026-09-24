@@ -121,7 +121,7 @@ class PermitService:
 
     def create_request(self, payload: PermitCreateRequest, solicitante: UserModel) -> PermitResponse:
         self._validate_payload(payload)
-        self._validate_question_answers(payload.respostas)
+        self._validate_question_answers(payload)
         protocolo = self._generate_protocol()
         dam_status = DAM_STATUS_ISENTO if payload.is_beneficente else "nao_gerado"
         request = PermitRequestModel(
@@ -1140,7 +1140,10 @@ class PermitService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Opções selecionáveis não podem ser repetidas.",
             )
-        unknown_required_fields = set(payload.campos_obrigatorios) - set(payload.tipos_resposta)
+        meta_required_fields = {"__pergunta_obrigatoria"}
+        unknown_required_fields = (
+            set(payload.campos_obrigatorios) - set(payload.tipos_resposta) - meta_required_fields
+        )
         if unknown_required_fields:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1330,8 +1333,14 @@ class PermitService:
             ]
         return []
 
-    def _validate_question_answers(self, respostas: dict[str, Any]) -> None:
-        definitions = self.db.query(QuestionDefinitionModel).all()
+    def _validate_question_answers(self, payload: PermitCreateRequest) -> None:
+        respostas = payload.respostas
+        event_type_key = str(payload.dados_evento.get("tipo_evento", "")).strip()
+        definitions = [
+            question
+            for question in self.db.query(QuestionDefinitionModel).all()
+            if not question.event_type_keys or not event_type_key or event_type_key in question.event_type_keys
+        ]
         for question in definitions:
             answer = respostas.get(question.key)
             if answer is None:
@@ -1343,10 +1352,12 @@ class PermitService:
                 continue
             required_fields = question.campos_obrigatorios or {}
             for field_name, required in required_fields.items():
+                if field_name == "__pergunta_obrigatoria":
+                    continue
                 if required is not True:
                     continue
                 value = self._answer_field_value(answer, field_name)
-                if value is None or not str(value).strip():
+                if self._required_answer_value_is_empty(value):
                     raise HTTPException(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                         detail=f"Preencha o campo obrigatório '{field_name}' da pergunta: {question.pergunta}",
@@ -1370,10 +1381,20 @@ class PermitService:
             "Texto": "texto",
             "Calendário": "data",
             "Anexar Documento": "arquivo",
+            "Rota do Evento": "percurso_ruas",
+            "Opções selecionáveis": "opcoes_selecionadas",
             "Assinatura impressa": "assinatura",
             "Assinatura gov.br": "assinatura",
         }
         return answer.get(field_map.get(field_name, field_name))
+
+    @staticmethod
+    def _required_answer_value_is_empty(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, (list, tuple, set, dict)):
+            return len(value) == 0
+        return not str(value).strip()
 
     def _required_business_days(self, event_data: dict[str, Any]) -> int:
         range_id = event_data.get("publico_faixa_id")
@@ -1878,7 +1899,6 @@ class PermitService:
         email_status = send_email(destinatario, assunto, f"{mensagem}\n\nAcesse: {link}")
         if email_status:
             body = f"{body}\nStatus do envio: {email_status}"
-        print(body)
         self._add_comment(request.id, actor, body)
 
     def _generate_protocol(self) -> str:

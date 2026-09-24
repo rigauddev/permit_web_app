@@ -21,6 +21,8 @@ class PermitRequestFormBuilder extends ConsumerStatefulWidget {
 
 class _PermitRequestFormBuilderState
     extends ConsumerState<PermitRequestFormBuilder> {
+  static const int _maxAttachmentBytes = 10 * 1024 * 1024;
+
   static const _responsibilityTerm = '''
 Declaro, sob minha responsabilidade, que as informações prestadas e os documentos anexados nesta solicitação são verdadeiros, completos e correspondem ao evento informado.
 
@@ -145,7 +147,8 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
       withData: true,
     );
     if (result == null || result.files.isEmpty) return null;
-    return result.files.single;
+    final file = result.files.single;
+    return _validateAttachmentSize(file) ? file : null;
   }
 
   Future<PlatformFile?> _takeDocumentPhoto(String fileName) async {
@@ -156,7 +159,29 @@ Comprometo-me a cumprir as normas municipais, ambientais, sanitárias, de trâns
     );
     if (photo == null) return null;
     final bytes = await photo.readAsBytes();
-    return PlatformFile(name: fileName, size: bytes.length, bytes: bytes);
+    final file = PlatformFile(name: fileName, size: bytes.length, bytes: bytes);
+    return _validateAttachmentSize(file) ? file : null;
+  }
+
+  bool _validateAttachmentSize(PlatformFile file) {
+    if (file.size <= _maxAttachmentBytes) return true;
+    showDialog<void>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Arquivo muito grande'),
+            content: Text(
+              'O arquivo "${file.name}" tem ${_formatFileSize(file.size)} e ultrapassa o limite de 10 MB.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Entendi'),
+              ),
+            ],
+          ),
+    );
+    return false;
   }
 
   Future<void> _chooseIdentificationDocument() async {
@@ -1509,6 +1534,16 @@ String _documentLabel(String key) {
     default:
       return key.replaceAll('_', ' ');
   }
+}
+
+String _formatFileSize(int bytes) {
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  if (bytes >= 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '$bytes bytes';
 }
 
 class _AddressSearchDialog extends StatefulWidget {

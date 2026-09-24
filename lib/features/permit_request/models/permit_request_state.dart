@@ -13,6 +13,7 @@ class PermitRequestState {
   final List<PlatformFile> attachments;
   final Map<String, PlatformFile> documentAttachments;
   final bool isSubmitting;
+  final String? uploadProgressMessage;
   final String? submittedProtocol;
 
   PermitRequestState({
@@ -28,6 +29,7 @@ class PermitRequestState {
     this.attachments = const [],
     this.documentAttachments = const {},
     this.isSubmitting = false,
+    this.uploadProgressMessage,
     this.submittedProtocol,
   });
 
@@ -58,6 +60,8 @@ class PermitRequestState {
     List<PlatformFile>? attachments,
     Map<String, PlatformFile>? documentAttachments,
     bool? isSubmitting,
+    String? uploadProgressMessage,
+    bool clearUploadProgressMessage = false,
     String? submittedProtocol,
   }) {
     return PermitRequestState(
@@ -73,6 +77,10 @@ class PermitRequestState {
       attachments: attachments ?? this.attachments,
       documentAttachments: documentAttachments ?? this.documentAttachments,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      uploadProgressMessage:
+          clearUploadProgressMessage
+              ? null
+              : uploadProgressMessage ?? this.uploadProgressMessage,
       submittedProtocol: submittedProtocol ?? this.submittedProtocol,
     );
   }

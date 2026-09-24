@@ -9,7 +9,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-permit_password}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-permit_root_password}
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      - "${MYSQL_PORT:-127.0.0.1:3317}:3306"
     volumes:
       - permit_mysql_data:/var/lib/mysql
     healthcheck:
@@ -30,7 +30,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-me-in-dev}
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8081}
       SDE_EMAIL: ${SDE_EMAIL:-sde@valenca.ba.gov.br}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -41,6 +41,9 @@ services:
       PREFEITURA_LOGO_URL: ${PREFEITURA_LOGO_URL:-}
       HISTORICAL_EVENTS_XLSX_PATH: ${HISTORICAL_EVENTS_XLSX_PATH:-/app/private/Planilha_de_solicitacao_de_eventos.xlsx}
       RUN_SEED: ${RUN_SEED:-true}
+      ORLA_GUAIBIM_POLYGON: ${ORLA_GUAIBIM_POLYGON:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-}
     volumes:
       - ./permit_system/private:/app/private:ro
       - permit_uploads_data:/app/uploads
@@ -64,12 +67,13 @@ services:
       args:
         API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
         APP_APK_DOWNLOAD_URL: ${APP_APK_DOWNLOAD_URL:-}
+        SHOW_ADMIN_LOGIN: ${SHOW_ADMIN_LOGIN:-false}
     container_name: permit_web_app
     depends_on:
       api:
         condition: service_healthy
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_PORT:-8081}:80"
     restart: unless-stopped
 
   caddy:

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permit_web_app/core/routes/app_routes.dart';
 
-import 'custom_appbar.dart';
 import 'custom_drawer.dart';
 
 class AppScaffold extends StatelessWidget {
@@ -31,7 +30,7 @@ class AppScaffold extends StatelessWidget {
 
         if (isMobile) {
           return Scaffold(
-            appBar: _buildMobileAppBar(context, appBar, currentRoute),
+            appBar: const _MobileSafeTopBoundary(),
             drawer: CustomDrawer(
               userType: userType,
               userProfile: userProfile,
@@ -40,7 +39,9 @@ class AppScaffold extends StatelessWidget {
             ),
             drawerEnableOpenDragGesture: true,
             backgroundColor: backgroundColor,
-            body: body,
+            body: Column(
+              children: [Expanded(child: body), const _SystemFooter()],
+            ),
             floatingActionButton: floatingActionButton,
             bottomNavigationBar: _MobileBottomNavigationBar(
               userType: userType,
@@ -65,10 +66,7 @@ class AppScaffold extends StatelessWidget {
               menu,
               Expanded(
                 child: Column(
-                  children: [
-                    if (appBar != null) _buildDesktopAppBar(appBar!),
-                    Expanded(child: body),
-                  ],
+                  children: [Expanded(child: body), const _SystemFooter()],
                 ),
               ),
             ],
@@ -77,75 +75,28 @@ class AppScaffold extends StatelessWidget {
       },
     );
   }
+}
 
-  PreferredSizeWidget? _buildMobileAppBar(
-    BuildContext context,
-    PreferredSizeWidget? appBar,
-    String currentRoute,
-  ) {
-    if (appBar == null) return null;
+class _MobileSafeTopBoundary extends StatelessWidget
+    implements PreferredSizeWidget {
+  const _MobileSafeTopBoundary();
 
-    if (appBar is AppBar) {
-      final canNavigateBack =
-          currentRoute != AppRoutes.home && Navigator.canPop(context);
-      return AppBar(
-        title: appBar.title,
-        leading:
-            appBar.leading ?? (canNavigateBack ? const BackButton() : null),
-        actions: appBar.actions,
-        centerTitle: appBar.centerTitle,
-        elevation: appBar.elevation,
-        backgroundColor: appBar.backgroundColor,
-        foregroundColor: appBar.foregroundColor,
-        iconTheme: appBar.iconTheme,
-        titleTextStyle: appBar.titleTextStyle,
-        toolbarHeight: appBar.toolbarHeight,
-        bottom: appBar.bottom,
-        automaticallyImplyLeading: false,
-      );
-    }
+  @override
+  Size get preferredSize => const Size.fromHeight(1);
 
-    if (appBar is CustomAppBar) {
-      final canNavigateBack =
-          currentRoute != AppRoutes.home && Navigator.canPop(context);
-      return CustomAppBar(
-        title: appBar.title,
-        actions: appBar.actions,
-        hideDrawerButton: !canNavigateBack,
-      );
-    }
-
-    return appBar;
-  }
-
-  PreferredSizeWidget _buildDesktopAppBar(PreferredSizeWidget appBar) {
-    if (appBar is AppBar) {
-      return AppBar(
-        title: appBar.title,
-        leading: appBar.leading,
-        actions: appBar.actions,
-        centerTitle: appBar.centerTitle,
-        elevation: appBar.elevation,
-        backgroundColor: appBar.backgroundColor,
-        foregroundColor: appBar.foregroundColor,
-        iconTheme: appBar.iconTheme,
-        titleTextStyle: appBar.titleTextStyle,
-        toolbarHeight: appBar.toolbarHeight,
-        bottom: appBar.bottom,
-        automaticallyImplyLeading: false,
-      );
-    }
-
-    if (appBar is CustomAppBar) {
-      return CustomAppBar(
-        title: appBar.title,
-        actions: appBar.actions,
-        hideDrawerButton: true,
-      );
-    }
-
-    return appBar;
-  }
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: const Color(0xFFF8FBF7),
+    child: SafeArea(
+      bottom: false,
+      child: Container(
+        height: 1,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFD8E0D8))),
+        ),
+      ),
+    ),
+  );
 }
 
 class _MobileBottomNavigationBar extends StatelessWidget {
@@ -159,16 +110,11 @@ class _MobileBottomNavigationBar extends StatelessWidget {
 
   static const _homeRoute = AppRoutes.home;
 
-  String get _favoritesRoute {
-    if (userType == 'cidadao' || userType == 'user') {
-      return AppRoutes.favoriteServices;
-    }
-    return AppRoutes.secretariaRequests;
-  }
+  String get _servicesRoute => AppRoutes.services;
 
   int get _selectedIndex {
     if (currentRoute == _homeRoute) return 0;
-    if (currentRoute == _favoritesRoute) return 1;
+    if (currentRoute == _servicesRoute) return 1;
     return 0;
   }
 
@@ -184,7 +130,7 @@ class _MobileBottomNavigationBar extends StatelessWidget {
 
         final targetRoute = switch (index) {
           0 => _homeRoute,
-          1 => _favoritesRoute,
+          1 => _servicesRoute,
           _ => _homeRoute,
         };
         if (currentRoute == targetRoute) return;
@@ -205,9 +151,9 @@ class _MobileBottomNavigationBar extends StatelessWidget {
           label: 'Início',
         ),
         NavigationDestination(
-          icon: Icon(Icons.favorite_border),
-          selectedIcon: Icon(Icons.favorite),
-          label: 'Favoritos',
+          icon: Icon(Icons.design_services_outlined),
+          selectedIcon: Icon(Icons.design_services),
+          label: 'Serviços',
         ),
         NavigationDestination(
           icon: Icon(Icons.menu),
@@ -215,6 +161,44 @@ class _MobileBottomNavigationBar extends StatelessWidget {
           label: 'Menu',
         ),
       ],
+    );
+  }
+}
+
+class _SystemFooter extends StatelessWidget {
+  const _SystemFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF526257),
+      fontWeight: FontWeight.w600,
+    );
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FBF7),
+        border: Border(top: BorderSide(color: Color(0xFFD8E0D8))),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 14,
+        runSpacing: 4,
+        children: [
+          Text(
+            'Sistema desenvolvido por SEMOP - Secretaria de Mobilidade Pública',
+            style: textStyle,
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            'Desenvolvedor: Matheus Rigaud',
+            style: textStyle,
+            textAlign: TextAlign.center,
+          ),
+          Text('Direção: Rael', style: textStyle, textAlign: TextAlign.center),
+        ],
+      ),
     );
   }
 }

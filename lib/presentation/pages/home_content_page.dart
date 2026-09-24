@@ -36,6 +36,7 @@ class _HomeContentPageState extends State<HomeContentPage> {
   };
 
   List<Map<String, dynamic>> _cards = [];
+  List<Map<String, dynamic>> _services = [];
   String _selectedScope = 'prefeitura';
   String? _currentRole;
   String? _currentSecretaria;
@@ -78,8 +79,15 @@ class _HomeContentPageState extends State<HomeContentPage> {
         return;
       }
       final cards = await _api.listHomeContent(token);
+      final services =
+          _currentRole == 'admin'
+              ? await _api.listServiceConfigs(accessToken: token)
+              : <Map<String, dynamic>>[];
       if (!mounted) return;
-      setState(() => _cards = cards);
+      setState(() {
+        _cards = cards;
+        _services = services;
+      });
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
         await SessionExpiration.logout(context);
@@ -142,6 +150,46 @@ class _HomeContentPageState extends State<HomeContentPage> {
       _showMessage(error.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _toggleService(String key, bool isActive) async {
+    final token = await SessionExpiration.readAccessToken();
+    if (token == null) {
+      if (!mounted) return;
+      await SessionExpiration.logout(context);
+      return;
+    }
+    try {
+      await _api.updateServiceConfig(
+        accessToken: token,
+        serviceKey: key,
+        isActive: isActive,
+      );
+      await _load();
+      _showMessage(isActive ? 'Serviço ativado.' : 'Serviço desativado.');
+    } on PermitApiException catch (error) {
+      _showMessage(error.toString(), isError: true);
+    }
+  }
+
+  Future<void> _approveBanner(int cardId, bool approved) async {
+    final token = await SessionExpiration.readAccessToken();
+    if (token == null) return;
+    try {
+      await _api.approveHomeContent(
+        accessToken: token,
+        cardId: cardId,
+        approved: approved,
+      );
+      await _load();
+      _showMessage(
+        approved
+            ? 'Banner aprovado e publicado.'
+            : 'Banner retirado da página inicial.',
+      );
+    } on PermitApiException catch (error) {
+      _showMessage(error.toString(), isError: true);
     }
   }
 
@@ -225,6 +273,50 @@ class _HomeContentPageState extends State<HomeContentPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (_currentRole == 'admin' &&
+                            _services.isNotEmpty) ...[
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Serviços da aplicação',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Ative ou desative serviços exibidos no catálogo da prefeitura.',
+                                  ),
+                                  const Divider(height: 22),
+                                  ..._services.map(
+                                    (service) => SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(
+                                        service['title']?.toString() ?? '',
+                                      ),
+                                      subtitle: Text(
+                                        service['description']?.toString() ??
+                                            '',
+                                      ),
+                                      value: service['is_active'] == true,
+                                      onChanged:
+                                          (value) => _toggleService(
+                                            service['key'].toString(),
+                                            value,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         Card(
                           child: Padding(
                             padding: const EdgeInsets.all(18),
@@ -360,14 +452,22 @@ class _HomeContentPageState extends State<HomeContentPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        ..._cards.map(
-                          (card) => Card(
+                        ..._cards.map((card) {
+                          final establishment =
+                              card['scope']?.toString().startsWith(
+                                'establishment:',
+                              ) ==
+                              true;
+                          final approved = card['is_active'] == true;
+                          return Card(
                             child: ListTile(
                               leading: SizedBox(
                                 width: 72,
                                 height: 48,
                                 child: Image.network(
-                                  card['image_url'] as String? ?? '',
+                                  _api.resolveFileUrl(
+                                    card['image_url'] as String? ?? '',
+                                  ),
                                   fit: BoxFit.cover,
                                   errorBuilder:
                                       (_, __, ___) =>
@@ -376,16 +476,35 @@ class _HomeContentPageState extends State<HomeContentPage> {
                               ),
                               title: Text(card['title'] as String? ?? ''),
                               subtitle: Text(
-                                '${_secretarias[card['scope']] ?? card['scope']} - ${card['is_active'] == true ? 'Ativo' : 'Inativo'}',
+                                establishment
+                                    ? '${card['owner_name'] ?? 'Estabelecimento'} • ${approved ? 'Aprovado e publicado' : 'Aguardando aprovação'}'
+                                    : '${_secretarias[card['scope']] ?? card['scope']} - ${approved ? 'Ativo' : 'Inativo'}',
                               ),
-                              trailing: IconButton(
-                                tooltip: 'Editar',
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: () => _edit(card),
-                              ),
+                              trailing:
+                                  establishment && _currentRole == 'admin'
+                                      ? FilledButton.tonalIcon(
+                                        onPressed:
+                                            () => _approveBanner(
+                                              card['id'] as int,
+                                              !approved,
+                                            ),
+                                        icon: Icon(
+                                          approved
+                                              ? Icons.visibility_off_outlined
+                                              : Icons.check_circle_outline,
+                                        ),
+                                        label: Text(
+                                          approved ? 'Retirar' : 'Aprovar',
+                                        ),
+                                      )
+                                      : IconButton(
+                                        tooltip: 'Editar',
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () => _edit(card),
+                                      ),
                             ),
-                          ),
-                        ),
+                          );
+                        }),
                       ],
                     ),
                   ),

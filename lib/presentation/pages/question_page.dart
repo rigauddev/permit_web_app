@@ -34,6 +34,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   int _displayOrder = 0;
   bool _requerVistoria = false;
   bool _vistoriaExigeFoto = false;
+  bool _questionRequired = false;
   final List<String> _checklistVistoria = [];
   final TextEditingController _checklistController = TextEditingController();
   final TextEditingController _rangeLabelController = TextEditingController();
@@ -160,6 +161,23 @@ class _PerguntasPageState extends State<PerguntasPage> {
                             _key = _generateKeyFromPergunta(v);
                           },
                           initialValue: _pergunta,
+                        ),
+                        SizedBox(
+                          width:
+                              MediaQuery.of(context).size.width < 600
+                                  ? double.infinity
+                                  : 400,
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Pergunta obrigatória'),
+                            subtitle: const Text(
+                              'Quando marcada, o cidadão não poderá responder Não.',
+                            ),
+                            value: _questionRequired,
+                            onChanged:
+                                (value) =>
+                                    setState(() => _questionRequired = value),
+                          ),
                         ),
                         _buildTextField(
                           label: 'Descrição e orientação ao cidadão',
@@ -1096,6 +1114,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     ];
 
     final obrigatorios = {
+      if (_questionRequired) '__pergunta_obrigatoria': true,
       for (final field in _responseFields)
         if (_selectedResponseFields[field] == true)
           field: _requiredResponseFields[field] == true,
@@ -1168,6 +1187,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
           int.tryParse(pergunta['display_order']?.toString() ?? '') ?? 0;
       _requerVistoria = pergunta['requer_vistoria'] == true;
       _vistoriaExigeFoto = pergunta['vistoria_exige_foto'] == true;
+      _questionRequired =
+          (pergunta['campos_obrigatorios']
+              as Map<String, dynamic>?)?['__pergunta_obrigatoria'] ==
+          true;
       _checklistVistoria
         ..clear()
         ..addAll(List<String>.from(pergunta['checklist_vistoria'] ?? []));
@@ -1217,6 +1240,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _displayOrder = 0;
     _requerVistoria = false;
     _vistoriaExigeFoto = false;
+    _questionRequired = false;
     _checklistVistoria.clear();
     _checklistController.clear();
     _customResponseFieldController.clear();
@@ -1234,11 +1258,17 @@ class _PerguntasPageState extends State<PerguntasPage> {
     final obrigatorios =
         (p['campos_obrigatorios'] as Map<String, dynamic>?)?.entries
             .where((entry) => entry.value == true)
+            .where((entry) => entry.key != '__pergunta_obrigatoria')
             .map((entry) => entry.key)
             .toList() ??
         <String>[];
     final options = List<String>.from(p['opcoes_resposta'] ?? const []);
     final details = <String>[tipos.join(', ')];
+    if ((p['campos_obrigatorios']
+            as Map<String, dynamic>?)?['__pergunta_obrigatoria'] ==
+        true) {
+      details.add('Pergunta obrigatória');
+    }
     if (options.isNotEmpty) {
       details.add(
         'Opções: ${options.take(3).join(', ')}${options.length > 3 ? '...' : ''}',

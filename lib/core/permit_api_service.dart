@@ -10,7 +10,10 @@ class PermitApiService {
           baseUrl ??
           const String.fromEnvironment(
             'API_BASE_URL',
-            defaultValue: 'http://127.0.0.1:8000',
+            defaultValue: String.fromEnvironment(
+              'API_URL',
+              defaultValue: 'http://127.0.0.1:8000',
+            ),
           );
 
   final http.Client _client;
@@ -52,6 +55,23 @@ class PermitApiService {
     }
     final response = await http.Response.fromStream(await request.send());
     return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>?> lookupCep(String cep) async {
+    final digits = cep.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 8) return null;
+    final response = await _client.get(
+      Uri.parse('https://viacep.com.br/ws/$digits/json/'),
+      headers: const {'Accept': 'application/json'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw PermitApiException('Não foi possível consultar o CEP.');
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! Map<String, dynamic> || decoded['erro'] == true) {
+      return null;
+    }
+    return decoded;
   }
 
   Future<List<Map<String, dynamic>>> searchEventAddresses(String query) async {
@@ -381,9 +401,13 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> listHomeContent(String accessToken) async {
+  Future<List<Map<String, dynamic>>> listHomeContent(
+    String accessToken, {
+    bool mine = false,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/home-content${mine ? '?mine=true' : ''}');
     final response = await _client.get(
-      Uri.parse('$_baseUrl/home-content'),
+      uri,
       headers: {'Authorization': 'Bearer $accessToken'},
     );
     final decoded = _decodeResponse(response) as List<dynamic>;
@@ -441,6 +465,131 @@ class PermitApiService {
         'display_order': displayOrder,
         'is_active': isActive,
       }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> approveHomeContent({
+    required String accessToken,
+    required int cardId,
+    required bool approved,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/home-content/$cardId/approval'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'approved': approved}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getContentSettings({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/settings'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateContentSettings({
+    required String accessToken,
+    required String eventMapTitle,
+    required String eventMapDescription,
+    required List<String> editorSecretarias,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/settings'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'event_map_title': eventMapTitle,
+        'event_map_description': eventMapDescription,
+        'event_map_editor_secretarias': editorSecretarias,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> listTourismPoints({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/tourism-points'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> saveTourismPoint({
+    required String accessToken,
+    required Map<String, dynamic> payload,
+    int? pointId,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/home-content/tourism-points${pointId == null ? '' : '/$pointId'}',
+    );
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $accessToken',
+    };
+    final response =
+        pointId == null
+            ? await _client.post(
+              uri,
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            : await _client.put(
+              uri,
+              headers: headers,
+              body: jsonEncode(payload),
+            );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteTourismPoint({
+    required String accessToken,
+    required int pointId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/home-content/tourism-points/$pointId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> listServiceConfigs({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/services'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> updateServiceConfig({
+    required String accessToken,
+    required String serviceKey,
+    required bool isActive,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/services/$serviceKey'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'is_active': isActive}),
     );
     return _decodeResponse(response) as Map<String, dynamic>;
   }

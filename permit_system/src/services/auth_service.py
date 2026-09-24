@@ -1,8 +1,10 @@
 import re
 import random
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from src.core.security import (
@@ -13,7 +15,7 @@ from src.core.security import (
     hash_password,
     verify_password,
 )
-from src.infra.database.models import EmailVerificationModel, RoleModel, SecretariaModel, UserModel
+from src.infra.database.models import EmailVerificationModel, OrlaInn, OrlaVehicle, RoleModel, SecretariaModel, UserModel
 from src.schemas.auth_schema import (
     ChangePasswordRequest,
     EmailVerificationConfirmResponse,
@@ -25,6 +27,7 @@ from src.schemas.auth_schema import (
 )
 from src.schemas.user_schema import UserAdminUpdateRequest, UserCreateRequest, UserResponse, UserSelfUpdateRequest
 from src.services.email_service import build_mfa_email_html, send_email
+from src.services.orla_area import is_inside_orla
 
 
 class AuthService:
@@ -33,29 +36,48 @@ class AuthService:
 
     def start_login(self, identifier: str, senha: str, access_type: str | None = None, client_type: str = "web") -> LoginStartResponse:
         identifier = (identifier or "").strip()
+        normalized_identifier = identifier.lower()
+        document = self._only_digits(identifier)
+        access_type = access_type or "cidadao"
         if access_type == "cidadao":
-            document = self._only_digits(identifier)
-            if not (self._is_valid_cpf(document) or self._is_valid_cnpj(document)):
+            filters = []
+            if "@" in normalized_identifier:
+                filters.append(func.lower(UserModel.email) == normalized_identifier)
+            if document and (self._is_valid_cpf(document) or self._is_valid_cnpj(document)):
+                filters.append(UserModel.cpf_cnpj == document)
+            if not filters:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="CPF/CNPJ informado está incorreto.",
+                    detail="Informe um e-mail, CPF ou CNPJ válido.",
                 )
             user = (
                 self.db.query(UserModel)
-                .filter(UserModel.cpf_cnpj == document, UserModel.is_active.is_(True))
+                .filter(or_(*filters), UserModel.is_active.is_(True))
                 .first()
             )
         else:
-            if "@" not in identifier:
-                self._invalid_credentials()
-            user = (
-                self.db.query(UserModel)
-                .filter(UserModel.email == identifier, UserModel.is_active.is_(True))
-                .first()
-            )
-        if not user or not verify_password(senha, user.senha_hash):
+            if "@" in normalized_identifier:
+                user = (
+                    self.db.query(UserModel)
+                    .filter(func.lower(UserModel.email) == normalized_identifier, UserModel.is_active.is_(True))
+                    .first()
+                )
+            else:
+                user = (
+                    self.db.query(UserModel)
+                    .filter(UserModel.credential_number == identifier, UserModel.is_active.is_(True))
+                    .first()
+                )
+        password_ok = bool(user and verify_password(senha, user.senha_hash))
+        if user and access_type == "cidadao" and not password_ok:
+            password_ok = verify_password(self._only_digits(senha), user.senha_hash)
+        if not user or not password_ok:
             self._invalid_credentials()
         if access_type == "cidadao" and user.role.slug != "cidadao":
+            self._invalid_credentials()
+        if access_type == "servidor" and user.role.slug in {"cidadao", "admin"}:
+            self._invalid_credentials()
+        if access_type == "admin" and user.role.slug != "admin":
             self._invalid_credentials()
         if access_type == "interno" and user.role.slug == "cidadao":
             self._invalid_credentials()
@@ -66,6 +88,7 @@ class AuthService:
             return LoginStartResponse(
                 mfa_required=False,
                 access_token=token.access_token,
+                expires_at=token.expires_at,
                 user=token.user,
             )
         return LoginStartResponse(
@@ -203,6 +226,7 @@ class AuthService:
         if role_slug == "cidadao":
             document = self._validate_document(payload.cpf_cnpj, payload.tipo_pessoa)
             self._validate_citizen_registration_files(payload)
+            self._validate_citizen_stay(payload)
             existing = (
                 self.db.query(UserModel)
                 .filter(UserModel.cpf_cnpj == document)
@@ -233,28 +257,126 @@ class AuthService:
             if not secretaria:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Secretaria inválida")
 
+        managed_inn_id = None
+        tourism_categories = {"pousada_hotel", "restaurante", "quiosque"}
+        if role_slug == "cidadao" and payload.business_category in tourism_categories:
+            category_label = {
+                "pousada_hotel": "pousada ou hotel",
+                "restaurante": "restaurante",
+                "quiosque": "quiosque",
+            }.get(payload.business_category, "estabelecimento")
+            inn_name = (payload.managed_inn_name or payload.razao_social or payload.nome or "").strip()
+            if len(inn_name) < 2:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Informe o nome do {category_label}.")
+            if payload.orla_access_requested:
+                if not payload.endereco_latitude or not payload.endereco_longitude:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="Busque e selecione o endereço do estabelecimento para validar a geolocalização da Orla.",
+                    )
+                if not is_inside_orla(payload.endereco_latitude, payload.endereco_longitude):
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="O endereço informado não está dentro da área demarcada da Orla. A gestão pode validar manualmente quando necessário.",
+                    )
+            inn = self.db.query(OrlaInn).filter(OrlaInn.name == inn_name).first()
+            if not inn:
+                beachfront = bool(is_inside_orla(payload.endereco_latitude, payload.endereco_longitude))
+                inn = OrlaInn(
+                    name=inn_name,
+                    address=payload.endereco,
+                    cep=payload.cep,
+                    latitude=payload.endereco_latitude,
+                    longitude=payload.endereco_longitude,
+                    capacity=payload.managed_inn_capacity,
+                    guest_capacity=payload.managed_inn_guest_capacity,
+                    beachfront=beachfront,
+                    approval_status="pending" if beachfront else "approved",
+                )
+                self.db.add(inn)
+                self.db.flush()
+            elif payload.managed_inn_capacity and not inn.capacity:
+                inn.capacity = payload.managed_inn_capacity
+            if payload.managed_inn_guest_capacity and not inn.guest_capacity:
+                inn.guest_capacity = payload.managed_inn_guest_capacity
+            if payload.endereco_latitude and payload.endereco_longitude and (not inn.latitude or not inn.longitude):
+                inn.latitude = payload.endereco_latitude
+                inn.longitude = payload.endereco_longitude
+            managed_inn_id = inn.id
+
         user = UserModel(
             tipo_pessoa=payload.tipo_pessoa,
             nome=payload.nome,
             sobrenome=payload.sobrenome,
             razao_social=payload.razao_social,
             cpf_cnpj=document,
+            credential_number=self._generate_credential_number(role_slug, secretaria_slug),
             email=email,
             senha_hash=hash_password(payload.senha),
             telefone=payload.telefone,
             endereco=payload.endereco,
+            cep=payload.cep,
+            endereco_latitude=payload.endereco_latitude,
+            endereco_longitude=payload.endereco_longitude,
+            tipo_usuario=payload.tipo_usuario,
+            business_category=payload.business_category,
+            managed_inn_id=managed_inn_id,
+            tipo_estadia=payload.tipo_estadia if payload.tipo_usuario == "turista" else None,
+            estadia_endereco=payload.estadia_endereco if payload.tipo_usuario == "turista" else None,
+            estadia_cep=payload.estadia_cep if payload.tipo_usuario == "turista" else None,
+            estadia_latitude=payload.estadia_latitude if payload.tipo_usuario == "turista" else None,
+            estadia_longitude=payload.estadia_longitude if payload.tipo_usuario == "turista" else None,
+            estadia_inicio=payload.estadia_inicio if payload.tipo_usuario == "turista" else None,
+            estadia_fim=payload.estadia_fim if payload.tipo_usuario == "turista" else None,
+            pousada_id=payload.pousada_id if payload.tipo_usuario == "turista" and payload.tipo_estadia == "pousada" else None,
+            orla_access_requested=bool(payload.orla_access_requested),
+            orla_access_status="solicitado" if payload.orla_access_requested else "nao_solicitado",
             foto_usuario_nome=payload.foto_usuario_nome,
             foto_usuario_url=payload.foto_usuario_url,
+            documento_identificacao_nome=payload.documento_identificacao_nome,
+            documento_identificacao_url=payload.documento_identificacao_url,
+            documento_identificacao_tipo=payload.documento_identificacao_tipo,
             comprovante_residencia_nome=payload.comprovante_residencia_nome,
             comprovante_residencia_url=payload.comprovante_residencia_url,
             comprovante_residencia_tipo=payload.comprovante_residencia_tipo,
             comprovante_residencia_status=self._residence_proof_status(payload),
             comprovante_residencia_observacao=self._residence_proof_observation(payload),
+            alvara_funcionamento_nome=payload.alvara_funcionamento_nome,
+            alvara_funcionamento_url=payload.alvara_funcionamento_url,
             role_id=role.id,
             secretaria_id=secretaria.id if secretaria else None,
             mfa_email_enabled=bool(payload.mfa_email_enabled and email),
         )
         self.db.add(user)
+        self.db.flush()
+        if payload.orla_vehicle and role_slug == "cidadao" and payload.tipo_usuario == "turista":
+            vehicle = payload.orla_vehicle
+            plate_value = re.sub(r"[\s-]", "", vehicle.plate).upper()
+            if not re.fullmatch(r"[A-Z]{3}[0-9][A-Z0-9][0-9]{2}", plate_value):
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe uma placa brasileira válida.")
+            if self.db.query(OrlaVehicle).filter(OrlaVehicle.plate == plate_value).first():
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Placa já cadastrada.")
+            self.db.add(OrlaVehicle(
+                user_id=user.id,
+                plate=plate_value,
+                brand=vehicle.brand.strip(),
+                model=vehicle.model.strip(),
+                color=vehicle.color.strip(),
+                establishment_name=(vehicle.establishment_name or "").strip() or None,
+                is_excursion=bool(vehicle.is_excursion),
+                driver_name=(vehicle.driver_name or "").strip() or None,
+                driver_document=(vehicle.driver_document or "").strip() or None,
+                driver_phone=(vehicle.driver_phone or "").strip() or None,
+                passengers_count=vehicle.passengers_count,
+                qr_token=secrets.token_urlsafe(32),
+            ))
+        if payload.mfa_email_enabled is not None:
+            if payload.mfa_email_enabled and not user.email:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Informe um e-mail antes de ativar MFA por e-mail.",
+                )
+            user.mfa_email_enabled = bool(payload.mfa_email_enabled)
         self.db.commit()
         self.db.refresh(user)
         return self.to_response(user)
@@ -262,7 +384,8 @@ class AuthService:
     @staticmethod
     def _create_session_token(user: UserModel, client_type: str = "web") -> TokenResponse:
         session = AuthService._to_session(user)
-        expires_delta = timedelta(days=5)
+        expires_delta = timedelta(days=1) if client_type == "app" else timedelta(hours=1)
+        expires_at = datetime.now(timezone.utc) + expires_delta
         token = create_access_token(
             subject=str(user.id),
             claims={
@@ -272,7 +395,7 @@ class AuthService:
             },
             expires_delta=expires_delta,
         )
-        return TokenResponse(access_token=token, user=session)
+        return TokenResponse(access_token=token, expires_at=expires_at.isoformat(), user=session)
 
     def update_current_user(self, user: UserModel, payload: UserSelfUpdateRequest) -> UserResponse:
         for field in [
@@ -286,6 +409,13 @@ class AuthService:
             value = getattr(payload, field)
             if value is not None:
                 setattr(user, field, value)
+        if payload.mfa_email_enabled is not None:
+            if payload.mfa_email_enabled and not user.email:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Informe um e-mail antes de ativar MFA por e-mail.",
+                )
+            user.mfa_email_enabled = bool(payload.mfa_email_enabled)
         self.db.commit()
         self.db.refresh(user)
         return self.to_response(user)
@@ -371,6 +501,8 @@ class AuthService:
             permissions=AuthService._permission_slugs(user),
             foto_usuario_url=user.foto_usuario_url,
             must_change_password=bool(user.must_change_password),
+            business_category=user.business_category,
+            managed_inn_id=user.managed_inn_id,
         )
 
     def _get_user_from_challenge(self, challenge_token: str) -> UserModel:
@@ -456,10 +588,26 @@ class AuthService:
 
     @staticmethod
     def _validate_citizen_registration_files(payload: UserCreateRequest) -> None:
+        if payload.tipo_pessoa == "PJ":
+            if payload.tipo_usuario == "turista":
+                return
+            if not (payload.alvara_funcionamento_nome or payload.alvara_funcionamento_url):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Anexe o alvará de funcionamento da pessoa jurídica para concluir o cadastro.",
+                )
+            return
+        if payload.tipo_usuario != "morador":
+            return
         if not (payload.foto_usuario_nome or payload.foto_usuario_url):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Inclua uma foto do usuário para concluir o cadastro.",
+            )
+        if not (payload.documento_identificacao_nome or payload.documento_identificacao_url):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Inclua RG ou CNH para concluir o cadastro.",
             )
         if not (payload.comprovante_residencia_nome or payload.comprovante_residencia_url):
             raise HTTPException(
@@ -473,8 +621,33 @@ class AuthService:
                 detail="Serão aceitas somente contas de água ou luz como comprovante de residência.",
             )
 
+    def _validate_citizen_stay(self, payload: UserCreateRequest) -> None:
+        if payload.tipo_usuario == "morador":
+            return
+        if not payload.tipo_estadia:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe o tipo de estadia do turista.")
+        if not payload.estadia_inicio or not payload.estadia_fim:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe o período da estadia.")
+        start_date = self._parse_date(payload.estadia_inicio, "Data inicial da estadia inválida.")
+        end_date = self._parse_date(payload.estadia_fim, "Data final da estadia inválida.")
+        if end_date < start_date:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A data final da estadia deve ser igual ou posterior à data inicial.")
+        if payload.tipo_estadia == "casa_aluguel" and not payload.estadia_endereco:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe o endereço da casa de aluguel.")
+        if payload.tipo_estadia == "pousada":
+            if payload.pousada_id:
+                inn = self.db.get(OrlaInn, payload.pousada_id)
+                if not inn:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pousada não encontrada.")
+            elif not payload.estadia_endereco:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Selecione a pousada ou informe nome e telefone da hospedagem.")
+
     @staticmethod
     def _residence_proof_status(payload: UserCreateRequest) -> str:
+        if payload.tipo_pessoa == "PJ":
+            return "nao_exigido"
+        if payload.tipo_usuario != "morador":
+            return "nao_exigido"
         name = (payload.comprovante_residencia_nome or "").lower()
         proof_type = (payload.comprovante_residencia_tipo or "").lower()
         if any(term in name for term in ["agua", "água", "embasa"]) or any(term in name for term in ["luz", "energia", "coelba", "neoenergia"]):
@@ -485,12 +658,23 @@ class AuthService:
 
     @staticmethod
     def _residence_proof_observation(payload: UserCreateRequest) -> str | None:
+        if payload.tipo_pessoa == "PJ":
+            return "Comprovante de residência não exigido para pessoa jurídica. Alvará anexado no cadastro."
         status_value = AuthService._residence_proof_status(payload)
+        if status_value == "nao_exigido":
+            return "Comprovante de residência não exigido para turista."
         if status_value == "pre_validado":
             return "Nome do arquivo indica conta de água/luz. A validação final depende da leitura do documento."
         if status_value == "pendente_validacao":
             return "Documento aceito para análise. Leitura automática do conteúdo será integrada na etapa de OCR."
         return "Tipo de comprovante não permitido."
+
+    @staticmethod
+    def _parse_date(value: str, message: str):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=message) from exc
 
     @staticmethod
     def _validate_email_verification_token(email: str, verification_token: str | None) -> None:
@@ -515,13 +699,27 @@ class AuthService:
             email=user.email,
             telefone=user.telefone,
             endereco=user.endereco,
+            cep=user.cep,
+            tipo_usuario=user.tipo_usuario,
+            business_category=user.business_category,
+            managed_inn_id=user.managed_inn_id,
+            tipo_estadia=user.tipo_estadia,
+            estadia_endereco=user.estadia_endereco,
+            estadia_cep=user.estadia_cep,
+            estadia_inicio=user.estadia_inicio,
+            estadia_fim=user.estadia_fim,
+            orla_access_requested=bool(user.orla_access_requested),
+            orla_access_status=user.orla_access_status,
             foto_usuario_url=user.foto_usuario_url,
+            documento_identificacao_url=user.documento_identificacao_url,
             comprovante_residencia_url=user.comprovante_residencia_url,
             comprovante_residencia_status=user.comprovante_residencia_status,
+            alvara_funcionamento_url=user.alvara_funcionamento_url,
             role=user.role.slug,
             secretaria=user.secretaria.slug if user.secretaria else None,
             permissions=AuthService._permission_slugs(user),
             must_change_password=bool(user.must_change_password),
+            mfa_email_enabled=bool(user.mfa_email_enabled),
             is_active=user.is_active,
         )
 
@@ -534,3 +732,13 @@ class AuthService:
             for role_permission in user.role.permissions
             if role_permission.permission and role_permission.permission.is_active
         )
+
+    def _generate_credential_number(self, role_slug: str, secretaria_slug: str | None) -> str | None:
+        if role_slug == "cidadao":
+            return None
+        prefix = "ADM" if role_slug == "admin" else (secretaria_slug or "SRV").upper()[:6]
+        for _ in range(10):
+            value = f"{prefix}-{secrets.randbelow(900000) + 100000}"
+            if not self.db.query(UserModel).filter(UserModel.credential_number == value).first():
+                return value
+        return f"{prefix}-{secrets.token_hex(4).upper()}"

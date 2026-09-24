@@ -12,7 +12,12 @@ router = APIRouter(prefix="/uploads", tags=["uploads"])
 UPLOAD_ROOT = Path(os.getenv("UPLOAD_ROOT", "/app/uploads"))
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
-PUBLIC_UPLOAD_KINDS = {"usuarios/fotos", "usuarios/comprovantes"}
+PUBLIC_UPLOAD_KINDS = {
+    "usuarios/fotos",
+    "usuarios/comprovantes",
+    "usuarios/documentos",
+    "usuarios/alvaras",
+}
 
 
 @router.post("")

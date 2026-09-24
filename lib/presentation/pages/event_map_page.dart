@@ -25,6 +25,9 @@ class _EventMapPageState extends State<EventMapPage> {
   List<_MapEvent> _events = [];
   _MapEvent? _selected;
   DateTimeRange? _period;
+  String _pageTitle = 'Mapa de eventos autorizados';
+  String _pageDescription =
+      'Acompanhe eventos aprovados por período e abra a rota de cada local.';
 
   @override
   void initState() {
@@ -48,7 +51,12 @@ class _EventMapPageState extends State<EventMapPage> {
         if (mounted) await SessionExpiration.logout(context);
         return;
       }
-      final requests = await _api.listEventMapRequests(token);
+      final results = await Future.wait<dynamic>([
+        _api.listEventMapRequests(token),
+        _api.getContentSettings(accessToken: token),
+      ]);
+      final requests = results[0] as List<Map<String, dynamic>>;
+      final settings = results[1] as Map<String, dynamic>;
       final events =
           requests
               .map(_MapEvent.fromRequest)
@@ -60,6 +68,9 @@ class _EventMapPageState extends State<EventMapPage> {
       setState(() {
         _events = events;
         _selected = events.isNotEmpty ? events.first : null;
+        _pageTitle = settings['event_map_title']?.toString() ?? _pageTitle;
+        _pageDescription =
+            settings['event_map_description']?.toString() ?? _pageDescription;
       });
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -175,7 +186,7 @@ class _EventMapPageState extends State<EventMapPage> {
     return AppScaffold(
       userType: widget.userType,
       appBar: AppBar(
-        title: const Text('Mapa de eventos autorizados'),
+        title: Text(_pageTitle),
         actions: [
           IconButton(
             tooltip: 'Atualizar',
@@ -195,6 +206,8 @@ class _EventMapPageState extends State<EventMapPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _Header(
+                    title: _pageTitle,
+                    description: _pageDescription,
                     total: events.length,
                     period: _period,
                     onPickPeriod: _pickPeriod,
@@ -244,11 +257,16 @@ int _mapLimit(BuildContext context) =>
 
 class _Header extends StatelessWidget {
   const _Header({
+    required this.title,
+    required this.description,
     required this.total,
     required this.period,
     required this.onPickPeriod,
     this.onOpenFullMap,
   });
+
+  final String title;
+  final String description;
 
   final int total;
   final DateTimeRange? period;
@@ -268,15 +286,13 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Eventos autorizados',
+                title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Acompanhe eventos aprovados por período no mapa gratuito do app e abra o endereço no Google Maps quando precisar navegar.',
-              ),
+              Text(description),
             ],
           ),
         ),

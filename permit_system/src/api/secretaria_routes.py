@@ -14,7 +14,7 @@ router = APIRouter(prefix="/secretarias", tags=["secretarias"])
 @router.get("", response_model=list[SecretariaResponse])
 def list_secretarias(
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+    current_user: UserModel = Depends(require_roles("admin")),
 ):
     return SecretariaService(db).list_secretarias(current_user)
 
@@ -33,7 +33,7 @@ def update_secretaria(
     secretaria_id: int,
     payload: SecretariaRequest,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+    current_user: UserModel = Depends(require_roles("admin")),
 ):
     return SecretariaService(db).update_secretaria(secretaria_id, payload, current_user)
 

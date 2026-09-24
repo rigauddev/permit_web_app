@@ -106,6 +106,7 @@ ROLE_PERMISSIONS = {
 }
 
 SECRETARIAS = [
+    ("semop", "SEMOP", None, "SEMOP — Acesso à Orla de Guaibim"),
     ("desenvolvimento_economico", "Secretaria de Desenvolvimento Econômico", "sde@valenca.ba.gov.br", "Coordenação da Central de Eventos"),
     ("meio_ambiente", "Secretaria de Meio Ambiente", "meioambiente@valenca.ba.gov.br", "Responsabilidade ambiental"),
     ("infraestrutura", "Secretaria de Infraestrutura", "infraestrutura@valenca.ba.gov.br", "Análise técnica de estruturas"),
@@ -291,12 +292,34 @@ def ensure_user_columns():
     migrations = {
         "foto_usuario_url": "ALTER TABLE usuarios ADD COLUMN foto_usuario_url VARCHAR(500) NULL",
         "foto_usuario_nome": "ALTER TABLE usuarios ADD COLUMN foto_usuario_nome VARCHAR(255) NULL",
+        "credential_number": "ALTER TABLE usuarios ADD COLUMN credential_number VARCHAR(40) NULL",
+        "documento_identificacao_url": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_url VARCHAR(500) NULL",
+        "documento_identificacao_nome": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_nome VARCHAR(255) NULL",
+        "documento_identificacao_tipo": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_tipo VARCHAR(50) NULL",
         "comprovante_residencia_url": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_url VARCHAR(500) NULL",
         "comprovante_residencia_nome": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_nome VARCHAR(255) NULL",
         "comprovante_residencia_tipo": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_tipo VARCHAR(50) NULL",
         "comprovante_residencia_status": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_status VARCHAR(50) NOT NULL DEFAULT 'pendente_validacao'",
         "comprovante_residencia_observacao": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_observacao TEXT NULL",
+        "alvara_funcionamento_url": "ALTER TABLE usuarios ADD COLUMN alvara_funcionamento_url VARCHAR(500) NULL",
+        "alvara_funcionamento_nome": "ALTER TABLE usuarios ADD COLUMN alvara_funcionamento_nome VARCHAR(255) NULL",
         "must_change_password": "ALTER TABLE usuarios ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0",
+        "cep": "ALTER TABLE usuarios ADD COLUMN cep VARCHAR(9) NULL",
+        "endereco_latitude": "ALTER TABLE usuarios ADD COLUMN endereco_latitude VARCHAR(40) NULL",
+        "endereco_longitude": "ALTER TABLE usuarios ADD COLUMN endereco_longitude VARCHAR(40) NULL",
+        "tipo_usuario": "ALTER TABLE usuarios ADD COLUMN tipo_usuario VARCHAR(20) NOT NULL DEFAULT 'morador'",
+        "business_category": "ALTER TABLE usuarios ADD COLUMN business_category VARCHAR(40) NULL",
+        "managed_inn_id": "ALTER TABLE usuarios ADD COLUMN managed_inn_id INTEGER NULL",
+        "tipo_estadia": "ALTER TABLE usuarios ADD COLUMN tipo_estadia VARCHAR(30) NULL",
+        "estadia_endereco": "ALTER TABLE usuarios ADD COLUMN estadia_endereco VARCHAR(255) NULL",
+        "estadia_cep": "ALTER TABLE usuarios ADD COLUMN estadia_cep VARCHAR(9) NULL",
+        "estadia_latitude": "ALTER TABLE usuarios ADD COLUMN estadia_latitude VARCHAR(40) NULL",
+        "estadia_longitude": "ALTER TABLE usuarios ADD COLUMN estadia_longitude VARCHAR(40) NULL",
+        "estadia_inicio": "ALTER TABLE usuarios ADD COLUMN estadia_inicio VARCHAR(10) NULL",
+        "estadia_fim": "ALTER TABLE usuarios ADD COLUMN estadia_fim VARCHAR(10) NULL",
+        "pousada_id": "ALTER TABLE usuarios ADD COLUMN pousada_id INTEGER NULL",
+        "orla_access_requested": "ALTER TABLE usuarios ADD COLUMN orla_access_requested BOOLEAN NOT NULL DEFAULT 0",
+        "orla_access_status": "ALTER TABLE usuarios ADD COLUMN orla_access_status VARCHAR(30) NOT NULL DEFAULT 'nao_solicitado'",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -312,10 +335,14 @@ def ensure_user_columns():
             connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN cpf_cnpj VARCHAR(18) NULL"))
             connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN email VARCHAR(255) NULL"))
             connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN mfa_email_enabled BOOLEAN NOT NULL DEFAULT 0"))
+            connection.execute(text("CREATE UNIQUE INDEX ux_usuarios_credential_number ON usuarios (credential_number)"))
         except Exception:
             pass
         connection.execute(text("UPDATE usuarios SET mfa_email_enabled = 0 WHERE mfa_email_enabled IS NULL"))
         connection.execute(text("UPDATE usuarios SET must_change_password = 0 WHERE must_change_password IS NULL"))
+        connection.execute(text("UPDATE usuarios SET tipo_usuario = 'morador' WHERE tipo_usuario IS NULL"))
+        connection.execute(text("UPDATE usuarios SET orla_access_requested = 0 WHERE orla_access_requested IS NULL"))
+        connection.execute(text("UPDATE usuarios SET orla_access_status = 'nao_solicitado' WHERE orla_access_status IS NULL"))
 
 
 def ensure_question_definition_columns():
@@ -372,6 +399,41 @@ def ensure_requirement_inspection_columns():
         "inspection_scheduled_time": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_time VARCHAR(5) NULL",
         "inspection_status": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_status VARCHAR(50) NOT NULL DEFAULT 'nao_agendada'",
         "inspection_result": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_result JSON NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
+def ensure_orla_vehicle_columns():
+    inspector = inspect(engine)
+    if "orla_vehicles" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("orla_vehicles")}
+    migrations = {
+        "brand": "ALTER TABLE orla_vehicles ADD COLUMN brand VARCHAR(80) NOT NULL DEFAULT 'Nao informado'",
+        "establishment_name": "ALTER TABLE orla_vehicles ADD COLUMN establishment_name VARCHAR(150) NULL",
+        "is_excursion": "ALTER TABLE orla_vehicles ADD COLUMN is_excursion BOOLEAN NOT NULL DEFAULT 0",
+        "driver_name": "ALTER TABLE orla_vehicles ADD COLUMN driver_name VARCHAR(150) NULL",
+        "driver_document": "ALTER TABLE orla_vehicles ADD COLUMN driver_document VARCHAR(30) NULL",
+        "driver_phone": "ALTER TABLE orla_vehicles ADD COLUMN driver_phone VARCHAR(30) NULL",
+        "passengers_count": "ALTER TABLE orla_vehicles ADD COLUMN passengers_count INTEGER NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
+def ensure_orla_inn_columns():
+    inspector = inspect(engine)
+    if "orla_inns" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("orla_inns")}
+    migrations = {
+        "capacity": "ALTER TABLE orla_inns ADD COLUMN capacity INTEGER NULL",
+        "guest_capacity": "ALTER TABLE orla_inns ADD COLUMN guest_capacity INTEGER NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -652,7 +714,15 @@ def seed_users(db, roles, secretarias):
         },
     ]
     cpf_seed = 20000000000
-    for index, (secretaria_slug, secretaria_nome, _, _) in enumerate(SECRETARIAS, start=1):
+    # Stable IDs preserve existing demo CPFs when secretarias are added/reordered.
+    secretaria_seed_ids = {
+        "desenvolvimento_economico": 1, "meio_ambiente": 2,
+        "infraestrutura": 3, "dmtran": 4, "vigilancia_sanitaria": 5,
+        "secretaria_saude": 6, "guarda_civil": 7, "receita_municipal": 8,
+        "semop": 9,
+    }
+    for secretaria_slug, secretaria_nome, _, _ in SECRETARIAS:
+        index = secretaria_seed_ids[secretaria_slug]
         secretaria_id = secretarias[secretaria_slug].id
         label = secretaria_nome.replace("Secretaria de ", "")
         users.extend(
@@ -718,9 +788,15 @@ def seed_users(db, roles, secretarias):
         user.role_id = data["role_id"]
         user.secretaria_id = data.get("secretaria_id")
         user.mfa_email_enabled = False
+        if user.role.slug != "cidadao" and not user.credential_number:
+            prefix = "ADM" if user.role.slug == "admin" else (user.secretaria.slug if user.secretaria else "SRV").upper()[:6]
+            user.credential_number = f"{prefix}-{user.id or abs(hash(user.email)) % 900000 + 100000}"
         if data["email"] == "cidadao@teste.local":
             user.foto_usuario_nome = "foto_maria_solicitante.jpg"
             user.foto_usuario_url = "/uploads/cidadao/foto_maria_solicitante.jpg"
+            user.documento_identificacao_nome = "cnh_maria_solicitante.pdf"
+            user.documento_identificacao_url = "/uploads/cidadao/cnh_maria_solicitante.pdf"
+            user.documento_identificacao_tipo = "cnh"
             user.comprovante_residencia_nome = "conta_luz_maria_solicitante.pdf"
             user.comprovante_residencia_url = "/uploads/cidadao/conta_luz_maria_solicitante.pdf"
             user.comprovante_residencia_tipo = "luz"
@@ -1806,6 +1882,8 @@ def main():
     ensure_question_definition_columns()
     ensure_event_credential_columns()
     ensure_requirement_inspection_columns()
+    ensure_orla_inn_columns()
+    ensure_orla_vehicle_columns()
     db = SessionLocal()
     try:
         roles = seed_roles(db)

@@ -379,7 +379,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
 
   Future<String?> submitRequest(BuildContext context) async {
     if (state.isSubmitting) return null;
-    state = state.copyWith(isSubmitting: true);
+    state = state.copyWith(
+      isSubmitting: true,
+      uploadProgressMessage: 'Preparando envio da solicitação...',
+    );
     try {
       final token = await const SessionStore().read().then(
         (s) => s?.accessToken,
@@ -387,6 +390,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       if (token == null || token.isEmpty) {
         throw PermitApiException('Sessão expirada. Faça login novamente.');
       }
+      final documentUploads = await _uploadInitialDocuments(token);
+      state = state.copyWith(
+        uploadProgressMessage: 'Registrando solicitação na prefeitura...',
+      );
       final response = await PermitApiService().createRequest(
         accessToken: token,
         responsibleData: state.responsibleData,
@@ -394,10 +401,14 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         answers: state.answers,
         answerDetails: state.answerDetails,
         attachmentNames: state.attachments.map((file) => file.name).toList(),
-        documentAttachments: await _uploadInitialDocuments(token),
+        documentAttachments: documentUploads,
       );
       final protocolo = response['protocolo'] as String? ?? '';
-      state = state.copyWith(isSubmitting: false, submittedProtocol: protocolo);
+      state = state.copyWith(
+        isSubmitting: false,
+        clearUploadProgressMessage: true,
+        submittedProtocol: protocolo,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Solicitação enviada. Protocolo: $protocolo')),
@@ -405,7 +416,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       return protocolo;
     } catch (error) {
-      state = state.copyWith(isSubmitting: false);
+      state = state.copyWith(
+        isSubmitting: false,
+        clearUploadProgressMessage: true,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
@@ -421,6 +435,9 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     final api = PermitApiService();
     final uploads = <Map<String, dynamic>>[];
     for (final entry in state.documentAttachments.entries) {
+      state = state.copyWith(
+        uploadProgressMessage: 'Enviando arquivo: ${entry.value.name}',
+      );
       final upload = await api.uploadFile(
         accessToken: token,
         kind: 'solicitacoes/documentos',

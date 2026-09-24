@@ -24,6 +24,16 @@ final ThemeData customTheme = ThemeData(
   scaffoldBackgroundColor: const Color(0xFFF6F8F5),
   useMaterial3: true,
   fontFamily: 'Roboto',
+  pageTransitionsTheme: const PageTransitionsTheme(
+    builders: {
+      TargetPlatform.android: _NoPageTransitionsBuilder(),
+      TargetPlatform.iOS: _NoPageTransitionsBuilder(),
+      TargetPlatform.macOS: _NoPageTransitionsBuilder(),
+      TargetPlatform.windows: _NoPageTransitionsBuilder(),
+      TargetPlatform.linux: _NoPageTransitionsBuilder(),
+      TargetPlatform.fuchsia: _NoPageTransitionsBuilder(),
+    },
+  ),
   inputDecorationTheme: const InputDecorationTheme(
     filled: true,
     fillColor: Colors.white,
@@ -67,3 +77,18 @@ final ThemeData customTheme = ThemeData(
     iconTheme: IconThemeData(color: Colors.white),
   ),
 );
+
+class _NoPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _NoPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
+  }
+}

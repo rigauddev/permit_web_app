@@ -20,7 +20,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Acesso do cidadão'), findsOneWidget);
-    expect(find.text('CPF ou CNPJ'), findsOneWidget);
+    expect(find.text('E-mail, CPF ou CNPJ'), findsOneWidget);
     expect(find.text('Senha'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);
   });

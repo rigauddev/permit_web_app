@@ -176,6 +176,7 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
     final isReviewStep = state.currentStep == state.totalSteps - 1;
     final termAccepted = state.eventData['termo_aceite'] == 'true';
     final submitBlockedByTerm = isReviewStep && !termAccepted;
+    final nextBlockedByValidation = controller.validateCurrentStep() != null;
 
     return AppScaffold(
       userType: widget.userType,
@@ -213,67 +214,105 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                 ),
               );
             }
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Passo ${state.currentStep + 1} de ${state.totalSteps}',
+            return Stack(
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Passo ${state.currentStep + 1} de ${state.totalSteps}',
+                          ),
+                          const SizedBox(height: 20),
+                          Expanded(child: PermitRequestFormBuilder()),
+                          const SizedBox(height: 8),
+                          if (submitBlockedByTerm) ...[
+                            const Text(
+                              'Leia e aceite o termo de responsabilidade para liberar o envio.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          _RequestNavigationBar(
+                            currentStep: state.currentStep,
+                            isLastStep:
+                                state.currentStep == state.totalSteps - 1,
+                            isSubmitting: state.isSubmitting,
+                            submitBlockedByTerm:
+                                submitBlockedByTerm || nextBlockedByValidation,
+                            onBack: controller.previousStep,
+                            onExit: _exitFlow,
+                            onNext: () async {
+                              if (!controller.canGoNext(context)) return;
+                              if (state.currentStep == state.totalSteps - 1) {
+                                final protocolo = await controller
+                                    .submitRequest(context);
+                                if (protocolo == null || !context.mounted) {
+                                  return;
+                                }
+                                await _clearDraft();
+                                if (!context.mounted) return;
+                                controller.resetForm();
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => PermitDashboardPage(
+                                          userType: widget.userType,
+                                          userProfile: widget.userProfile,
+                                          permitType: widget.permitType,
+                                          questions: widget.questions,
+                                          forms: const [],
+                                          eventTypes: widget.eventTypes,
+                                        ),
+                                  ),
+                                );
+                              } else {
+                                controller.nextStep();
+                              }
+                            },
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 20),
-                      Expanded(child: PermitRequestFormBuilder()),
-                      const SizedBox(height: 8),
-                      if (submitBlockedByTerm) ...[
-                        const Text(
-                          'Leia e aceite o termo de responsabilidade para liberar o envio.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      _RequestNavigationBar(
-                        currentStep: state.currentStep,
-                        isLastStep: state.currentStep == state.totalSteps - 1,
-                        isSubmitting: state.isSubmitting,
-                        submitBlockedByTerm: submitBlockedByTerm,
-                        onBack: controller.previousStep,
-                        onExit: _exitFlow,
-                        onNext: () async {
-                          if (!controller.canGoNext(context)) return;
-                          if (state.currentStep == state.totalSteps - 1) {
-                            final protocolo = await controller.submitRequest(
-                              context,
-                            );
-                            if (protocolo == null || !context.mounted) return;
-                            await _clearDraft();
-                            if (!context.mounted) return;
-                            controller.resetForm();
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (_) => PermitDashboardPage(
-                                      userType: widget.userType,
-                                      userProfile: widget.userProfile,
-                                      permitType: widget.permitType,
-                                      questions: widget.questions,
-                                      forms: const [],
-                                      eventTypes: widget.eventTypes,
-                                    ),
-                              ),
-                            );
-                          } else {
-                            controller.nextStep();
-                          }
-                        },
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                if (state.isSubmitting)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      child: Center(
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 360),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    state.uploadProgressMessage ??
+                                        'Enviando solicitação...',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
         ),

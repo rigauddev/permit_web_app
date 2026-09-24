@@ -8,20 +8,26 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/routes/app_routes.dart';
 import '../../core/session_store.dart';
 import '../../data/providers/user_provider.dart';
 
 class LoginPage extends HookConsumerWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.initialAccessProfile = 'cidadao'});
+
+  final String initialAccessProfile;
 
   static const _apkDownloadUrl = String.fromEnvironment(
     'APP_APK_DOWNLOAD_URL',
     defaultValue: '',
   );
-
+  static const _showAdminLogin = bool.fromEnvironment(
+    'SHOW_ADMIN_LOGIN',
+    defaultValue: false,
+  );
   List<Widget> _loginFields({
     required BuildContext context,
-    required bool isCitizenAccess,
+    required String accessProfile,
     required bool isLoading,
     required bool obscurePassword,
     required TextEditingController identifierController,
@@ -33,11 +39,22 @@ class LoginPage extends HookConsumerWidget {
       TextField(
         controller: identifierController,
         keyboardType:
-            isCitizenAccess ? TextInputType.number : TextInputType.emailAddress,
+            accessProfile == 'cidadao'
+                ? TextInputType.emailAddress
+                : accessProfile == 'servidor'
+                ? TextInputType.text
+                : TextInputType.emailAddress,
         decoration: InputDecoration(
-          labelText: isCitizenAccess ? 'CPF ou CNPJ' : 'E-mail institucional',
+          labelText:
+              accessProfile == 'cidadao'
+                  ? 'E-mail, CPF ou CNPJ'
+                  : accessProfile == 'servidor'
+                  ? 'Número de credencial'
+                  : 'E-mail institucional',
           prefixIcon: Icon(
-            isCitizenAccess ? Icons.badge_outlined : Icons.email_outlined,
+            accessProfile == 'cidadao'
+                ? Icons.badge_outlined
+                : Icons.email_outlined,
           ),
         ),
       ),
@@ -77,9 +94,9 @@ class LoginPage extends HookConsumerWidget {
                 : const Text('Entrar'),
       ),
       const SizedBox(height: 12),
-      if (isCitizenAccess)
+      if (accessProfile == 'cidadao')
         TextButton(
-          onPressed: () => Navigator.pushNamed(context, '/registrar_usuario'),
+          onPressed: () => Navigator.pushNamed(context, AppRoutes.registerUser),
           child: const Text('Criar conta de cidadão'),
         ),
     ];
@@ -208,7 +225,7 @@ class LoginPage extends HookConsumerWidget {
     final mfaGeneration = useState<MfaGeneration?>(null);
     final selectedMfaMethod = useState<String>('email');
     final mfaResendSeconds = useState<int>(0);
-    final accessProfile = useState<String>('cidadao');
+    final accessProfile = useState<String>(initialAccessProfile);
     final isLoading = useState(false);
     final obscurePassword = useState(true);
     final errorMessage = useState<String?>(null);
@@ -241,7 +258,7 @@ class LoginPage extends HookConsumerWidget {
       mfaGeneration.value = generation;
       selectedMfaMethod.value = method;
       mfaResendSeconds.value = 60;
-      if (generation.devCode != null) {
+      if (kDebugMode && generation.devCode != null) {
         debugPrint('Código MFA de teste: ${generation.devCode}');
       }
       Future.delayed(const Duration(milliseconds: 200), () {
@@ -249,33 +266,32 @@ class LoginPage extends HookConsumerWidget {
       });
     }
 
+    String loginSuccessRoute() =>
+        accessProfile.value == 'admin' ? AppRoutes.adminLogin : AppRoutes.home;
+
     Future<void> validateLogin() async {
       isLoading.value = true;
       errorMessage.value = null;
       try {
         if (accessProfile.value == 'cidadao' &&
-            !_isValidCpfOrCnpj(identifierController.text)) {
-          errorMessage.value = 'CPF/CNPJ informado está incorreto.';
+            !_isValidCitizenIdentifier(identifierController.text)) {
+          errorMessage.value = 'Informe um e-mail, CPF ou CNPJ válido.';
           return;
         }
         final loginChallenge = await authService.startLogin(
           identifierController.text,
           passwordController.text,
-          accessType: accessProfile.value == 'cidadao' ? 'cidadao' : 'interno',
+          accessType: accessProfile.value,
           clientType: kIsWeb ? 'web' : 'app',
         );
         if (!loginChallenge.mfaRequired) {
           final accessToken = loginChallenge.accessToken;
+          final expiresAt = loginChallenge.expiresAt;
           final user = loginChallenge.user;
-          if (accessToken == null || user == null) {
+          if (accessToken == null || expiresAt == null || user == null) {
             errorMessage.value = 'Não foi possível iniciar a sessão';
             return;
           }
-          final expiresAt =
-              DateTime.now()
-                  .add(const Duration(days: 5))
-                  .toUtc()
-                  .toIso8601String();
           await sessionStore.save(
             accessToken: accessToken,
             expiresAt: expiresAt,
@@ -284,7 +300,11 @@ class LoginPage extends HookConsumerWidget {
           ref.read(userProvider.notifier).setUser(user);
           await Future<void>.delayed(Duration.zero);
           if (context.mounted) {
-            Navigator.pushReplacementNamed(context, '/home');
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              loginSuccessRoute(),
+              (route) => false,
+            );
           }
           return;
         }
@@ -317,20 +337,19 @@ class LoginPage extends HookConsumerWidget {
           mfaController.text,
           clientType: kIsWeb ? 'web' : 'app',
         );
-        final expiresAt =
-            DateTime.now()
-                .add(const Duration(days: 5))
-                .toUtc()
-                .toIso8601String();
         await sessionStore.save(
           accessToken: session.accessToken,
-          expiresAt: expiresAt,
+          expiresAt: session.expiresAt,
           userJson: jsonEncode(session.user.toJson()),
         );
         ref.read(userProvider.notifier).setUser(session.user);
         await Future<void>.delayed(Duration.zero);
         if (context.mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            loginSuccessRoute(),
+            (route) => false,
+          );
         }
       } on AuthException catch (error) {
         errorMessage.value = error.message;
@@ -366,27 +385,23 @@ class LoginPage extends HookConsumerWidget {
       errorMessage.value = null;
     }
 
-    void clearCredentials() {
-      identifierController.clear();
-      passwordController.clear();
-      mfaController.clear();
-      challenge.value = null;
-      mfaGeneration.value = null;
-      selectedMfaMethod.value = 'email';
-      mfaResendSeconds.value = 0;
-      obscurePassword.value = true;
-      errorMessage.value = null;
-    }
-
-    void selectAccessProfile(String profile) {
-      clearCredentials();
-      accessProfile.value = profile;
-    }
-
     final size = MediaQuery.of(context).size;
     final theme = Theme.of(context);
     final hasChallenge = challenge.value != null;
     final isCitizenAccess = accessProfile.value == 'cidadao';
+    final isAdminAccess = accessProfile.value == 'admin';
+    final pageTitle =
+        isCitizenAccess
+            ? 'Acesso do cidadão'
+            : isAdminAccess
+            ? 'Gestão do sistema'
+            : 'Portal do servidor';
+    final pageSubtitle =
+        isCitizenAccess
+            ? 'Entre para solicitar e acompanhar os serviços municipais.'
+            : isAdminAccess
+            ? 'Acesso exclusivo para administradores da gestão do sistema.'
+            : 'Acesso restrito a servidores, operadores e gestores das secretarias.';
 
     Future<void> openPlayStore() async {
       final targetUrl =
@@ -411,26 +426,58 @@ class LoginPage extends HookConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed:
-                        isLoading.value
-                            ? null
-                            : () => selectAccessProfile(
-                              isCitizenAccess ? 'interno' : 'cidadao',
-                            ),
-                    icon: Icon(
-                      isCitizenAccess
-                          ? Icons.badge_outlined
-                          : Icons.person_outline,
-                    ),
-                    label: Text(
-                      isCitizenAccess ? 'Portal do Servidor' : 'Acesso cidadão',
-                    ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: size.width < 600 ? size.width * 0.92 : 520,
+                  ),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (!isCitizenAccess)
+                        TextButton.icon(
+                          onPressed:
+                              isLoading.value
+                                  ? null
+                                  : () => Navigator.pushNamedAndRemoveUntil(
+                                    context,
+                                    AppRoutes.login,
+                                    (route) => false,
+                                  ),
+                          icon: const Icon(Icons.person_outline),
+                          label: const Text('Acesso cidadão'),
+                        ),
+                      if (accessProfile.value != 'servidor')
+                        TextButton.icon(
+                          onPressed:
+                              isLoading.value
+                                  ? null
+                                  : () => Navigator.pushNamedAndRemoveUntil(
+                                    context,
+                                    AppRoutes.serverLogin,
+                                    (route) => false,
+                                  ),
+                          icon: const Icon(Icons.badge_outlined),
+                          label: const Text('Portal do Servidor'),
+                        ),
+                      if (!isAdminAccess && _showAdminLogin)
+                        TextButton.icon(
+                          onPressed:
+                              isLoading.value
+                                  ? null
+                                  : () => Navigator.pushNamedAndRemoveUntil(
+                                    context,
+                                    AppRoutes.adminLogin,
+                                    (route) => false,
+                                  ),
+                          icon: const Icon(Icons.admin_panel_settings_outlined),
+                          label: const Text('Admin'),
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 28),
                 Image.asset(
                   'assets/images/logo_prefeitura_1.png',
                   width: size.width < 600 ? size.width * 0.62 : 280,
@@ -452,11 +499,7 @@ class LoginPage extends HookConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            hasChallenge
-                                ? 'Validação de segurança'
-                                : isCitizenAccess
-                                ? 'Acesso do cidadão'
-                                : 'Portal do servidor',
+                            hasChallenge ? 'Validação de segurança' : pageTitle,
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -464,9 +507,7 @@ class LoginPage extends HookConsumerWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            isCitizenAccess
-                                ? 'Entre para solicitar e acompanhar alvarás de evento.'
-                                : 'Acesso restrito a servidores, operadores, gestores e administradores.',
+                            pageSubtitle,
                             style: theme.textTheme.bodyMedium,
                             textAlign: TextAlign.center,
                           ),
@@ -474,7 +515,7 @@ class LoginPage extends HookConsumerWidget {
                           if (!hasChallenge)
                             ..._loginFields(
                               context: context,
-                              isCitizenAccess: isCitizenAccess,
+                              accessProfile: accessProfile.value,
                               isLoading: isLoading.value,
                               obscurePassword: obscurePassword.value,
                               identifierController: identifierController,
@@ -598,8 +639,13 @@ class _PlayStoreLogoPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-bool _isValidCpfOrCnpj(String value) {
-  final digits = _onlyDigits(value);
+bool _isValidCitizenIdentifier(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return false;
+  if (trimmed.contains('@')) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(trimmed);
+  }
+  final digits = _onlyDigits(trimmed);
   return _isValidCpf(digits) || _isValidCnpj(digits);
 }
 

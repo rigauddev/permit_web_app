@@ -38,6 +38,8 @@ class QuestionFieldWidget extends StatefulWidget {
 }
 
 class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
+  static const int _maxAttachmentBytes = 10 * 1024 * 1024;
+
   String? respostaSimNao;
   final TextEditingController textoController = TextEditingController();
   final Map<String, TextEditingController> customControllers = {};
@@ -48,6 +50,9 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
   String? assinaturaSelecionada;
   String? percursoUrl;
   final Set<String> opcoesSelecionadas = {};
+
+  bool get _questionRequired =>
+      widget.camposObrigatorios['__pergunta_obrigatoria'] == true;
 
   @override
   void initState() {
@@ -100,6 +105,13 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
           text: widget.currentValue[label]?.toString() ?? '',
         );
       }
+    }
+
+    if (_questionRequired && respostaSimNao != 'Sim') {
+      respostaSimNao = 'Sim';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) salvarResposta();
+      });
     }
 
     if (_usesRouteAnswer && percursoControllers.isEmpty) {
@@ -277,12 +289,15 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
                 title: const Text('Sim'),
                 value: 'Sim',
                 groupValue: respostaSimNao,
-                onChanged: (value) {
-                  setState(() {
-                    respostaSimNao = value;
-                    salvarResposta();
-                  });
-                },
+                onChanged:
+                    _questionRequired
+                        ? null
+                        : (value) {
+                          setState(() {
+                            respostaSimNao = value;
+                            salvarResposta();
+                          });
+                        },
               ),
             ),
             const SizedBox(width: 10),
@@ -291,16 +306,27 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
                 title: const Text('Não'),
                 value: 'Não',
                 groupValue: respostaSimNao,
-                onChanged: (value) {
-                  setState(() {
-                    respostaSimNao = value;
-                    salvarResposta();
-                  });
-                },
+                onChanged:
+                    _questionRequired
+                        ? null
+                        : (value) {
+                          setState(() {
+                            respostaSimNao = value;
+                            salvarResposta();
+                          });
+                        },
               ),
             ),
           ],
         ),
+        if (_questionRequired)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Pergunta obrigatória para este tipo de evento.',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
         const SizedBox(height: 10),
         if (respostaSimNao == 'Sim') ...[
           if ((widget.modeloDocumentoUrl ?? '').isNotEmpty) ...[
@@ -404,6 +430,7 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
                         ? null
                         : result.files.single;
                 if (file == null) return;
+                if (!_validateAttachmentSize(file)) return;
                 setState(() {
                   arquivoSelecionado = file.path ?? file.name;
                   salvarResposta();
@@ -662,6 +689,18 @@ class _QuestionFieldWidgetState extends State<QuestionFieldWidget> {
     return widget.camposObrigatorios[field] == true ? '$label *' : label;
   }
 
+  bool _validateAttachmentSize(PlatformFile file) {
+    if (file.size <= _maxAttachmentBytes) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'O arquivo "${file.name}" tem ${_formatFileSize(file.size)} e ultrapassa o limite de 10 MB.',
+        ),
+      ),
+    );
+    return false;
+  }
+
   Future<void> _openGeneratedRoute() async {
     final rawUrl = percursoUrl;
     if (rawUrl == null || rawUrl.isEmpty) return;
@@ -704,4 +743,14 @@ class _StreetSegmentControllers {
     inicio.dispose();
     fim.dispose();
   }
+}
+
+String _formatFileSize(int bytes) {
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  if (bytes >= 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '$bytes bytes';
 }

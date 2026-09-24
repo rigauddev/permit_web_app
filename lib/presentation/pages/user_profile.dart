@@ -35,6 +35,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   bool _saving = false;
   bool _loading = true;
   bool _loaded = false;
+  bool _mfaEmailEnabled = false;
 
   @override
   void initState() {
@@ -57,6 +58,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     _lastNameController.text = user.lastName;
     _phoneController.text = user.phone;
     _addressController.text = user.address;
+    _mfaEmailEnabled = user.mfaEmailEnabled;
     _loaded = true;
   }
 
@@ -115,6 +117,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         endereco: _addressController.text.trim(),
         userPhotoName: uploadedPhotoName,
         userPhotoUrl: uploadedPhotoUrl,
+        mfaEmailEnabled: _mfaEmailEnabled,
       );
       await const SessionStore().updateUserJson(jsonEncode(updated.toJson()));
       ref.read(userProvider.notifier).setUser(updated);
@@ -262,9 +265,30 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                                 ),
                               ],
                               const SizedBox(height: 16),
-                              if ((user?.email ?? '').isNotEmpty)
-                                _lockedField('E-mail', user?.email ?? ''),
+                              _lockedField(
+                                'E-mail',
+                                (user?.email ?? '').isEmpty
+                                    ? 'Não informado'
+                                    : user!.email,
+                              ),
                               _lockedField('CPF/CNPJ', user?.cpfCnpj ?? ''),
+                              const SizedBox(height: 6),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('MFA por e-mail'),
+                                subtitle: Text(
+                                  (user?.email ?? '').isEmpty
+                                      ? 'Informe um e-mail para ativar autenticação em duas etapas.'
+                                      : 'Ao entrar, o sistema solicitará um código enviado para o e-mail cadastrado.',
+                                ),
+                                value: _mfaEmailEnabled,
+                                onChanged:
+                                    _saving || (user?.email ?? '').isEmpty
+                                        ? null
+                                        : (value) => setState(
+                                          () => _mfaEmailEnabled = value,
+                                        ),
+                              ),
                               if (!isCitizen) ...[
                                 _lockedField('Perfil', user?.role ?? ''),
                                 _lockedField(
