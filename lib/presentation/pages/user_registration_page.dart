@@ -2,10 +2,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth_service.dart';
 import '../../core/orla_api_service.dart';
 import '../../core/permit_api_service.dart';
+import '../../core/routes/app_routes.dart';
 
 class UserRegistrationPage extends StatefulWidget {
   const UserRegistrationPage({super.key});
@@ -287,6 +289,14 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
         );
       }
       _setLoadingStage('Validando dados e criando sua conta...');
+      final accessRequested =
+          (isCompany &&
+              isResident &&
+              _isTourismBusiness &&
+              _orlaAccessRequested) ||
+          (_citizenType == 'turista' &&
+              _stayType == 'pousada' &&
+              (_orlaAccessRequested || _newInnBeachfront));
       await _authService.registerCitizen(
         tipoPessoa: _personType,
         nome: _nameController.text.trim(),
@@ -355,14 +365,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
             _citizenType == 'turista' && _stayType == 'pousada'
                 ? _selectedInnId
                 : null,
-        orlaAccessRequested:
-            (isCompany &&
-                isResident &&
-                _isTourismBusiness &&
-                _orlaAccessRequested) ||
-            (_citizenType == 'turista' &&
-                _stayType == 'pousada' &&
-                (_orlaAccessRequested || _newInnBeachfront)),
+        orlaAccessRequested: accessRequested,
         orlaVehicle:
             _citizenType == 'turista'
                 ? {
@@ -399,12 +402,18 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
         _isLoading = false;
         _loadingMessage = 'Cadastro concluído.';
       });
-      await _showMessage(
-        title: 'Cadastro realizado',
-        message: 'Sua conta foi criada. Entre com seu CPF/CNPJ e senha.',
-        icon: Icons.check_circle_outline,
-        isError: false,
-      );
+      if (accessRequested &&
+          _citizenType == 'turista' &&
+          _stayType == 'pousada') {
+        await _showRegistrationSuccessWithShare();
+      } else {
+        await _showMessage(
+          title: 'Cadastro realizado',
+          message: 'Sua conta foi criada. Entre com seu CPF/CNPJ e senha.',
+          icon: Icons.check_circle_outline,
+          isError: false,
+        );
+      }
       if (mounted) Navigator.pop(context);
     } on AuthException catch (error) {
       if (mounted) setState(() => _isLoading = false);
@@ -415,6 +424,77 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
     } finally {
       if (mounted && _isLoading) setState(() => _isLoading = false);
     }
+  }
+
+  String _publicSystemUrl() {
+    const configured = String.fromEnvironment(
+      'PUBLIC_APP_URL',
+      defaultValue: '',
+    );
+    if (configured.isNotEmpty) {
+      return configured.replaceFirst(RegExp(r'/$'), '');
+    }
+    final origin = Uri.base.origin;
+    return origin == 'null' || origin.isEmpty
+        ? 'http://localhost:8081'
+        : origin;
+  }
+
+  Future<void> _shareAccessRequest() async {
+    final innName = _selectedInnName() ?? _newInnNameController.text.trim();
+    final guestName = [
+      _nameController.text.trim(),
+      _surnameController.text.trim(),
+    ].where((part) => part.isNotEmpty).join(' ');
+    final requestUrl = '${_publicSystemUrl()}${AppRoutes.orlaGuests}';
+    final period =
+        _stayRange == null
+            ? ''
+            : ' Período: ${_dateToIso(_stayRange!.start)} a ${_dateToIso(_stayRange!.end)}.';
+    final message = Uri.encodeComponent(
+      'Olá! $guestName enviou uma solicitação de acesso à Orla vinculada a $innName.$period '
+      'A equipe da pousada/hotel pode consultar e validar a solicitação em: $requestUrl',
+    );
+    final opened = await launchUrl(
+      Uri.parse('https://wa.me/?text=$message'),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      _showError('Não foi possível abrir o WhatsApp neste dispositivo.');
+    }
+  }
+
+  Future<void> _showRegistrationSuccessWithShare() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (dialogContext) => AlertDialog(
+            icon: const Icon(
+              Icons.check_circle_outline,
+              color: Color(0xFF0E5F2F),
+              size: 42,
+            ),
+            title: const Text('Cadastro e solicitação enviados'),
+            content: const Text(
+              'Sua conta foi criada. Compartilhe a página da solicitação com a pousada/hotel para avisar que a liberação está pendente.',
+              textAlign: TextAlign.center,
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Concluir'),
+              ),
+              FilledButton.icon(
+                onPressed: _shareAccessRequest,
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Enviar pelo WhatsApp'),
+              ),
+            ],
+          ),
+    );
   }
 
   Future<void> _pickUserPhoto() async {

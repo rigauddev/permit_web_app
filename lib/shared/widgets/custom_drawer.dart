@@ -264,6 +264,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       AppRoutes.secretarias,
                       AppRoutes.homeContent,
                       AppRoutes.contentManagement,
+                      AppRoutes.emailTemplates,
                     ],
                     currentRoute: currentRoute,
                     children: [
@@ -284,6 +285,10 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                       const _DrawerSectionItem(
                         'Mapas e conteúdo turístico',
                         AppRoutes.contentManagement,
+                      ),
+                      const _DrawerSectionItem(
+                        'Modelos de e-mail',
+                        AppRoutes.emailTemplates,
                       ),
                     ],
                   ),

@@ -8,6 +8,7 @@ from src.schemas.content_schema import (
     BannerApprovalRequest,
     ContentSettingsRequest,
     ContentSettingsResponse,
+    EmailTemplatesResponse,
     HomeContentCardRequest,
     HomeContentCardResponse,
     ServiceConfigRequest,
@@ -54,6 +55,23 @@ def update_content_settings(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
 ):
     return ContentService(db).update_settings(payload, current_user)
+
+
+@router.get('/email-templates', response_model=EmailTemplatesResponse)
+def get_email_templates(
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles('admin')),
+):
+    return ContentService(db).get_email_templates(current_user)
+
+
+@router.put('/email-templates', response_model=EmailTemplatesResponse)
+def update_email_templates(
+    payload: EmailTemplatesResponse,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles('admin')),
+):
+    return ContentService(db).update_email_templates(payload, current_user)
 
 
 @router.get("/tourism-points", response_model=list[TourismPointResponse])

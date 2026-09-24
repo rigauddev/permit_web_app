@@ -78,3 +78,14 @@ class OrlaGuestPass(Base):
     qr_token = Column(String(100), nullable=False, unique=True)
     status = Column(String(30), nullable=False, default='authorized')
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+
+
+class OrlaNotification(Base):
+    __tablename__ = 'orla_notifications'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False, index=True)
+    title = Column(String(160), nullable=False)
+    message = Column(String(500), nullable=False)
+    kind = Column(String(40), nullable=False, default='informacao')
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)

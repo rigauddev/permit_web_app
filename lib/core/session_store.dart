@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -23,6 +24,10 @@ class SessionStore {
   static const accessTokenKey = 'access_token';
   static const userKey = 'user';
   static const sessionExpiresAtKey = 'session_expires_at';
+  // No navegador a sessão é guardada como um único valor no localStorage.
+  // Isso impede que uma atualização encontre apenas parte dos três campos
+  // antigos durante a inicialização do Flutter.
+  static const _webSessionKey = 'permit_web_session_v1';
   static const _secureStorageTimeout = Duration(milliseconds: 800);
 
   final FlutterSecureStorage _secureStorage;
@@ -33,6 +38,17 @@ class SessionStore {
     required String expiresAt,
   }) async {
     final preferences = await SharedPreferences.getInstance();
+    if (kIsWeb) {
+      await preferences.setString(
+        _webSessionKey,
+        jsonEncode({
+          'accessToken': accessToken,
+          'userJson': userJson,
+          'expiresAt': expiresAt,
+        }),
+      );
+      return;
+    }
     await preferences.setString(accessTokenKey, accessToken);
     await preferences.setString(userKey, userJson);
     await preferences.setString(sessionExpiresAtKey, expiresAt);
@@ -52,6 +68,8 @@ class SessionStore {
   }
 
   Future<SavedSession?> read() async {
+    if (kIsWeb) return _readWebSession();
+
     final accessToken = await _readValue(accessTokenKey);
     final userJson = await _readValue(userKey);
     final expiresAtText = await _readValue(sessionExpiresAtKey);
@@ -60,16 +78,12 @@ class SessionStore {
     if (accessToken == null || userJson == null) {
       return null;
     }
-    final effectiveExpiresAt =
-        expiresAt ?? DateTime.now().toUtc().add(const Duration(days: 5));
-    final effectiveExpiresAtText = effectiveExpiresAt.toUtc().toIso8601String();
     if (expiresAt == null) {
-      await save(
-        accessToken: accessToken,
-        userJson: userJson,
-        expiresAt: effectiveExpiresAtText,
-      );
+      await clear();
+      return null;
     }
+    final effectiveExpiresAt = expiresAt;
+    final effectiveExpiresAtText = effectiveExpiresAt.toUtc().toIso8601String();
     if (effectiveExpiresAt.toUtc().isBefore(DateTime.now().toUtc())) {
       await clear();
       return null;
@@ -87,6 +101,15 @@ class SessionStore {
   }
 
   Future<void> clear() async {
+    if (kIsWeb) {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(_webSessionKey);
+      // Limpa também o formato usado pelas versões anteriores.
+      await preferences.remove(accessTokenKey);
+      await preferences.remove(userKey);
+      await preferences.remove(sessionExpiresAtKey);
+      return;
+    }
     try {
       await _secureStorage
           .delete(key: accessTokenKey)
@@ -105,6 +128,7 @@ class SessionStore {
   }
 
   Future<String?> readUserJson() async {
+    if (kIsWeb) return (await read())?.userJson;
     return _readValue(userKey);
   }
 
@@ -121,10 +145,6 @@ class SessionStore {
   Future<String?> _readValue(String key) async {
     final preferences = await SharedPreferences.getInstance();
     final preferencesValue = preferences.getString(key);
-    if (kIsWeb && preferencesValue != null && preferencesValue.isNotEmpty) {
-      return preferencesValue;
-    }
-
     String? secureValue;
     try {
       secureValue = await _secureStorage
@@ -159,5 +179,69 @@ class SessionStore {
     } catch (_) {
       // SharedPreferences already preserved the web session.
     }
+  }
+
+  Future<SavedSession?> _readWebSession() async {
+    final preferences = await SharedPreferences.getInstance();
+    final saved = preferences.getString(_webSessionKey);
+    if (saved == null || saved.isEmpty) {
+      return _migrateLegacyWebSession(preferences);
+    }
+
+    try {
+      final data = jsonDecode(saved);
+      if (data is! Map) throw const FormatException('Sessão inválida');
+      final accessToken = data['accessToken']?.toString();
+      final userJson = data['userJson']?.toString();
+      final expiresAt = DateTime.tryParse(data['expiresAt']?.toString() ?? '');
+      if (accessToken == null ||
+          accessToken.isEmpty ||
+          userJson == null ||
+          userJson.isEmpty ||
+          expiresAt == null) {
+        throw const FormatException('Sessão incompleta');
+      }
+      if (!expiresAt.toUtc().isAfter(DateTime.now().toUtc())) {
+        await clear();
+        return null;
+      }
+      return SavedSession(
+        accessToken: accessToken,
+        userJson: userJson,
+        expiresAt: expiresAt,
+      );
+    } catch (_) {
+      await clear();
+      return null;
+    }
+  }
+
+  Future<SavedSession?> _migrateLegacyWebSession(
+    SharedPreferences preferences,
+  ) async {
+    final accessToken = preferences.getString(accessTokenKey);
+    final userJson = preferences.getString(userKey);
+    final expiresAt = DateTime.tryParse(
+      preferences.getString(sessionExpiresAtKey) ?? '',
+    );
+    if (accessToken == null ||
+        accessToken.isEmpty ||
+        userJson == null ||
+        userJson.isEmpty ||
+        expiresAt == null ||
+        !expiresAt.toUtc().isAfter(DateTime.now().toUtc())) {
+      await clear();
+      return null;
+    }
+    await save(
+      accessToken: accessToken,
+      userJson: userJson,
+      expiresAt: expiresAt.toUtc().toIso8601String(),
+    );
+    return SavedSession(
+      accessToken: accessToken,
+      userJson: userJson,
+      expiresAt: expiresAt,
+    );
   }
 }

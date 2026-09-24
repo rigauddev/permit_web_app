@@ -43,6 +43,6 @@ __all__ = [
     "UserModel",
 ]
 
-from .orla_model import OrlaAccount, OrlaVehicle, OrlaAccess, OrlaInn, OrlaGuestPass
+from .orla_model import OrlaAccount, OrlaVehicle, OrlaAccess, OrlaInn, OrlaGuestPass, OrlaNotification
 
-__all__.extend(["OrlaAccount", "OrlaVehicle", "OrlaAccess", "OrlaInn", "OrlaGuestPass"])
+__all__.extend(["OrlaAccount", "OrlaVehicle", "OrlaAccess", "OrlaInn", "OrlaGuestPass", "OrlaNotification"])

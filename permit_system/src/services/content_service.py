@@ -7,6 +7,8 @@ from src.infra.database.models import ContentSettingModel, HomeContentCardModel,
 from src.schemas.content_schema import (
     ContentSettingsRequest,
     ContentSettingsResponse,
+    EmailTemplateInput,
+    EmailTemplatesResponse,
     HomeContentCardRequest,
     HomeContentCardResponse,
     ServiceConfigResponse,
@@ -45,6 +47,29 @@ DEFAULT_CONTENT_SETTINGS = {
     "event_map_title": "Mapa de eventos autorizados",
     "event_map_description": "Consulte os eventos autorizados por período e abra a rota de cada local.",
     "event_map_editor_secretarias": "[]",
+    "email_templates": json.dumps({
+        "welcome": {
+            "subject": "Boas-vindas ao Sistema de Serviços de Valença",
+            "header_text": "Seja bem-vindo(a)!",
+            "body_text": "Olá, {{nome}}. Sua conta foi criada com sucesso. Acesse o sistema para acompanhar seus serviços municipais.",
+            "footer_text": "Prefeitura Municipal de Valença • Secretaria de Mobilidade Pública - SEMOP",
+            "logo_mode": "system", "logo_url": None,
+        },
+        "blocked": {
+            "subject": "Conta bloqueada no Sistema de Serviços de Valença",
+            "header_text": "Atualização da sua conta",
+            "body_text": "Olá, {{nome}}. Sua conta foi bloqueada. Caso precise de ajuda, entre em contato com a Prefeitura.",
+            "footer_text": "Prefeitura Municipal de Valença • Secretaria de Mobilidade Pública - SEMOP",
+            "logo_mode": "system", "logo_url": None,
+        },
+        "password_recovery": {
+            "subject": "Recuperação de senha",
+            "header_text": "Recupere seu acesso",
+            "body_text": "Olá, {{nome}}. Use o código {{codigo}} para recuperar sua senha. Se você não fez esta solicitação, ignore esta mensagem.",
+            "footer_text": "Prefeitura Municipal de Valença • Secretaria de Mobilidade Pública - SEMOP",
+            "logo_mode": "system", "logo_url": None,
+        },
+    }),
 }
 DEFAULT_TOURISM_POINTS = [
     ("Ponta do Curral", "Ponto natural e encontro com o mar", "Extremo da faixa turística", "Atrativos", -13.2678, -38.9535, .83, .21),
@@ -207,6 +232,31 @@ class ContentService:
                 self.db.add(ContentSettingModel(key=key, value=value, updated_by=current_user.id))
         self.db.commit()
         return self.get_settings(current_user)
+
+    def get_email_templates(self, current_user: UserModel) -> EmailTemplatesResponse:
+        if current_user.role.slug != 'admin':
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Somente o administrador pode editar modelos de e-mail')
+        self._ensure_default_settings()
+        row = self.db.query(ContentSettingModel).filter(ContentSettingModel.key == 'email_templates').first()
+        try:
+            value = json.loads(row.value if row else '{}')
+        except (TypeError, ValueError):
+            value = {}
+        defaults = json.loads(DEFAULT_CONTENT_SETTINGS['email_templates'])
+        return EmailTemplatesResponse(**{key: value.get(key, defaults[key]) for key in defaults})
+
+    def update_email_templates(self, payload: EmailTemplatesResponse, current_user: UserModel) -> EmailTemplatesResponse:
+        if current_user.role.slug != 'admin':
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Somente o administrador pode editar modelos de e-mail')
+        value = payload.model_dump(mode='json')
+        row = self.db.query(ContentSettingModel).filter(ContentSettingModel.key == 'email_templates').first()
+        if row:
+            row.value = json.dumps(value, ensure_ascii=False)
+            row.updated_by = current_user.id
+        else:
+            self.db.add(ContentSettingModel(key='email_templates', value=json.dumps(value, ensure_ascii=False), updated_by=current_user.id))
+        self.db.commit()
+        return EmailTemplatesResponse(**value)
 
     def list_tourism_points(self, current_user: UserModel) -> list[TourismPointResponse]:
         self._ensure_default_tourism_points()

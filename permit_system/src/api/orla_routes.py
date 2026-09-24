@@ -2,7 +2,7 @@
 import os
 import re
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -16,7 +16,7 @@ from src.api.dependencies import get_current_user
 from src.core.security import hash_password
 from src.infra.database.mysql_db import get_db
 from src.infra.database.models import RoleModel, UserModel
-from src.infra.database.models.orla_model import OrlaAccount, OrlaVehicle, OrlaAccess, OrlaInn, OrlaGuestPass
+from src.infra.database.models.orla_model import OrlaAccount, OrlaVehicle, OrlaAccess, OrlaInn, OrlaGuestPass, OrlaNotification
 from src.services.orla_area import is_inside_orla
 
 router = APIRouter(prefix='/orla', tags=['Acesso à Orla'])
@@ -69,6 +69,10 @@ def _stay_allows_orla_access(db: Session, owner: UserModel) -> tuple[bool, str |
             return True, None
         return False, 'Casa de aluguel fora da área autorizada da Orla de Guaibim.'
     if owner.tipo_estadia == 'pousada':
+        if owner.orla_access_status != 'aprovado':
+            if owner.orla_access_status == 'recusado':
+                return False, 'Solicitação de acesso recusada pela pousada/hotel.'
+            return False, 'Solicitação aguardando liberação da pousada/hotel.'
         return _inn_status_allows_orla_access(db.get(OrlaInn, owner.pousada_id) if owner.pousada_id else None)
     return False, 'Tipo de estadia do turista não permite validar acesso à Orla.'
 
@@ -331,6 +335,10 @@ class GuestPassInput(BaseModel):
     orla_access_requested: bool = False
 
 
+class StayRequestApprovalInput(BaseModel):
+    approved: bool
+
+
 def inn_data(inn):
     return {
         'id': inn.id,
@@ -402,7 +410,10 @@ def guest_pass_data(row, inn: OrlaInn | None = None):
 
 @router.get('/inns/public')
 def public_inns(db: Session = Depends(get_db)):
-    rows = db.query(OrlaInn).filter(OrlaInn.approval_status == 'approved').order_by(OrlaInn.name).all()
+    # Pousadas recém-cadastradas na área da Orla ficam pendentes de validação,
+    # mas precisam continuar disponíveis para o turista indicar sua estadia.
+    # A aprovação segue obrigatória no momento de liberar o acesso.
+    rows = db.query(OrlaInn).filter(OrlaInn.approval_status != 'rejected').order_by(OrlaInn.name).all()
     return [public_inn_data(inn) for inn in rows]
 
 
@@ -509,6 +520,86 @@ def guest_passes(db: Session = Depends(get_db), user=Depends(get_current_user)):
         raise HTTPException(403, 'Acesso restrito a pousadas/hotéis e fiscalização.')
     rows = query.order_by(OrlaGuestPass.id.desc()).limit(200).all()
     return [guest_pass_data(row, db.get(OrlaInn, row.inn_id)) for row in rows]
+
+
+def stay_request_data(db: Session, guest: UserModel):
+    vehicle = db.query(OrlaVehicle).filter(OrlaVehicle.user_id == guest.id).order_by(OrlaVehicle.id.desc()).first()
+    return {
+        'id': guest.id,
+        'guest_name': ' '.join(filter(None, [guest.nome, guest.sobrenome])),
+        'guest_phone': guest.telefone,
+        'stay_start': guest.estadia_inicio,
+        'stay_end': guest.estadia_fim,
+        'status': guest.orla_access_status,
+        'vehicle_plate': vehicle.plate if vehicle else None,
+        'vehicle_brand': vehicle.brand if vehicle else None,
+        'vehicle_model': vehicle.model if vehicle else None,
+        'vehicle_color': vehicle.color if vehicle else None,
+    }
+
+
+def notification_data(row: OrlaNotification):
+    return {
+        'id': row.id,
+        'title': row.title,
+        'message': row.message,
+        'kind': row.kind,
+        'is_read': row.read_at is not None,
+        'created_at': row.created_at,
+    }
+
+
+@router.get('/stay-requests')
+def stay_requests(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if not (user.role.slug == 'cidadao' and user.business_category == 'pousada_hotel' and user.managed_inn_id):
+        raise HTTPException(403, 'Acesso restrito à pousada/hotel responsável.')
+    rows = db.query(UserModel).filter(
+        UserModel.pousada_id == user.managed_inn_id,
+        UserModel.orla_access_requested.is_(True),
+    ).order_by(UserModel.id.desc()).limit(200).all()
+    return [stay_request_data(db, row) for row in rows]
+
+
+@router.put('/stay-requests/{guest_id}/approval')
+def approve_stay_request(guest_id: int, payload: StayRequestApprovalInput,
+                         db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if not (user.role.slug == 'cidadao' and user.business_category == 'pousada_hotel' and user.managed_inn_id):
+        raise HTTPException(403, 'Acesso restrito à pousada/hotel responsável.')
+    guest = db.get(UserModel, guest_id)
+    if not guest or guest.pousada_id != user.managed_inn_id or not guest.orla_access_requested:
+        raise HTTPException(404, 'Solicitação não encontrada para esta pousada/hotel.')
+    guest.orla_access_status = 'aprovado' if payload.approved else 'recusado'
+    inn = db.get(OrlaInn, user.managed_inn_id)
+    action = 'aceita' if payload.approved else 'recusada'
+    db.add(OrlaNotification(
+        user_id=guest.id,
+        title='Solicitação de acesso à Orla atualizada',
+        message=f'A pousada/hotel {inn.name if inn else "informada"} {action} sua solicitação de acesso à Orla de Guaibim.',
+        kind='acesso_aprovado' if payload.approved else 'acesso_recusado',
+    ))
+    db.commit()
+    return stay_request_data(db, guest)
+
+
+@router.get('/notifications')
+def notifications(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if user.role.slug != 'cidadao':
+        raise HTTPException(403, 'Notificações disponíveis apenas para cidadãos.')
+    rows = db.query(OrlaNotification).filter(
+        OrlaNotification.user_id == user.id,
+    ).order_by(OrlaNotification.id.desc()).limit(30).all()
+    return [notification_data(row) for row in rows]
+
+
+@router.put('/notifications/{notification_id}/read')
+def read_notification(notification_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    row = db.get(OrlaNotification, notification_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(404, 'Notificação não encontrada.')
+    if row.read_at is None:
+        row.read_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+    return notification_data(row)
 
 
 @router.post('/guest-passes', status_code=201)

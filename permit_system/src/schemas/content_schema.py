@@ -48,6 +48,21 @@ class ContentSettingsResponse(ContentSettingsRequest):
     can_manage_editors: bool = False
 
 
+class EmailTemplateInput(BaseModel):
+    subject: str = Field(..., min_length=3, max_length=160)
+    header_text: str = Field(..., min_length=3, max_length=180)
+    body_text: str = Field(..., min_length=5, max_length=3000)
+    footer_text: str = Field(..., min_length=3, max_length=500)
+    logo_mode: str = Field(default='system', pattern='^(system|custom|none)$')
+    logo_url: str | None = Field(default=None, max_length=500)
+
+
+class EmailTemplatesResponse(BaseModel):
+    welcome: EmailTemplateInput
+    blocked: EmailTemplateInput
+    password_recovery: EmailTemplateInput
+
+
 class TourismPointRequest(BaseModel):
     title: str = Field(..., min_length=2, max_length=120)
     detail: str = Field(..., min_length=2, max_length=255)

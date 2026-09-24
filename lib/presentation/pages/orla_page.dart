@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,7 +12,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/orla_api_service.dart';
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
@@ -83,6 +84,8 @@ class _OrlaPageState extends State<OrlaPage> {
   Map<String, dynamic>? _reports;
   List<dynamic> _users = [];
   List<dynamic> _guestPasses = [];
+  List<dynamic> _stayRequests = [];
+  List<dynamic> _notifications = [];
   List<Map<String, dynamic>> _businessBanners = [];
   PlatformFile? _bannerFile;
   String? _bannerImageUrl;
@@ -185,6 +188,14 @@ class _OrlaPageState extends State<OrlaPage> {
         me['can_register_guests'] == true
             ? await _api.request('/guest-passes')
             : <dynamic>[];
+    final stayRequests =
+        me['can_register_guests'] == true
+            ? await _api.request('/stay-requests')
+            : <dynamic>[];
+    final notifications =
+        me['role'] == 'cidadao'
+            ? await _api.request('/notifications')
+            : <dynamic>[];
     var businessBanners = <Map<String, dynamic>>[];
     final isTourismBusiness = const {
       'pousada_hotel',
@@ -206,6 +217,8 @@ class _OrlaPageState extends State<OrlaPage> {
         _users = users;
         _reports = reports;
         _guestPasses = guestPasses;
+        _stayRequests = stayRequests;
+        _notifications = notifications;
         _businessBanners = businessBanners;
       });
     }
@@ -282,6 +295,10 @@ class _OrlaPageState extends State<OrlaPage> {
                     ),
                   ),
                 ),
+              if (_notifications.isNotEmpty && !_staff) ...[
+                const SizedBox(height: 12),
+                _notificationsPanel(),
+              ],
               if (_me != null && !_staff) ...[
                 const SizedBox(height: 16),
                 if (widget.establishmentsOnly) ...[
@@ -1239,6 +1256,17 @@ class _OrlaPageState extends State<OrlaPage> {
             ],
           ),
           const SizedBox(height: 12),
+          _stayRequestsSection(),
+          const SizedBox(height: 18),
+          const Divider(),
+          const SizedBox(height: 12),
+          Text(
+            'Hóspedes cadastrados pela pousada/hotel',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
           if (_guestPasses.isEmpty)
             const Text('Nenhum hóspede cadastrado pela pousada/hotel.')
           else
@@ -1249,6 +1277,247 @@ class _OrlaPageState extends State<OrlaPage> {
       ),
     ),
   );
+
+  Widget _stayRequestsSection() {
+    final pending =
+        _stayRequests
+            .where((item) => item is Map && item['status'] == 'solicitado')
+            .toList();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0D28B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.pending_actions_outlined,
+                color: Color(0xFF8A5A00),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Solicitações de acesso à Orla',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (pending.isNotEmpty)
+                Chip(
+                  label: Text(
+                    '${pending.length} pendente${pending.length == 1 ? '' : 's'}',
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Turistas que indicaram esta pousada aguardam sua validação antes de receberem acesso à Orla.',
+          ),
+          const SizedBox(height: 10),
+          if (_stayRequests.isEmpty)
+            const Text('Nenhuma solicitação recebida até o momento.')
+          else
+            ..._stayRequests.map(
+              (item) => _stayRequestCard(Map<String, dynamic>.from(item)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _notificationsPanel() {
+    final unread =
+        _notifications
+            .where((item) => item is Map && item['is_read'] != true)
+            .toList();
+    return Card(
+      color: const Color(0xFFEAF4FF),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.notifications_active_outlined,
+                  color: Color(0xFF155A8A),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Atualizações do acesso à Orla',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                if (unread.isNotEmpty)
+                  Chip(
+                    label: Text(
+                      '${unread.length} nova${unread.length == 1 ? '' : 's'}',
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ..._notifications
+                .take(3)
+                .map(
+                  (item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      item['kind'] == 'acesso_aprovado'
+                          ? Icons.verified_outlined
+                          : Icons.info_outline,
+                      color:
+                          item['kind'] == 'acesso_aprovado'
+                              ? const Color(0xFF0E5F2F)
+                              : const Color(0xFF155A8A),
+                    ),
+                    title: Text(
+                      item['title']?.toString() ?? 'Atualização',
+                      style: TextStyle(
+                        fontWeight:
+                            item['is_read'] == true
+                                ? FontWeight.w600
+                                : FontWeight.w800,
+                      ),
+                    ),
+                    subtitle: Text(item['message']?.toString() ?? ''),
+                    onTap:
+                        item['is_read'] == true
+                            ? null
+                            : () => _readNotification(item),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _readNotification(Map<String, dynamic> notification) async {
+    await _run(() async {
+      await _api.request(
+        '/notifications/${notification['id']}/read',
+        method: 'PUT',
+      );
+      await _load();
+    });
+  }
+
+  Widget _stayRequestCard(Map<String, dynamic> request) {
+    final status = request['status']?.toString() ?? 'solicitado';
+    final pending = status == 'solicitado';
+    final approved = status == 'aprovado';
+    final color =
+        approved
+            ? const Color(0xFF0E5F2F)
+            : pending
+            ? const Color(0xFF8A5A00)
+            : const Color(0xFFB3261E);
+    final label =
+        approved
+            ? 'Aprovado'
+            : pending
+            ? 'Aguardando validação'
+            : 'Recusado';
+    return Card(
+      margin: const EdgeInsets.only(top: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  request['guest_name']?.toString() ?? 'Turista',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                Chip(
+                  label: Text(label),
+                  side: BorderSide(color: color.withValues(alpha: .35)),
+                  backgroundColor: color.withValues(alpha: .10),
+                  labelStyle: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Estadia: ${request['stay_start'] ?? '-'} até ${request['stay_end'] ?? '-'}',
+            ),
+            if ((request['vehicle_plate']?.toString() ?? '').isNotEmpty)
+              Text(
+                'Veículo: ${request['vehicle_plate']} • ${request['vehicle_brand'] ?? ''} ${request['vehicle_model'] ?? ''}',
+              ),
+            if (pending) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed:
+                        _busy ? null : () => _approveStayRequest(request, true),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Aprovar acesso'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed:
+                        _busy
+                            ? null
+                            : () => _approveStayRequest(request, false),
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: const Text('Recusar'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _approveStayRequest(
+    Map<String, dynamic> request,
+    bool approved,
+  ) async {
+    await _run(() async {
+      await _api.request(
+        '/stay-requests/${request['id']}/approval',
+        method: 'PUT',
+        body: {'approved': approved},
+      );
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            approved ? 'Acesso à Orla aprovado.' : 'Solicitação recusada.',
+          ),
+        ),
+      );
+    });
+  }
 
   Widget _inspectionHeader(BuildContext context) => Card(
     child: Padding(
@@ -1598,16 +1867,22 @@ class _OrlaPageState extends State<OrlaPage> {
               }
 
               return AlertDialog(
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 24,
+                ),
                 title: Text(
                   isExcursion ? 'Cadastrar excursão' : 'Cadastrar hóspede',
                 ),
                 content: SizedBox(
                   width: 620,
                   child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(right: 2),
                     child: Form(
                       key: form,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _FormSectionTitle(
                             icon: Icons.person_outline,
@@ -1632,6 +1907,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                             : 'Informe o hóspede'
                                         : null,
                           ),
+                          const SizedBox(height: 14),
                           TextFormField(
                             controller: guestDocument,
                             decoration: InputDecoration(
@@ -1653,6 +1929,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                             : 'Informe CPF/CNPJ do hóspede'
                                         : null,
                           ),
+                          const SizedBox(height: 14),
                           TextFormField(
                             controller: guestPhone,
                             keyboardType: TextInputType.phone,
@@ -1663,20 +1940,73 @@ class _OrlaPageState extends State<OrlaPage> {
                                       : 'WhatsApp do hóspede',
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          if (isExcursion) ...[
+                            const SizedBox(height: 24),
+                            const _FormSectionTitle(
+                              icon: Icons.person_pin_circle_outlined,
+                              title: 'Motorista e lotação',
+                            ),
+                            TextFormField(
+                              controller: responsibleName,
+                              decoration: const InputDecoration(
+                                labelText: 'Nome do motorista',
+                              ),
+                              validator:
+                                  (v) =>
+                                      (v ?? '').trim().length < 2
+                                          ? 'Informe o motorista'
+                                          : null,
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: responsibleDocument,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Documento do motorista',
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: responsiblePhone,
+                              keyboardType: TextInputType.phone,
+                              decoration: const InputDecoration(
+                                labelText: 'Telefone do motorista',
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: guestCount,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Quantidade de hóspedes da excursão',
+                              ),
+                              validator:
+                                  (v) =>
+                                      (int.tryParse(v ?? '') ?? 0) <= 0
+                                          ? 'Informe a quantidade'
+                                          : null,
+                            ),
+                          ],
+                          const SizedBox(height: 24),
                           _FormSectionTitle(
                             icon: Icons.calendar_month_outlined,
-                            title: 'Período da estadia',
+                            title:
+                                isExcursion
+                                    ? 'Período da excursão'
+                                    : 'Período da estadia',
                           ),
-                          OutlinedButton.icon(
-                            onPressed: pickStayRange,
-                            icon: const Icon(Icons.calendar_month_outlined),
-                            label: Text(
-                              stayRange == null
-                                  ? isExcursion
-                                      ? 'Selecionar período da excursão'
-                                      : 'Selecionar período da estadia'
-                                  : '${stayStart.text} até ${stayEnd.text}',
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: pickStayRange,
+                              icon: const Icon(Icons.calendar_month_outlined),
+                              label: Text(
+                                stayRange == null
+                                    ? isExcursion
+                                        ? 'Selecionar período da excursão'
+                                        : 'Selecionar período da estadia'
+                                    : '${stayStart.text} até ${stayEnd.text}',
+                              ),
                             ),
                           ),
                           FormField<DateTimeRange>(
@@ -1705,7 +2035,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                         )
                                         : const SizedBox.shrink(),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 24),
                           _FormSectionTitle(
                             icon: Icons.directions_car_outlined,
                             title:
@@ -1713,48 +2043,6 @@ class _OrlaPageState extends State<OrlaPage> {
                                     ? 'Veículo da excursão'
                                     : 'Veículo do hóspede',
                           ),
-                          if (isExcursion) ...[
-                            _FormSectionTitle(
-                              icon: Icons.person_pin_circle_outlined,
-                              title: 'Motorista e lotação',
-                            ),
-                            TextFormField(
-                              controller: responsibleName,
-                              decoration: const InputDecoration(
-                                labelText: 'Nome do motorista',
-                              ),
-                              validator:
-                                  (v) =>
-                                      (v ?? '').trim().length < 2
-                                          ? 'Informe o motorista'
-                                          : null,
-                            ),
-                            TextFormField(
-                              controller: responsibleDocument,
-                              decoration: const InputDecoration(
-                                labelText: 'Documento do motorista',
-                              ),
-                            ),
-                            TextFormField(
-                              controller: responsiblePhone,
-                              decoration: const InputDecoration(
-                                labelText: 'Telefone do motorista',
-                              ),
-                            ),
-                            TextFormField(
-                              controller: guestCount,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Quantidade de hóspedes da excursão',
-                              ),
-                              validator:
-                                  (v) =>
-                                      (int.tryParse(v ?? '') ?? 0) <= 0
-                                          ? 'Informe a quantidade'
-                                          : null,
-                            ),
-                            const Divider(height: 28),
-                          ],
                           TextFormField(
                             controller: plate,
                             maxLength: 8,
@@ -1774,6 +2062,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                         ? null
                                         : 'Placa inválida',
                           ),
+                          const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
                             initialValue: selectedBrand,
                             decoration: InputDecoration(labelText: 'Marca'),
@@ -1795,6 +2084,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                 (value) =>
                                     value == null ? 'Informe a marca' : null,
                           ),
+                          const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
                             initialValue: selectedModel,
                             decoration: InputDecoration(labelText: 'Modelo'),
@@ -1817,6 +2107,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                 (value) =>
                                     value == null ? 'Informe o modelo' : null,
                           ),
+                          const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
                             initialValue: selectedColor,
                             decoration: const InputDecoration(labelText: 'Cor'),
@@ -1836,7 +2127,9 @@ class _OrlaPageState extends State<OrlaPage> {
                                 (value) =>
                                     value == null ? 'Informe a cor' : null,
                           ),
-                          const Divider(height: 28),
+                          const SizedBox(height: 18),
+                          const Divider(height: 1),
+                          const SizedBox(height: 10),
                           CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
                             value: releaseOrlaAccess,
@@ -2631,6 +2924,15 @@ class _OrlaPageState extends State<OrlaPage> {
                 icon: const Icon(Icons.print),
                 label: const Text('Imprimir'),
               ),
+              OutlinedButton.icon(
+                onPressed:
+                    () => _saveQrImage(
+                      qrCode: v['qr_code']?.toString() ?? '',
+                      fileName: 'qrcode-orla-${v['plate'] ?? 'veiculo'}',
+                    ),
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Salvar imagem'),
+              ),
             ],
           ),
     );
@@ -2676,9 +2978,14 @@ class _OrlaPageState extends State<OrlaPage> {
                 child: const Text('Fechar'),
               ),
               OutlinedButton.icon(
-                onPressed: () => _showGuestQrImage(pass),
-                icon: const Icon(Icons.image_outlined),
-                label: const Text('Gerar imagem'),
+                onPressed:
+                    () => _saveQrImage(
+                      qrCode: pass['qr_code']?.toString() ?? '',
+                      fileName:
+                          'qrcode-orla-${pass['vehicle_plate'] ?? 'hospede'}',
+                    ),
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Salvar imagem'),
               ),
               FilledButton.icon(
                 onPressed: () => _sendGuestWhatsApp(pass),
@@ -2690,9 +2997,9 @@ class _OrlaPageState extends State<OrlaPage> {
     );
   }
 
-  Future<Uint8List> _buildGuestQrPng(Map<String, dynamic> pass) async {
+  Future<Uint8List> _buildQrPng(String qrCode) async {
     final painter = QrPainter(
-      data: pass['qr_code']?.toString() ?? '',
+      data: qrCode,
       version: QrVersions.auto,
       gapless: true,
       eyeStyle: const QrEyeStyle(
@@ -2714,65 +3021,27 @@ class _OrlaPageState extends State<OrlaPage> {
     return byteData.buffer.asUint8List();
   }
 
-  Future<void> _showGuestQrImage(Map<String, dynamic> pass) async {
+  Future<void> _saveQrImage({
+    required String qrCode,
+    required String fileName,
+  }) async {
     try {
-      final bytes = await _buildGuestQrPng(pass);
-      if (!mounted) return;
-      showDialog<void>(
-        context: context,
-        builder:
-            (ctx) => AlertDialog(
-              title: const Text('Imagem do QR Code'),
-              content: SizedBox(
-                width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.memory(bytes, width: 280, height: 280),
-                    const SizedBox(height: 12),
-                    Text(
-                      '${pass['guest_name']} • ${pass['vehicle_plate']}',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'URL do sistema: ${_systemUrl()}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Use esta imagem para salvar, imprimir ou anexar na conversa do WhatsApp.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      () => Clipboard.setData(
-                        ClipboardData(text: pass['qr_code']?.toString() ?? ''),
-                      ),
-                  child: const Text('Copiar código'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Fechar'),
-                ),
-                FilledButton.icon(
-                  onPressed: () => _sendGuestWhatsApp(pass),
-                  icon: const Icon(Icons.chat_outlined),
-                  label: const Text('WhatsApp'),
-                ),
-              ],
-            ),
+      final bytes = await _buildQrPng(qrCode);
+      await FileSaver.instance.saveFile(
+        name: fileName,
+        bytes: bytes,
+        fileExtension: 'png',
+        mimeType: MimeType.png,
       );
-    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ).showSnackBar(const SnackBar(content: Text('Imagem do QR Code salva.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível salvar a imagem: $error')),
+      );
     }
   }
 
@@ -2793,15 +3062,34 @@ class _OrlaPageState extends State<OrlaPage> {
       return;
     }
     final systemUrl = _systemUrl();
-    final message = Uri.encodeComponent(
-      'Olá, ${pass['guest_name']}. Sua autorização de acesso à Orla de Guaibim foi gerada. '
-      'Apresente a imagem do QR Code enviada pela pousada/hotel na entrada. '
-      'Código do QR: ${pass['qr_code']}. '
-      'Acesse o sistema: $systemUrl. '
-      'Login: CPF/CNPJ (${pass['guest_document']}). Senha inicial: o próprio CPF/CNPJ.',
-    );
-    final uri = Uri.parse('https://wa.me/55$phone?text=$message');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final message =
+        'Olá, ${pass['guest_name']}. Sua autorização de acesso à Orla de Guaibim foi gerada. '
+        'Apresente a imagem do QR Code enviada pela pousada/hotel na entrada. '
+        'Veículo: ${pass['vehicle_plate']} • ${pass['vehicle_brand']} ${pass['vehicle_model']} • ${pass['vehicle_color']}. '
+        'Período: ${pass['stay_start'] ?? '-'} até ${pass['stay_end'] ?? '-'}. '
+        'Acesse o sistema: $systemUrl. '
+        'Login: CPF/CNPJ (${pass['guest_document']}). Senha inicial: o próprio CPF/CNPJ.';
+    try {
+      final bytes = await _buildQrPng(pass['qr_code']?.toString() ?? '');
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            bytes,
+            mimeType: 'image/png',
+            name: 'qrcode-orla-${pass['vehicle_plate'] ?? 'hospede'}.png',
+          ),
+        ],
+        text: message,
+        subject: 'Autorização de acesso à Orla de Guaibim',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Não foi possível compartilhar o QR Code: $error'),
+        ),
+      );
+    }
   }
 
   Future<void> _print(Map<String, dynamic> v) async {

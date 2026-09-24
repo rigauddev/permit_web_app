@@ -84,6 +84,8 @@ void main() {
       MaterialApp(home: OrlaPage(api: FakeOrlaApi(staff: true))),
     );
     await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
+    await tester.pumpAndSettle();
     expect(find.text('Maria'), findsOneWidget);
     expect(find.text('Escanear QR Code'), findsOneWidget);
     expect(find.text('Consultar placa'), findsOneWidget);
@@ -94,6 +96,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: OrlaPage(api: FakeOrlaApi(staff: true, manager: true))),
     );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
     await tester.pumpAndSettle();
     expect(find.text('Alterar limite'), findsOneWidget);
   });

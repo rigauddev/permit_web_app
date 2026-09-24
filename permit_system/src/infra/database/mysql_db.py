@@ -2,8 +2,8 @@ import os
 import time
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.exc import DatabaseError
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import DatabaseError, IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from .models import Base
@@ -29,6 +29,7 @@ def create_tables():
     for attempt in range(1, 6):
         try:
             Base.metadata.create_all(bind=engine)
+            _ensure_user_email_unique_index()
             print("Tabelas criadas com sucesso!")
             return
         except DatabaseError as error:
@@ -41,6 +42,26 @@ def create_tables():
             time.sleep(wait_seconds)
     if last_error:
         raise last_error
+
+
+def _ensure_user_email_unique_index():
+    """Aplica a unicidade de e-mail também em bancos já criados pelo MVP."""
+    inspector = inspect(engine)
+    indexes = inspector.get_indexes('usuarios')
+    constraints = inspector.get_unique_constraints('usuarios')
+    has_unique_email = any(
+        item.get('unique') and item.get('column_names') == ['email']
+        for item in [*indexes, *constraints]
+    )
+    if not has_unique_email:
+        try:
+            with engine.begin() as connection:
+                connection.execute(text('CREATE UNIQUE INDEX uq_usuarios_email ON usuarios (email)'))
+        except IntegrityError:
+            # Bancos legados podem possuir duplicidades anteriores à regra.
+            # A API impede novos casos; os registros antigos são tratados pela
+            # gestão antes de ativar a restrição física no banco.
+            print('Índice único de e-mail adiado: existem e-mails duplicados legados.')
 
 if __name__ == "__main__":
     create_tables()

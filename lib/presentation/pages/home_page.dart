@@ -168,87 +168,98 @@ class _CitizenHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _MunicipalBrandHeader(),
-              const SizedBox(height: 18),
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: contentFuture,
-                builder: (context, snapshot) {
-                  final cards = snapshot.data ?? const <Map<String, dynamic>>[];
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      height: 320,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final mainCards =
-                      cards
-                          .where(
-                            (card) =>
-                                !(card['scope']?.toString().startsWith(
-                                      'establishment:',
-                                    ) ??
-                                    false),
-                          )
-                          .toList();
-                  return _HomeCarousel(
-                    cards:
-                        mainCards.isEmpty
-                            ? _UserHomePageState._fallbackCards
-                            : mainCards,
-                  );
-                },
-              ),
-              const SizedBox(height: 18),
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: tourismPointsFuture,
-                builder:
-                    (context, snapshot) => _GuaibimEventsMapCard(
-                      points:
-                          (snapshot.data ?? const [])
-                              .where((item) => item['is_active'] != false)
-                              .map(_TourismPoint.fromMap)
-                              .toList(),
-                    ),
-              ),
-              const SizedBox(height: 18),
-              _HomeServicesCard(servicesFuture: servicesFuture),
-              const SizedBox(height: 18),
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: contentFuture,
-                builder: (context, snapshot) {
-                  final establishmentCards =
-                      (snapshot.data ?? const <Map<String, dynamic>>[])
-                          .where(
-                            (card) =>
-                                card['scope']?.toString().startsWith(
-                                  'establishment:',
-                                ) ??
-                                false,
-                          )
-                          .toList();
-                  if (establishmentCards.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    children: [
-                      _EstablishmentHighlightsCarousel(
-                        cards: establishmentCards,
-                      ),
-                      const SizedBox(height: 18),
-                    ],
-                  );
-                },
-              ),
-            ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _MunicipalBrandHeader(),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: contentFuture,
+                      builder: (context, snapshot) {
+                        final cards =
+                            snapshot.data ?? const <Map<String, dynamic>>[];
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const SizedBox(
+                            height: 320,
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        final mainCards =
+                            cards
+                                .where(
+                                  (card) =>
+                                      !(card['scope']?.toString().startsWith(
+                                            'establishment:',
+                                          ) ??
+                                          false),
+                                )
+                                .toList();
+                        return _HomeCarousel(
+                          cards:
+                              mainCards.isEmpty
+                                  ? _UserHomePageState._fallbackCards
+                                  : mainCards,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: tourismPointsFuture,
+                      builder:
+                          (context, snapshot) => _GuaibimEventsMapCard(
+                            points:
+                                (snapshot.data ?? const [])
+                                    .where((item) => item['is_active'] != false)
+                                    .map(_TourismPoint.fromMap)
+                                    .toList(),
+                          ),
+                    ),
+                    const SizedBox(height: 18),
+                    _HomeServicesCard(servicesFuture: servicesFuture),
+                    const SizedBox(height: 18),
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: contentFuture,
+                      builder: (context, snapshot) {
+                        final establishmentCards =
+                            (snapshot.data ?? const <Map<String, dynamic>>[])
+                                .where(
+                                  (card) =>
+                                      card['scope']?.toString().startsWith(
+                                        'establishment:',
+                                      ) ??
+                                      false,
+                                )
+                                .toList();
+                        if (establishmentCards.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          children: [
+                            _EstablishmentHighlightsCarousel(
+                              cards: establishmentCards,
+                            ),
+                            const SizedBox(height: 18),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -813,9 +824,7 @@ class _GuaibimEventsMapCard extends StatefulWidget {
   State<_GuaibimEventsMapCard> createState() => _GuaibimEventsMapCardState();
 }
 
-class _GuaibimEventsMapCardState extends State<_GuaibimEventsMapCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+class _GuaibimEventsMapCardState extends State<_GuaibimEventsMapCard> {
   final _searchController = TextEditingController();
   String _selectedCategory = 'Todos';
 
@@ -916,42 +925,30 @@ class _GuaibimEventsMapCardState extends State<_GuaibimEventsMapCard>
   }
 
   @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-  }
-
-  @override
   void dispose() {
-    _controller.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final map = AnimatedBuilder(
-      animation: _controller,
-      builder:
-          (context, _) => Stack(
-            fit: StackFit.expand,
-            children: [
-              CustomPaint(
-                painter: _GuaibimMapPainter(pulse: _controller.value),
-                child: const SizedBox.expand(),
-              ),
-              ..._filteredPoints.map(
-                (point) => _TourismMarker(
-                  point: point,
-                  pulse: _controller.value,
-                  compact: !widget.fullscreen,
-                ),
-              ),
-            ],
+    final map = RepaintBoundary(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CustomPaint(
+            painter: const _GuaibimMapPainter(pulse: .45),
+            child: const SizedBox.expand(),
           ),
+          ..._filteredPoints.map(
+            (point) => _TourismMarker(
+              point: point,
+              pulse: .45,
+              compact: !widget.fullscreen,
+            ),
+          ),
+        ],
+      ),
     );
 
     return Card(

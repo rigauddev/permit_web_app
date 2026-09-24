@@ -529,6 +529,31 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getEmailTemplates({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/email-templates'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateEmailTemplates({
+    required String accessToken,
+    required Map<String, dynamic> templates,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/email-templates'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(templates),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<List<Map<String, dynamic>>> listTourismPoints({
     required String accessToken,
   }) async {

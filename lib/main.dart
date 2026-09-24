@@ -17,6 +17,7 @@ import 'presentation/pages/change_password_page.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/home_content_page.dart';
 import 'presentation/pages/content_management_page.dart';
+import 'presentation/pages/email_templates_page.dart';
 import 'presentation/pages/help_page.dart';
 import 'presentation/pages/event_map_page.dart';
 import 'presentation/pages/my_requests_page.dart';
@@ -146,6 +147,12 @@ class _AppRouter extends StatelessWidget {
               user: user,
               allowedRoles: const {'admin', 'gestor_secretaria'},
               child: ContentManagementPage(userType: user?.userType ?? ''),
+            ),
+        AppRoutes.emailTemplates:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin'},
+              child: EmailTemplatesPage(userType: user?.userType ?? ''),
             ),
         AppRoutes.secretarias:
             (context) => _GuardedRoute(

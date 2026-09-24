@@ -126,6 +126,58 @@ class OrlaTest(unittest.TestCase):
         self.assertEqual(managed.status_code, 200)
         self.assertEqual(managed.json()[0]['address'], 'Rua protegida, 10')
 
+    def test_inn_can_approve_only_its_own_tourist_request(self):
+        with self.Session() as db:
+            inn = OrlaInn(name='Pousada da Orla', beachfront=True, approval_status='approved')
+            other_inn = OrlaInn(name='Outra Pousada', beachfront=True, approval_status='approved')
+            db.add_all([inn, other_inn]); db.flush()
+            citizen_role = db.query(RoleModel).filter_by(slug='cidadao').first()
+            inn_user = UserModel(
+                nome='Pousada', senha_hash='test', role=citizen_role,
+                business_category='pousada_hotel', managed_inn_id=inn.id,
+            )
+            guest = UserModel(
+                nome='Turista', senha_hash='test', role=citizen_role,
+                tipo_usuario='turista', tipo_estadia='pousada', pousada_id=inn.id,
+                estadia_inicio='2026-09-20', estadia_fim='2026-09-30',
+                orla_access_requested=True, orla_access_status='solicitado',
+            )
+            other_guest = UserModel(
+                nome='Outro Turista', senha_hash='test', role=citizen_role,
+                tipo_usuario='turista', tipo_estadia='pousada', pousada_id=other_inn.id,
+                orla_access_requested=True, orla_access_status='solicitado',
+            )
+            db.add_all([inn_user, guest, other_guest]); db.flush()
+            self.ids['inn_user'] = inn_user.id
+            self.ids['guest'] = guest.id
+            self.ids['other_guest'] = other_guest.id
+            db.commit()
+        self.current = self.ids['inn_user']
+        requests = self.client.get('/orla/stay-requests')
+        self.assertEqual(requests.status_code, 200)
+        self.assertEqual([item['id'] for item in requests.json()], [self.ids['guest']])
+        approved = self.client.put(
+            f"/orla/stay-requests/{self.ids['guest']}/approval", json={'approved': True},
+        )
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.json()['status'], 'aprovado')
+        self.current = self.ids['guest']
+        notifications = self.client.get('/orla/notifications')
+        self.assertEqual(notifications.status_code, 200)
+        self.assertEqual(notifications.json()[0]['kind'], 'acesso_aprovado')
+        notification_id = notifications.json()[0]['id']
+        self.assertFalse(notifications.json()[0]['is_read'])
+        self.assertTrue(
+            self.client.put(f'/orla/notifications/{notification_id}/read').json()['is_read'],
+        )
+        self.current = self.ids['inn_user']
+        self.assertEqual(
+            self.client.put(
+                f"/orla/stay-requests/{self.ids['other_guest']}/approval", json={'approved': True},
+            ).status_code,
+            404,
+        )
+
     def test_movements_and_revocation(self):
         v = self.register().json()
         self.current = self.ids['operator']

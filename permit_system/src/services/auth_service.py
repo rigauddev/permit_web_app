@@ -26,7 +26,7 @@ from src.schemas.auth_schema import (
     UserSessionResponse,
 )
 from src.schemas.user_schema import UserAdminUpdateRequest, UserCreateRequest, UserResponse, UserSelfUpdateRequest
-from src.services.email_service import build_mfa_email_html, send_email
+from src.services.email_service import build_mfa_email_html, render_configured_email_template, send_email
 from src.services.orla_area import is_inside_orla
 
 
@@ -147,7 +147,8 @@ class AuthService:
         return self._create_session_token(user, client_type)
 
     def start_email_verification(self, email: str, purpose: str = "register") -> EmailVerificationStartResponse:
-        existing_user = self.db.query(UserModel).filter(UserModel.email == email).first()
+        email = (email or '').strip().lower()
+        existing_user = self.db.query(UserModel).filter(func.lower(UserModel.email) == email).first()
         if purpose == "register" and existing_user:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já cadastrado")
 
@@ -220,7 +221,7 @@ class AuthService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Aceite o termo de responsabilidade para criar a conta",
             )
-        email = (payload.email or "").strip() or None
+        email = (payload.email or "").strip().lower() or None
         if email and "@" not in email:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="E-mail inválido")
         if role_slug == "cidadao":
@@ -234,6 +235,8 @@ class AuthService:
             )
             if existing:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CPF/CNPJ já cadastrado")
+            if email and self.db.query(UserModel).filter(func.lower(UserModel.email) == email).first():
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já cadastrado")
         elif not email:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -241,7 +244,7 @@ class AuthService:
             )
         else:
             document = None
-            existing = self.db.query(UserModel).filter(UserModel.email == email).first()
+            existing = self.db.query(UserModel).filter(func.lower(UserModel.email) == email).first()
             if existing:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já cadastrado")
 
@@ -379,6 +382,11 @@ class AuthService:
             user.mfa_email_enabled = bool(payload.mfa_email_enabled)
         self.db.commit()
         self.db.refresh(user)
+        if user.email:
+            subject, text, html = render_configured_email_template(
+                self.db, 'welcome', {'nome': user.nome},
+            )
+            send_email(user.email, subject, text, html)
         return self.to_response(user)
 
     @staticmethod

@@ -74,7 +74,7 @@ class UserModel(Base):
     razao_social = Column(String(255), nullable=True)
     cpf_cnpj = Column(String(18), unique=True, nullable=True, index=True)
     credential_number = Column(String(40), unique=True, nullable=True, index=True)
-    email = Column(String(255), unique=False, nullable=True, index=True)
+    email = Column(String(255), unique=True, nullable=True, index=True)
     senha_hash = Column(String(255), nullable=False)
     telefone = Column(String(20), nullable=True)
     endereco = Column(String(255), nullable=True)

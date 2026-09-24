@@ -27,6 +27,7 @@ class AppScaffold extends StatelessWidget {
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 900;
         final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
+        final contextualAppBar = _contextualAppBar(context, currentRoute);
 
         if (isMobile) {
           return Scaffold(
@@ -40,7 +41,11 @@ class AppScaffold extends StatelessWidget {
             drawerEnableOpenDragGesture: true,
             backgroundColor: backgroundColor,
             body: Column(
-              children: [Expanded(child: body), const _SystemFooter()],
+              children: [
+                if (contextualAppBar != null) contextualAppBar,
+                Expanded(child: body),
+                const _SystemFooter(),
+              ],
             ),
             floatingActionButton: floatingActionButton,
             bottomNavigationBar: _MobileBottomNavigationBar(
@@ -66,7 +71,11 @@ class AppScaffold extends StatelessWidget {
               menu,
               Expanded(
                 child: Column(
-                  children: [Expanded(child: body), const _SystemFooter()],
+                  children: [
+                    if (contextualAppBar != null) contextualAppBar,
+                    Expanded(child: body),
+                    const _SystemFooter(),
+                  ],
                 ),
               ),
             ],
@@ -74,6 +83,52 @@ class AppScaffold extends StatelessWidget {
         );
       },
     );
+  }
+
+  Widget? _contextualAppBar(BuildContext context, String currentRoute) {
+    if (appBar == null || _mainRoutes.contains(currentRoute)) return null;
+    if (appBar is! AppBar) {
+      return SizedBox(height: appBar!.preferredSize.height, child: appBar);
+    }
+
+    final source = appBar! as AppBar;
+    return AppBar(
+      automaticallyImplyLeading: false,
+      leading:
+          source.leading ??
+          BackButton(onPressed: () => _goBack(context, currentRoute)),
+      title: source.title,
+      actions: source.actions,
+      bottom: source.bottom,
+      toolbarHeight: source.toolbarHeight,
+      centerTitle: source.centerTitle,
+      elevation: source.elevation,
+      scrolledUnderElevation: source.scrolledUnderElevation,
+      backgroundColor: source.backgroundColor,
+      foregroundColor: source.foregroundColor,
+      surfaceTintColor: source.surfaceTintColor,
+    );
+  }
+
+  static const _mainRoutes = {
+    AppRoutes.home,
+    AppRoutes.services,
+    AppRoutes.help,
+    AppRoutes.operatorHelp,
+  };
+
+  void _goBack(BuildContext context, String currentRoute) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+      return;
+    }
+    final parent =
+        currentRoute.startsWith('${AppRoutes.orla}/')
+            ? AppRoutes.orla
+            : currentRoute == AppRoutes.orla
+            ? AppRoutes.services
+            : AppRoutes.home;
+    Navigator.pushReplacementNamed(context, parent);
   }
 }
 
@@ -196,7 +251,11 @@ class _SystemFooter extends StatelessWidget {
             style: textStyle,
             textAlign: TextAlign.center,
           ),
-          Text('Diretor: Rael Costa', style: textStyle, textAlign: TextAlign.center),
+          Text(
+            'Diretor: Rael Costa',
+            style: textStyle,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
