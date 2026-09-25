@@ -60,10 +60,7 @@ class _ReceitaMunicipalServicesPageState
   bool _favoriteLoading = true;
   Set<String> _favoriteServices = {};
   List<Map<String, dynamic>> _eventTypes = [];
-  Set<String> _activeServices = {
-    favoriteEventPermitServiceKey,
-    favoriteOrlaServiceKey,
-  };
+  Set<String> _activeServices = {favoriteOrlaServiceKey};
 
   @override
   void initState() {
@@ -169,65 +166,15 @@ class _ReceitaMunicipalServicesPageState
                 const SizedBox(height: 6),
                 Text(
                   isCitizen
-                      ? 'Solicite alvarás de eventos e cadastre veículos para acesso à orla.'
-                      : 'Acompanhe as solicitações relacionadas ao serviço de Alvará de Evento.',
+                      ? 'Cadastre veículos, gere o QR Code e solicite o acesso à Orla de Guaibim.'
+                      : 'Acesse as funcionalidades vinculadas ao serviço de Acesso à Orla.',
                 ),
                 const SizedBox(height: 18),
                 _ServiceCategorySection(
-                  title: 'Prefeitura',
+                  title: 'Acesso à Orla',
                   description:
-                      'Serviços centralizados pela Prefeitura e acompanhados por mais de uma secretaria.',
+                      'Serviço digital da SEMOP para autorização e fiscalização da Orla de Guaibim.',
                   children: [
-                    if (_activeServices.contains(
-                          favoriteEventPermitServiceKey,
-                        ) ||
-                        _activeServices.contains(
-                          favoriteBusinessPermitServiceKey,
-                        ))
-                      _PermitGroupCard(
-                        eventActive: _activeServices.contains(
-                          favoriteEventPermitServiceKey,
-                        ),
-                        businessActive: _activeServices.contains(
-                          favoriteBusinessPermitServiceKey,
-                        ),
-                        loading: _loading,
-                        favoriteLoading: _favoriteLoading,
-                        eventFavorite: _favoriteServices.contains(
-                          favoriteEventPermitServiceKey,
-                        ),
-                        businessFavorite: _favoriteServices.contains(
-                          favoriteBusinessPermitServiceKey,
-                        ),
-                        onOpenEvent: _openEventPermit,
-                        onOpenBusiness:
-                            () => _showServiceUnavailable(
-                              'Alvará de Funcionamento',
-                            ),
-                        onToggleEvent:
-                            () =>
-                                _toggleFavorite(favoriteEventPermitServiceKey),
-                        onToggleBusiness:
-                            () => _toggleFavorite(
-                              favoriteBusinessPermitServiceKey,
-                            ),
-                      ),
-                    if (_activeServices.contains(favoriteIptuServiceKey))
-                      _ServiceCard(
-                        icon: Icons.home_work_outlined,
-                        title: 'IPTU',
-                        tag: 'Prefeitura',
-                        description:
-                            'Consulta e serviços relacionados ao IPTU.',
-                        loading: false,
-                        favoriteLoading: _favoriteLoading,
-                        isFavorite: _favoriteServices.contains(
-                          favoriteIptuServiceKey,
-                        ),
-                        onToggleFavorite:
-                            () => _toggleFavorite(favoriteIptuServiceKey),
-                        onTap: () => _showServiceUnavailable('IPTU'),
-                      ),
                     if (_activeServices.contains(favoriteOrlaServiceKey))
                       _ServiceCard(
                         icon: Icons.beach_access,

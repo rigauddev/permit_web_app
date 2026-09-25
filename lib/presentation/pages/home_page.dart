@@ -60,7 +60,13 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
     try {
       final services = await _api.listServiceConfigs(accessToken: token);
       final active =
-          services.where((service) => service['is_active'] == true).toList();
+          services
+              .where(
+                (service) =>
+                    service['is_active'] == true &&
+                    service['key']?.toString() == 'acesso_orla',
+              )
+              .toList();
       return active.isEmpty ? _fallbackServices : active;
     } catch (_) {
       return _fallbackServices;
@@ -117,12 +123,6 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
 
   static const _fallbackServices = [
     {
-      'key': 'alvara_evento',
-      'title': 'Alvará de Evento',
-      'description': 'Autorização para festas e eventos.',
-      'is_active': true,
-    },
-    {
       'key': 'acesso_orla',
       'title': 'Acesso à Orla',
       'description': 'Cadastro de veículos para a Orla de Guaibim.',
@@ -139,16 +139,6 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
       'image_url':
           'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80',
       'display_order': 0,
-      'is_active': true,
-    },
-    {
-      'scope': 'prefeitura',
-      'title': 'Central de Eventos',
-      'body':
-          'Solicite alvará de evento e acompanhe as etapas em um único sistema.',
-      'image_url':
-          'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=1200&q=80',
-      'display_order': 1,
       'is_active': true,
     },
   ];
@@ -560,11 +550,6 @@ class _InternalHome extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              _InternalOperationsPreview(
-                contentSettingsFuture: contentSettingsFuture,
-              ),
-              const SizedBox(height: 24),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final crossAxisCount =
@@ -581,27 +566,6 @@ class _InternalHome extends StatelessWidget {
                     childAspectRatio: constraints.maxWidth < 680 ? 2.7 : 1.55,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
-                      const _HomeActionCard(
-                        icon: Icons.assignment_turned_in_outlined,
-                        title: 'Solicitações da secretaria',
-                        description:
-                            'Analise aprovações, recusas e pedidos de correção pertinentes ao seu órgão.',
-                        route: '/secretaria-requests',
-                      ),
-                      const _HomeActionCard(
-                        icon: Icons.fact_check_outlined,
-                        title: 'Vistorias e pendências',
-                        description:
-                            'Acompanhe exigências técnicas, documentos e retornos do cidadão.',
-                        route: '/inspections',
-                      ),
-                      const _HomeActionCard(
-                        icon: Icons.qr_code_scanner_outlined,
-                        title: 'Verificar evento',
-                        description:
-                            'Leia o QR Code do alvará e registre a fiscalização do evento autorizado.',
-                        route: '/verificar-evento',
-                      ),
                       if (_canAccessOrla)
                         const _HomeActionCard(
                           icon: Icons.beach_access,
@@ -610,13 +574,6 @@ class _InternalHome extends StatelessWidget {
                               'Valide veículos cadastrados por QR Code ou placa e registre entradas.',
                           route: '/orla',
                         ),
-                      const _HomeActionCard(
-                        icon: Icons.analytics_outlined,
-                        title: 'Relatórios',
-                        description:
-                            'Analise eventos por período, ano, tipo, secretaria e frequência mensal.',
-                        route: '/reports',
-                      ),
                       if (_canManageUsers)
                         const _HomeActionCard(
                           icon: Icons.people_outline,
@@ -640,15 +597,6 @@ class _InternalHome extends StatelessWidget {
                           description:
                               'Crie até 5 cards de carrossel para sua secretaria ou prefeitura.',
                           route: '/home-content',
-                        ),
-                      if (user?.role == 'admin' ||
-                          user?.role == 'gestor_secretaria')
-                        const _HomeActionCard(
-                          icon: Icons.add_location_alt_outlined,
-                          title: 'Mapas e conteúdo turístico',
-                          description:
-                              'Edite pontos turísticos, rotas e responsáveis pelo mapa de eventos.',
-                          route: AppRoutes.contentManagement,
                         ),
                       if (_canManageUsers)
                         const _HomeActionCard(

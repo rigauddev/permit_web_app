@@ -78,6 +78,7 @@ class _OrlaPageState extends State<OrlaPage> {
   final _search = TextEditingController();
   final _reportStart = TextEditingController();
   final _reportEnd = TextEditingController();
+  DateTimeRange? _reportPeriod;
   final _bannerTitle = TextEditingController();
   final _bannerBody = TextEditingController();
   Map<String, dynamic>? _me;
@@ -261,7 +262,9 @@ class _OrlaPageState extends State<OrlaPage> {
             maxWidth: widget.section == OrlaSection.access ? 1440 : 1180,
           ),
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(
+              MediaQuery.sizeOf(context).width < 600 ? 12 : 20,
+            ),
             children: [
               if (widget.section == OrlaSection.access && !_staff)
                 _orlaServiceBanner(context)
@@ -322,30 +325,28 @@ class _OrlaPageState extends State<OrlaPage> {
                     'Confira os dados antes de cadastrar. Veículos não podem ser editados nem excluídos.',
                   ),
                   const SizedBox(height: 12),
-                  if (widget.section == OrlaSection.access)
-                    FilledButton.icon(
-                      onPressed:
-                          _busy ||
-                                  vehicles.length >=
-                                      (_me!['vehicle_limit'] as int)
-                              ? null
-                              : _register,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Cadastrar veículo'),
-                    ),
-                  if (widget.section == OrlaSection.access)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            () => Navigator.pushReplacementNamed(
-                              context,
-                              '/orla/veiculos',
-                            ),
-                        icon: const Icon(Icons.directions_car),
-                        label: const Text('Ver meus veículos'),
-                      ),
-                    ),
+                  // FilledButton.icon(
+                  //   onPressed:
+                  //       _busy ||
+                  //               vehicles.length >=
+                  //                   (_me!['vehicle_limit'] as int)
+                  //           ? null
+                  //           : _register,
+                  //   icon: const Icon(Icons.add),
+                  //   label: const Text('Cadastrar veículo'),
+                  // ),
+                  // Padding(
+                  //   padding: const EdgeInsets.only(top: 8),
+                  //   child: OutlinedButton.icon(
+                  //     onPressed:
+                  //         () => Navigator.pushReplacementNamed(
+                  //           context,
+                  //           '/orla/veiculos',
+                  //         ),
+                  //     icon: const Icon(Icons.directions_car),
+                  //     label: const Text('Ver meus veículos'),
+                  //   ),
+                  // ),
                   if (vehicles.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(24),
@@ -776,52 +777,61 @@ class _OrlaPageState extends State<OrlaPage> {
       showDragHandle: true,
       isScrollControlled: true,
       builder:
-          (context) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Detalhes do acesso • ${v['plate'] ?? ''}',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w900),
+          (context) => FractionallySizedBox(
+            heightFactor: .88,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Detalhes do acesso • ${v['plate'] ?? ''}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _AccessStatusChip.fromData(v),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ...details,
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _run(() => _history(v));
+                                  },
+                                  icon: const Icon(Icons.history),
+                                  label: const Text('Histórico de entradas'),
+                                ),
+                                if (own)
+                                  FilledButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _credential(v);
+                                    },
+                                    icon: const Icon(Icons.qr_code),
+                                    label: const Text('QR Code / imprimir'),
+                                  ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      _AccessStatusChip.fromData(v),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ...details,
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _run(() => _history(v));
-                        },
-                        icon: const Icon(Icons.history),
-                        label: const Text('Histórico de entradas'),
-                      ),
-                      if (own)
-                        FilledButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _credential(v);
-                          },
-                          icon: const Icon(Icons.qr_code),
-                          label: const Text('QR Code / imprimir'),
-                        ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1552,40 +1562,106 @@ class _OrlaPageState extends State<OrlaPage> {
     ),
   );
 
+  String _formatReportDate(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+
+  String _reportDateLabel() {
+    final period = _reportPeriod;
+    if (period == null) return 'Todo o período';
+    return '${_formatReportDate(period.start)} até ${_formatReportDate(period.end)}';
+  }
+
+  Future<void> _selectReportPeriod() async {
+    final now = DateTime.now();
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 2, 12, 31),
+      initialDateRange: _reportPeriod,
+      helpText: 'Selecione o período do relatório',
+      saveText: 'Usar período',
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _reportPeriod = selected;
+      _reportStart.text = selected.start.toIso8601String().substring(0, 10);
+      _reportEnd.text = selected.end.toIso8601String().substring(0, 10);
+    });
+  }
+
   Widget _reportFilters() => Card(
     child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        crossAxisAlignment: WrapCrossAlignment.end,
-        children: [
-          SizedBox(
-            width: 180,
-            child: TextField(
-              controller: _reportStart,
-              decoration: const InputDecoration(
-                labelText: 'Início do período',
-                hintText: '2026-01-01',
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 180,
-            child: TextField(
-              controller: _reportEnd,
-              decoration: const InputDecoration(
-                labelText: 'Fim do período',
-                hintText: '2026-12-31',
-              ),
-            ),
-          ),
-          FilledButton.icon(
+      padding: const EdgeInsets.all(14),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+          final periodButton = OutlinedButton.icon(
+            onPressed: _busy ? null : _selectReportPeriod,
+            icon: const Icon(Icons.date_range_outlined),
+            label: Text(_reportDateLabel(), overflow: TextOverflow.ellipsis),
+          );
+          final applyButton = FilledButton.icon(
             onPressed: _busy ? null : () => _run(_load),
             icon: const Icon(Icons.filter_alt_outlined),
-            label: const Text('Filtrar relatórios'),
-          ),
-        ],
+            label: const Text('Aplicar filtro'),
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Período do dashboard',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              const Text('Escolha as datas para atualizar os indicadores.'),
+              const SizedBox(height: 12),
+              if (compact) ...[
+                SizedBox(width: double.infinity, child: periodButton),
+                if (_reportPeriod != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed:
+                          _busy
+                              ? null
+                              : () => setState(() {
+                                _reportPeriod = null;
+                                _reportStart.clear();
+                                _reportEnd.clear();
+                              }),
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text('Limpar período'),
+                    ),
+                  ),
+                SizedBox(width: double.infinity, child: applyButton),
+              ] else
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    periodButton,
+                    if (_reportPeriod != null)
+                      TextButton.icon(
+                        onPressed:
+                            _busy
+                                ? null
+                                : () => setState(() {
+                                  _reportPeriod = null;
+                                  _reportStart.clear();
+                                  _reportEnd.clear();
+                                }),
+                        icon: const Icon(Icons.close, size: 18),
+                        label: const Text('Limpar'),
+                      ),
+                    applyButton,
+                  ],
+                ),
+            ],
+          );
+        },
       ),
     ),
   );
@@ -1718,82 +1794,89 @@ class _OrlaPageState extends State<OrlaPage> {
       showDragHandle: true,
       isScrollControlled: true,
       builder:
-          (context) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Detalhes do hóspede',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w900),
+          (context) => FractionallySizedBox(
+            heightFactor: .88,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Detalhes do hóspede',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _AccessStatusChip.fromData(pass),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _DetailLine('Nome', pass['guest_name']),
+                            _DetailLine('Documento', pass['guest_document']),
+                            _DetailLine('Telefone', pass['guest_phone']),
+                            _DetailLine('Pousada/Hotel', pass['inn_name']),
+                            _DetailLine(
+                              'Período',
+                              '${pass['stay_start']} até ${pass['stay_end']}',
+                            ),
+                            _DetailLine(
+                              'Veículo',
+                              '${pass['vehicle_plate']} • ${pass['vehicle_brand']} ${pass['vehicle_model']} • ${pass['vehicle_color']}',
+                            ),
+                            if (pass['is_excursion'] == true) ...[
+                              _DetailLine(
+                                'Excursão',
+                                '${pass['guest_count'] ?? '-'} hóspedes',
+                              ),
+                              _DetailLine(
+                                'Responsável/motorista',
+                                pass['excursion_responsible_name'],
+                              ),
+                              _DetailLine(
+                                'Telefone do responsável',
+                                pass['excursion_responsible_phone'],
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed:
+                                      pass['status'] == 'authorized'
+                                          ? () {
+                                            Navigator.pop(context);
+                                            _guestCredential(pass);
+                                          }
+                                          : null,
+                                  icon: const Icon(Icons.qr_code),
+                                  label: const Text('Ver QR Code'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      pass['status'] == 'authorized'
+                                          ? () {
+                                            Navigator.pop(context);
+                                            _sendGuestWhatsApp(pass);
+                                          }
+                                          : null,
+                                  icon: const Icon(Icons.chat_outlined),
+                                  label: const Text('Enviar WhatsApp'),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      _AccessStatusChip.fromData(pass),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _DetailLine('Nome', pass['guest_name']),
-                  _DetailLine('Documento', pass['guest_document']),
-                  _DetailLine('Telefone', pass['guest_phone']),
-                  _DetailLine('Pousada/Hotel', pass['inn_name']),
-                  _DetailLine(
-                    'Período',
-                    '${pass['stay_start']} até ${pass['stay_end']}',
-                  ),
-                  _DetailLine(
-                    'Veículo',
-                    '${pass['vehicle_plate']} • ${pass['vehicle_brand']} ${pass['vehicle_model']} • ${pass['vehicle_color']}',
-                  ),
-                  if (pass['is_excursion'] == true) ...[
-                    _DetailLine(
-                      'Excursão',
-                      '${pass['guest_count'] ?? '-'} hóspedes',
-                    ),
-                    _DetailLine(
-                      'Responsável/motorista',
-                      pass['excursion_responsible_name'],
-                    ),
-                    _DetailLine(
-                      'Telefone do responsável',
-                      pass['excursion_responsible_phone'],
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        onPressed:
-                            pass['status'] == 'authorized'
-                                ? () {
-                                  Navigator.pop(context);
-                                  _guestCredential(pass);
-                                }
-                                : null,
-                        icon: const Icon(Icons.qr_code),
-                        label: const Text('Ver QR Code'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed:
-                            pass['status'] == 'authorized'
-                                ? () {
-                                  Navigator.pop(context);
-                                  _sendGuestWhatsApp(pass);
-                                }
-                                : null,
-                        icon: const Icon(Icons.chat_outlined),
-                        label: const Text('Enviar WhatsApp'),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -3235,54 +3318,80 @@ class _OrlaDashboard extends StatelessWidget {
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _metric('Usuários', summary['users']),
-                _metric('Turistas', summary['tourists']),
-                _metric('Pousadas', summary['inns']),
-                _metric(
-                  'Acima do estacionamento',
-                  summary['inns_over_capacity'],
-                ),
-                _metric('Excursões', summary['excursions']),
-                _metric('Veículos', summary['vehicles']),
-                _metric(
-                  'Mês pico',
-                  summary['busiest_month_total'],
-                  subtitle: summary['busiest_month']?.toString(),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 600;
+                final metricWidth =
+                    compact ? (constraints.maxWidth - 10) / 2 : 145.0;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _metric('Usuários', summary['users'], width: metricWidth),
+                    _metric(
+                      'Turistas',
+                      summary['tourists'],
+                      width: metricWidth,
+                    ),
+                    _metric('Pousadas', summary['inns'], width: metricWidth),
+                    _metric(
+                      'Acima do estacionamento',
+                      summary['inns_over_capacity'],
+                      width: metricWidth,
+                    ),
+                    _metric(
+                      'Excursões',
+                      summary['excursions'],
+                      width: metricWidth,
+                    ),
+                    _metric(
+                      'Veículos',
+                      summary['vehicles'],
+                      width: metricWidth,
+                    ),
+                    _metric(
+                      'Mês pico',
+                      summary['busiest_month_total'],
+                      subtitle: summary['busiest_month']?.toString(),
+                      width: metricWidth,
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 18),
             LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 760;
+                final chartWidth = compact ? constraints.maxWidth : 455.0;
                 final charts = [
                   _chartCard(
                     context,
                     'Tipo de usuário',
                     _PieChart(values: userType),
                     userType,
+                    width: chartWidth,
                   ),
                   _chartCard(
                     context,
                     'Turistas por mês',
                     _LineChart(values: touristsByMonth),
                     touristsByMonth,
+                    width: chartWidth,
                   ),
                   _chartCard(
                     context,
                     'Pousadas por status',
                     _PieChart(values: innsStatus),
                     innsStatus,
+                    width: chartWidth,
                   ),
                   _chartCard(
                     context,
                     'Turistas por pousada',
                     _BarList(values: touristsByInn),
                     touristsByInn,
+                    width: chartWidth,
                   ),
                 ];
                 if (compact) {
@@ -3327,8 +3436,13 @@ class _OrlaDashboard extends StatelessWidget {
         .toList();
   }
 
-  Widget _metric(String label, dynamic value, {String? subtitle}) => SizedBox(
-    width: 145,
+  Widget _metric(
+    String label,
+    dynamic value, {
+    String? subtitle,
+    double? width,
+  }) => SizedBox(
+    width: width ?? 145,
     child: DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFF2F7F2),
@@ -3340,14 +3454,24 @@ class _OrlaDashboard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 8),
             Text(
               '${value ?? 0}',
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
             ),
             if (subtitle != null && subtitle.isNotEmpty)
-              Text(subtitle, style: const TextStyle(fontSize: 12)),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
           ],
         ),
       ),
@@ -3408,68 +3532,104 @@ class _OrlaDashboard extends StatelessWidget {
                         guestCapacity == null
                             ? ''
                             : ' • hóspedes: $guestOccupied de $guestCapacity${guestsExceeded ? ' • excedeu $guestsExceededBy' : ''}';
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor:
-                            exceeded
-                                ? const Color(0xFFFFE0B2)
-                                : const Color(0xFFE8F5E9),
-                        child: Icon(
-                          exceeded
-                              ? Icons.warning_amber_rounded
-                              : Icons.hotel_outlined,
-                          color:
-                              exceeded
-                                  ? const Color(0xFFE65100)
-                                  : const Color(0xFF2E7D32),
-                        ),
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FBF7),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      title: Text(inn['name']?.toString() ?? 'Pousada'),
-                      subtitle: Text(
-                        capacity == null
-                            ? 'Veículos: $occupied • vagas de estacionamento não informadas$guestText'
-                            : 'Veículos: $occupied de $capacity vagas${exceeded ? ' • excedeu $exceededBy' : ''}$guestText',
-                      ),
-                      trailing: Wrap(
-                        spacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Chip(
-                            visualDensity: VisualDensity.compact,
-                            label: Text(
-                              beachfront
-                                  ? approvalStatus == 'approved'
-                                      ? 'Orla validada'
-                                      : 'Orla pendente'
-                                  : 'Fora da orla',
-                            ),
-                            backgroundColor:
-                                beachfront
-                                    ? const Color(0xFFE8F5E9)
-                                    : const Color(0xFFF5F5F5),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                backgroundColor:
+                                    exceeded
+                                        ? const Color(0xFFFFE0B2)
+                                        : const Color(0xFFE8F5E9),
+                                child: Icon(
+                                  exceeded
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.hotel_outlined,
+                                  color:
+                                      exceeded
+                                          ? const Color(0xFFE65100)
+                                          : const Color(0xFF2E7D32),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      inn['name']?.toString() ?? 'Pousada',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      capacity == null
+                                          ? 'Veículos: $occupied • vagas de estacionamento não informadas$guestText'
+                                          : 'Veículos: $occupied de $capacity vagas${exceeded ? ' • excedeu $exceededBy' : ''}$guestText',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          if (exceeded || guestsExceeded)
-                            const Text(
-                              'Excedeu',
-                              style: TextStyle(
-                                color: Color(0xFFE65100),
-                                fontWeight: FontWeight.w800,
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Chip(
+                                visualDensity: VisualDensity.compact,
+                                label: Text(
+                                  beachfront
+                                      ? approvalStatus == 'approved'
+                                          ? 'Orla validada'
+                                          : 'Orla pendente'
+                                      : 'Fora da orla',
+                                ),
+                                backgroundColor:
+                                    beachfront
+                                        ? const Color(0xFFE8F5E9)
+                                        : const Color(0xFFF5F5F5),
                               ),
-                            ),
-                          if (onValidateInn != null && innId != null)
-                            TextButton.icon(
-                              onPressed:
-                                  () => onValidateInn!(innId, !beachfront),
-                              icon: Icon(
-                                beachfront
-                                    ? Icons.location_off_outlined
-                                    : Icons.add_location_alt_outlined,
-                              ),
-                              label: Text(
-                                beachfront ? 'Remover orla' : 'Validar na orla',
-                              ),
-                            ),
+                              if (exceeded || guestsExceeded)
+                                const Text(
+                                  'Excedeu',
+                                  style: TextStyle(
+                                    color: Color(0xFFE65100),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              if (onValidateInn != null && innId != null)
+                                TextButton.icon(
+                                  onPressed:
+                                      () => onValidateInn!(innId, !beachfront),
+                                  icon: Icon(
+                                    beachfront
+                                        ? Icons.location_off_outlined
+                                        : Icons.add_location_alt_outlined,
+                                  ),
+                                  label: Text(
+                                    beachfront
+                                        ? 'Remover orla'
+                                        : 'Validar na orla',
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                     );
@@ -3484,9 +3644,10 @@ class _OrlaDashboard extends StatelessWidget {
     BuildContext context,
     String title,
     Widget chart,
-    Map<String, double> legend,
-  ) => SizedBox(
-    width: 455,
+    Map<String, double> legend, {
+    double? width,
+  }) => SizedBox(
+    width: width ?? 455,
     child: DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -3604,27 +3765,34 @@ class _LegendChip extends StatelessWidget {
   final double value;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: .10),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: color.withValues(alpha: .28)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          '$label: ${value.toInt()}',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-      ],
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 260),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: .28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '$label: ${value.toInt()}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -3774,27 +3942,34 @@ class _AccessStatusChip extends StatelessWidget {
   final IconData icon;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: backgroundColor,
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: foregroundColor.withValues(alpha: 0.24)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: foregroundColor),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            color: foregroundColor,
-            fontWeight: FontWeight.w800,
-            fontSize: 12,
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 260),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: foregroundColor.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: foregroundColor),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foregroundColor,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
@@ -4086,7 +4261,14 @@ class _DetailLine extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+          SizedBox(
+            width: double.infinity,
+            child: Text(
+              text,
+              softWrap: true,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
     );
