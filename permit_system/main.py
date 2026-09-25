@@ -11,10 +11,16 @@ from src.api.permit_routes import credential_router, router as permit_router
 from src.api.permission_routes import router as permission_router
 from src.api.secretaria_routes import router as secretaria_router
 from src.api.upload_routes import router as upload_router
+from src.core.request_logging import log_request
 from src.infra.database.mysql_db import create_tables
 
 
 app = FastAPI(title="Permit System API", version="0.1.0")
+
+
+@app.middleware("http")
+async def request_error_logging(request, call_next):
+    return await log_request(request, call_next)
 
 default_cors = "http://localhost:8081,http://127.0.0.1:8081,http://localhost:3000,http://127.0.0.1:3000"
 public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip()

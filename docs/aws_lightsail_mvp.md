@@ -145,6 +145,13 @@ Em VPS pequena, mantenha `RUN_SEED=false` para a API subir rápido. Depois que o
 docker compose -f docker-compose.runtime.yml exec api python scripts/seed.py
 ```
 
+Erros HTTP da API são preservados no volume `permit_logs_data`, sem gravar
+corpo de requisições, senhas ou tokens. Para consultar os registros:
+
+```bash
+docker compose -f docker-compose.runtime.yml exec api sh -c 'tail -n 100 /app/logs/api-errors.jsonl'
+```
+
 Validar localmente na instância:
 
 ```bash
