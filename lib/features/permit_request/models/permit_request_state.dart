@@ -11,7 +11,9 @@ class PermitRequestState {
   final List<Map<String, dynamic>> questions;
   final List<Map<String, dynamic>> eventTypes;
   final List<PlatformFile> attachments;
+  final Map<String, PlatformFile> documentAttachments;
   final bool isSubmitting;
+  final String? uploadProgressMessage;
   final String? submittedProtocol;
 
   PermitRequestState({
@@ -25,7 +27,9 @@ class PermitRequestState {
     required this.questions,
     required this.eventTypes,
     this.attachments = const [],
+    this.documentAttachments = const {},
     this.isSubmitting = false,
+    this.uploadProgressMessage,
     this.submittedProtocol,
   });
 
@@ -40,6 +44,7 @@ class PermitRequestState {
     questions: [],
     eventTypes: [],
     attachments: [],
+    documentAttachments: {},
   );
 
   PermitRequestState copyWith({
@@ -53,7 +58,10 @@ class PermitRequestState {
     List<Map<String, dynamic>>? questions,
     List<Map<String, dynamic>>? eventTypes,
     List<PlatformFile>? attachments,
+    Map<String, PlatformFile>? documentAttachments,
     bool? isSubmitting,
+    String? uploadProgressMessage,
+    bool clearUploadProgressMessage = false,
     String? submittedProtocol,
   }) {
     return PermitRequestState(
@@ -67,7 +75,12 @@ class PermitRequestState {
       questions: questions ?? this.questions,
       eventTypes: eventTypes ?? this.eventTypes,
       attachments: attachments ?? this.attachments,
+      documentAttachments: documentAttachments ?? this.documentAttachments,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      uploadProgressMessage:
+          clearUploadProgressMessage
+              ? null
+              : uploadProgressMessage ?? this.uploadProgressMessage,
       submittedProtocol: submittedProtocol ?? this.submittedProtocol,
     );
   }

@@ -1,11 +1,20 @@
 import sys
 from datetime import date, datetime, timedelta, timezone
+import os
 from pathlib import Path
+import re
+from zipfile import ZipFile
+from xml.etree import ElementTree as ET
 
 from sqlalchemy import inspect, text
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT_DIR))
+
+HISTORICAL_EVENTS_XLSX_PATH = os.getenv(
+    "HISTORICAL_EVENTS_XLSX_PATH",
+    str(ROOT_DIR / "private" / "Planilha_de_solicitacao_de_eventos.xlsx"),
+)
 
 from src.core.security import create_event_credential_token, hash_password, hash_token
 from src.infra.database.models import (
@@ -97,6 +106,7 @@ ROLE_PERMISSIONS = {
 }
 
 SECRETARIAS = [
+    ("semop", "SEMOP", None, "SEMOP — Acesso à Orla de Guaibim"),
     ("desenvolvimento_economico", "Secretaria de Desenvolvimento Econômico", "sde@valenca.ba.gov.br", "Coordenação da Central de Eventos"),
     ("meio_ambiente", "Secretaria de Meio Ambiente", "meioambiente@valenca.ba.gov.br", "Responsabilidade ambiental"),
     ("infraestrutura", "Secretaria de Infraestrutura", "infraestrutura@valenca.ba.gov.br", "Análise técnica de estruturas"),
@@ -282,11 +292,34 @@ def ensure_user_columns():
     migrations = {
         "foto_usuario_url": "ALTER TABLE usuarios ADD COLUMN foto_usuario_url VARCHAR(500) NULL",
         "foto_usuario_nome": "ALTER TABLE usuarios ADD COLUMN foto_usuario_nome VARCHAR(255) NULL",
+        "credential_number": "ALTER TABLE usuarios ADD COLUMN credential_number VARCHAR(40) NULL",
+        "documento_identificacao_url": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_url VARCHAR(500) NULL",
+        "documento_identificacao_nome": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_nome VARCHAR(255) NULL",
+        "documento_identificacao_tipo": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_tipo VARCHAR(50) NULL",
         "comprovante_residencia_url": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_url VARCHAR(500) NULL",
         "comprovante_residencia_nome": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_nome VARCHAR(255) NULL",
         "comprovante_residencia_tipo": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_tipo VARCHAR(50) NULL",
         "comprovante_residencia_status": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_status VARCHAR(50) NOT NULL DEFAULT 'pendente_validacao'",
         "comprovante_residencia_observacao": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_observacao TEXT NULL",
+        "alvara_funcionamento_url": "ALTER TABLE usuarios ADD COLUMN alvara_funcionamento_url VARCHAR(500) NULL",
+        "alvara_funcionamento_nome": "ALTER TABLE usuarios ADD COLUMN alvara_funcionamento_nome VARCHAR(255) NULL",
+        "must_change_password": "ALTER TABLE usuarios ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0",
+        "cep": "ALTER TABLE usuarios ADD COLUMN cep VARCHAR(9) NULL",
+        "endereco_latitude": "ALTER TABLE usuarios ADD COLUMN endereco_latitude VARCHAR(40) NULL",
+        "endereco_longitude": "ALTER TABLE usuarios ADD COLUMN endereco_longitude VARCHAR(40) NULL",
+        "tipo_usuario": "ALTER TABLE usuarios ADD COLUMN tipo_usuario VARCHAR(20) NOT NULL DEFAULT 'morador'",
+        "business_category": "ALTER TABLE usuarios ADD COLUMN business_category VARCHAR(40) NULL",
+        "managed_inn_id": "ALTER TABLE usuarios ADD COLUMN managed_inn_id INTEGER NULL",
+        "tipo_estadia": "ALTER TABLE usuarios ADD COLUMN tipo_estadia VARCHAR(30) NULL",
+        "estadia_endereco": "ALTER TABLE usuarios ADD COLUMN estadia_endereco VARCHAR(255) NULL",
+        "estadia_cep": "ALTER TABLE usuarios ADD COLUMN estadia_cep VARCHAR(9) NULL",
+        "estadia_latitude": "ALTER TABLE usuarios ADD COLUMN estadia_latitude VARCHAR(40) NULL",
+        "estadia_longitude": "ALTER TABLE usuarios ADD COLUMN estadia_longitude VARCHAR(40) NULL",
+        "estadia_inicio": "ALTER TABLE usuarios ADD COLUMN estadia_inicio VARCHAR(10) NULL",
+        "estadia_fim": "ALTER TABLE usuarios ADD COLUMN estadia_fim VARCHAR(10) NULL",
+        "pousada_id": "ALTER TABLE usuarios ADD COLUMN pousada_id INTEGER NULL",
+        "orla_access_requested": "ALTER TABLE usuarios ADD COLUMN orla_access_requested BOOLEAN NOT NULL DEFAULT 0",
+        "orla_access_status": "ALTER TABLE usuarios ADD COLUMN orla_access_status VARCHAR(30) NOT NULL DEFAULT 'nao_solicitado'",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -302,9 +335,14 @@ def ensure_user_columns():
             connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN cpf_cnpj VARCHAR(18) NULL"))
             connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN email VARCHAR(255) NULL"))
             connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN mfa_email_enabled BOOLEAN NOT NULL DEFAULT 0"))
+            connection.execute(text("CREATE UNIQUE INDEX ux_usuarios_credential_number ON usuarios (credential_number)"))
         except Exception:
             pass
         connection.execute(text("UPDATE usuarios SET mfa_email_enabled = 0 WHERE mfa_email_enabled IS NULL"))
+        connection.execute(text("UPDATE usuarios SET must_change_password = 0 WHERE must_change_password IS NULL"))
+        connection.execute(text("UPDATE usuarios SET tipo_usuario = 'morador' WHERE tipo_usuario IS NULL"))
+        connection.execute(text("UPDATE usuarios SET orla_access_requested = 0 WHERE orla_access_requested IS NULL"))
+        connection.execute(text("UPDATE usuarios SET orla_access_status = 'nao_solicitado' WHERE orla_access_status IS NULL"))
 
 
 def ensure_question_definition_columns():
@@ -321,6 +359,7 @@ def ensure_question_definition_columns():
         "display_order": "ALTER TABLE question_definitions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
         "vistoria_exige_foto": "ALTER TABLE question_definitions ADD COLUMN vistoria_exige_foto BOOLEAN NOT NULL DEFAULT 0",
         "event_type_keys": "ALTER TABLE question_definitions ADD COLUMN event_type_keys JSON NULL",
+        "opcoes_resposta": "ALTER TABLE question_definitions ADD COLUMN opcoes_resposta JSON NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -335,6 +374,10 @@ def ensure_event_credential_columns():
     columns = {column["name"] for column in inspector.get_columns("credenciais_evento")}
     migrations = {
         "verified_at": "ALTER TABLE credenciais_evento ADD COLUMN verified_at DATETIME NULL",
+        "verified_by": "ALTER TABLE credenciais_evento ADD COLUMN verified_by INTEGER NULL",
+        "verified_secretaria": "ALTER TABLE credenciais_evento ADD COLUMN verified_secretaria VARCHAR(120) NULL",
+        "verification_status": "ALTER TABLE credenciais_evento ADD COLUMN verification_status VARCHAR(50) NULL",
+        "verification_notes": "ALTER TABLE credenciais_evento ADD COLUMN verification_notes TEXT NULL",
         "verification_count": "ALTER TABLE credenciais_evento ADD COLUMN verification_count INTEGER NOT NULL DEFAULT 0",
     }
     with engine.begin() as connection:
@@ -356,6 +399,41 @@ def ensure_requirement_inspection_columns():
         "inspection_scheduled_time": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_time VARCHAR(5) NULL",
         "inspection_status": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_status VARCHAR(50) NOT NULL DEFAULT 'nao_agendada'",
         "inspection_result": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_result JSON NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
+def ensure_orla_vehicle_columns():
+    inspector = inspect(engine)
+    if "orla_vehicles" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("orla_vehicles")}
+    migrations = {
+        "brand": "ALTER TABLE orla_vehicles ADD COLUMN brand VARCHAR(80) NOT NULL DEFAULT 'Nao informado'",
+        "establishment_name": "ALTER TABLE orla_vehicles ADD COLUMN establishment_name VARCHAR(150) NULL",
+        "is_excursion": "ALTER TABLE orla_vehicles ADD COLUMN is_excursion BOOLEAN NOT NULL DEFAULT 0",
+        "driver_name": "ALTER TABLE orla_vehicles ADD COLUMN driver_name VARCHAR(150) NULL",
+        "driver_document": "ALTER TABLE orla_vehicles ADD COLUMN driver_document VARCHAR(30) NULL",
+        "driver_phone": "ALTER TABLE orla_vehicles ADD COLUMN driver_phone VARCHAR(30) NULL",
+        "passengers_count": "ALTER TABLE orla_vehicles ADD COLUMN passengers_count INTEGER NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
+def ensure_orla_inn_columns():
+    inspector = inspect(engine)
+    if "orla_inns" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("orla_inns")}
+    migrations = {
+        "capacity": "ALTER TABLE orla_inns ADD COLUMN capacity INTEGER NULL",
+        "guest_capacity": "ALTER TABLE orla_inns ADD COLUMN guest_capacity INTEGER NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -636,7 +714,15 @@ def seed_users(db, roles, secretarias):
         },
     ]
     cpf_seed = 20000000000
-    for index, (secretaria_slug, secretaria_nome, _, _) in enumerate(SECRETARIAS, start=1):
+    # Stable IDs preserve existing demo CPFs when secretarias are added/reordered.
+    secretaria_seed_ids = {
+        "desenvolvimento_economico": 1, "meio_ambiente": 2,
+        "infraestrutura": 3, "dmtran": 4, "vigilancia_sanitaria": 5,
+        "secretaria_saude": 6, "guarda_civil": 7, "receita_municipal": 8,
+        "semop": 9,
+    }
+    for secretaria_slug, secretaria_nome, _, _ in SECRETARIAS:
+        index = secretaria_seed_ids[secretaria_slug]
         secretaria_id = secretarias[secretaria_slug].id
         label = secretaria_nome.replace("Secretaria de ", "")
         users.extend(
@@ -702,9 +788,15 @@ def seed_users(db, roles, secretarias):
         user.role_id = data["role_id"]
         user.secretaria_id = data.get("secretaria_id")
         user.mfa_email_enabled = False
+        if user.role.slug != "cidadao" and not user.credential_number:
+            prefix = "ADM" if user.role.slug == "admin" else (user.secretaria.slug if user.secretaria else "SRV").upper()[:6]
+            user.credential_number = f"{prefix}-{user.id or abs(hash(user.email)) % 900000 + 100000}"
         if data["email"] == "cidadao@teste.local":
             user.foto_usuario_nome = "foto_maria_solicitante.jpg"
             user.foto_usuario_url = "/uploads/cidadao/foto_maria_solicitante.jpg"
+            user.documento_identificacao_nome = "cnh_maria_solicitante.pdf"
+            user.documento_identificacao_url = "/uploads/cidadao/cnh_maria_solicitante.pdf"
+            user.documento_identificacao_tipo = "cnh"
             user.comprovante_residencia_nome = "conta_luz_maria_solicitante.pdf"
             user.comprovante_residencia_url = "/uploads/cidadao/conta_luz_maria_solicitante.pdf"
             user.comprovante_residencia_tipo = "luz"
@@ -812,6 +904,417 @@ def inspection_fields(tipo_exigencia, scheduled_for=None):
         "inspection_scheduled_time": "09:00" if checklist and scheduled_for else None,
         "inspection_status": "vistoria_agendada" if checklist and scheduled_for else "nao_agendada",
     }
+
+
+def seed_historical_event_requests(db, roles, secretarias, users):
+    rows = load_historical_event_rows()
+    if not rows:
+        print("Planilha histórica não encontrada; seed histórico ignorado.")
+        return
+
+    event_type_names = {key: name for key, name, _ in EVENT_TYPES}
+    imported = 0
+    for index, row in enumerate(rows, start=1):
+        document = row["cpf_cnpj"]
+        user = db.query(UserModel).filter_by(cpf_cnpj=document).first()
+        if not user:
+            user = UserModel(
+                tipo_pessoa="PJ" if len(document) == 14 else "PF",
+                nome=limit_text(row["nome"], 255),
+                cpf_cnpj=document,
+                email=None,
+                senha_hash=hash_password(document),
+                telefone=row["telefone"] or None,
+                endereco=limit_text(row["endereco"], 255) or None,
+                role_id=roles["cidadao"].id,
+                mfa_email_enabled=False,
+                mfa_totp_enabled=False,
+                must_change_password=False,
+                foto_usuario_nome=f"foto_{document}.jpg",
+                foto_usuario_url=f"/uploads/cidadaos/{document}/foto_usuario.jpg",
+                comprovante_residencia_nome=f"comprovante_residencia_{document}.pdf",
+                comprovante_residencia_url=f"/uploads/cidadaos/{document}/comprovante_residencia.pdf",
+                comprovante_residencia_tipo="luz",
+                comprovante_residencia_status="pendente_validacao",
+            )
+            db.add(user)
+            db.flush()
+        else:
+            user.nome = limit_text(row["nome"], 255) or user.nome
+            user.telefone = row["telefone"] or user.telefone
+            user.endereco = limit_text(row["endereco"], 255) or user.endereco
+            if user.role.slug == "cidadao":
+                if not user.foto_usuario_url:
+                    user.foto_usuario_url = f"/uploads/cidadaos/{document}/foto_usuario.jpg"
+                    user.foto_usuario_nome = f"foto_{document}.jpg"
+                if not user.comprovante_residencia_url:
+                    user.comprovante_residencia_url = f"/uploads/cidadaos/{document}/comprovante_residencia.pdf"
+                    user.comprovante_residencia_nome = f"comprovante_residencia_{document}.pdf"
+                    user.comprovante_residencia_tipo = "luz"
+                    user.comprovante_residencia_status = "pendente_validacao"
+
+        users[f"historico:{document}"] = user
+        event_type = infer_event_type(row)
+        protocolo = f"AL-H{row['ano']}-{index:04d}"
+        request = db.query(PermitRequestModel).filter_by(protocolo=protocolo).first()
+        event_date = date.fromisoformat(row["data_evento"])
+        status_value = "autorizada" if event_date <= date.today() else "em_analise"
+        dam_status = "pago" if status_value == "autorizada" else "nao_gerado"
+        answers = historical_answers(row, event_type)
+        responsible_data = {
+            "nome": row["nome"],
+            "cpf_cnpj": document,
+            "telefone": row["telefone"],
+            "email": "",
+            "endereco": row["endereco"],
+            "referencia": row["referencia"],
+        }
+        event_data = {
+            "nome_evento": row["descricao"],
+            "data_evento": row["data_evento"],
+            "endereco_evento": row["local"],
+            "bairro_evento": extract_neighborhood(row["local"]),
+            "tipo_evento": event_type,
+            "tipo_evento_nome": event_type_names.get(event_type, event_type),
+            "tipo_espaco_evento": "publico",
+            "publico_estimado": normalize_public(row["publico"]),
+            "publico_estimado_original": row["publico"],
+            "horario_inicio": row["horario_inicio"],
+            "horario_termino": row["horario_termino"],
+            "horario_original": row["horario"],
+            "valor_ingresso": row["valor_ingresso"],
+            "data_solicitacao": row["data_solicitacao"],
+            "dia_semana": row["dia_semana"],
+            "termo_aceite": "true",
+            "anexos_informados": [
+                "oficio_solicitacao.pdf",
+                "rg_cpf.pdf",
+                "comprovante_residencia.pdf",
+            ],
+        }
+        if request:
+            request.solicitante_id = user.id
+            request.status = status_value
+            request.dam_status = dam_status
+            request.is_beneficente = "beneficente" in row["descricao"].lower()
+            request.dados_responsavel = responsible_data
+            request.dados_evento = event_data
+            request.respostas = answers
+        else:
+            request = PermitRequestModel(
+                protocolo=protocolo,
+                solicitante_id=user.id,
+                tipo="alvara_evento",
+                status=status_value,
+                dam_status=dam_status,
+                is_beneficente="beneficente" in row["descricao"].lower(),
+                dados_responsavel=responsible_data,
+                dados_evento=event_data,
+                respostas=answers,
+                created_at=date.fromisoformat(row["data_solicitacao"]) if row["data_solicitacao"] else None,
+            )
+            db.add(request)
+            db.flush()
+
+        seed_historical_requirements(db, request, secretarias, row, answers, approved=status_value == "autorizada")
+        seed_historical_attachments(db, request)
+        imported += 1
+    print(f"Solicitações históricas importadas da planilha: {imported}")
+
+
+def load_historical_event_rows():
+    path = Path(HISTORICAL_EVENTS_XLSX_PATH)
+    if not path.exists():
+        return []
+    ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    rows = []
+    with ZipFile(path) as archive:
+        shared = read_shared_strings(archive, ns)
+        workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+        rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        relmap = {rel.attrib["Id"]: rel.attrib["Target"] for rel in rels}
+        for sheet in workbook.findall("a:sheets/a:sheet", ns):
+            title = sheet.attrib.get("name", "")
+            if title not in {"2025", "2026"}:
+                continue
+            rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+            target = relmap[rel_id]
+            sheet_path = "xl/" + target.lstrip("/") if not target.startswith("xl/") else target
+            sheet_root = ET.fromstring(archive.read(sheet_path))
+            for excel_row in sheet_root.findall("a:sheetData/a:row", ns):
+                if excel_row.attrib.get("r") == "1":
+                    continue
+                values = read_excel_row(excel_row, shared, ns)
+                row = normalize_historical_row(title, values)
+                if row:
+                    rows.append(row)
+    return rows
+
+
+def read_shared_strings(archive, ns):
+    if "xl/sharedStrings.xml" not in archive.namelist():
+        return []
+    root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+    return ["".join((text.text or "") for text in item.findall(".//a:t", ns)) for item in root.findall("a:si", ns)]
+
+
+def read_excel_row(excel_row, shared, ns):
+    values = []
+    for cell in excel_row.findall("a:c", ns):
+        index = excel_column_index(cell.attrib.get("r", "A1"))
+        while len(values) <= index:
+            values.append("")
+        cell_type = cell.attrib.get("t")
+        value_node = cell.find("a:v", ns)
+        inline_node = cell.find("a:is", ns)
+        value = ""
+        if cell_type == "s" and value_node is not None and value_node.text:
+            value = shared[int(value_node.text)]
+        elif cell_type == "inlineStr" and inline_node is not None:
+            value = "".join((text.text or "") for text in inline_node.findall(".//a:t", ns))
+        elif value_node is not None and value_node.text is not None:
+            value = value_node.text
+        values[index] = str(value).strip()
+    return values
+
+
+def normalize_historical_row(year, values):
+    values = values + [""] * 22
+    document = only_digits(values[5])
+    event_date = normalize_excel_date(values[10])
+    if len(document) not in {11, 14} or len(set(document)) <= 1:
+        return None
+    if not values[1].strip() or not values[2].strip() or not is_iso_date(event_date):
+        return None
+    start_time, end_time = split_time_range(values[12])
+    return {
+        "ano": year,
+        "nome": clean_text(values[1]),
+        "descricao": clean_text(values[2]),
+        "oficio": clean_text(values[3]),
+        "foto_rg_cpf": clean_text(values[4]),
+        "cpf_cnpj": document,
+        "endereco": clean_text(values[6]),
+        "referencia": clean_text(values[7]),
+        "telefone": normalize_phone(values[8]),
+        "data_solicitacao": normalize_excel_date(values[9]) if is_iso_date(normalize_excel_date(values[9])) else "",
+        "data_evento": event_date,
+        "dia_semana": clean_text(values[11]),
+        "horario": clean_text(values[12]),
+        "horario_inicio": start_time,
+        "horario_termino": end_time,
+        "local": clean_text(values[13]) or "Valença - BA",
+        "publico": clean_text(values[14]),
+        "valor_ingresso": clean_text(values[15]),
+        "meio_ambiente": clean_text(values[16]),
+        "bloqueio_via": clean_text(values[17]),
+        "guarda": clean_text(values[18]),
+        "bombeiros": clean_text(values[19]),
+        "ambulancia": clean_text(values[20]),
+    }
+
+
+def seed_historical_requirements(db, request, secretarias, row, answers, approved):
+    status_value = "aprovada" if approved else "aguardando_analise"
+    requirements = []
+    if answers.get("tem_som"):
+        requirements.append(("meio_ambiente", "Termo de Responsabilidade Ambiental"))
+    if answers.get("bloqueia_via"):
+        requirements.append(("dmtran", "Autorização para uso ou bloqueio de via pública"))
+    if answers.get("precisa_guarda"):
+        requirements.append(("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal"))
+    if answers.get("precisa_avcb"):
+        requirements.append(("infraestrutura", "Auto de Vistoria do Corpo de Bombeiros (AVCB)"))
+    if answers.get("precisa_ambulancia"):
+        requirements.append(("secretaria_saude", "Ofício solicitando ambulância no local do evento"))
+    if not requirements:
+        requirements.append(("desenvolvimento_economico", "Conferência documental da Central de Eventos"))
+    for secretaria_slug, tipo_exigencia in requirements:
+        requirement = (
+            db.query(PermitRequirementModel)
+            .filter_by(
+                permit_request_id=request.id,
+                secretaria_id=secretarias[secretaria_slug].id,
+                tipo_exigencia=tipo_exigencia,
+            )
+            .first()
+        )
+        fields = inspection_fields(tipo_exigencia, add_business_days(date.today(), -1) if approved else None)
+        if approved and fields["requires_inspection"]:
+            fields["inspection_status"] = "vistoria_concluida"
+        if requirement:
+            requirement.status = status_value
+            for key, value in fields.items():
+                setattr(requirement, key, value)
+        else:
+            db.add(
+                PermitRequirementModel(
+                    permit_request_id=request.id,
+                    secretaria_id=secretarias[secretaria_slug].id,
+                    tipo_exigencia=tipo_exigencia,
+                    status=status_value,
+                    **fields,
+                )
+            )
+
+
+def seed_historical_attachments(db, request):
+    attachments = [
+        ("oficio_solicitacao", "oficio_solicitacao.pdf"),
+        ("rg_cpf", "rg_cpf.pdf"),
+        ("comprovante_residencia", "comprovante_residencia.pdf"),
+    ]
+    if request.status == "autorizada":
+        attachments.extend(
+            [
+                ("dam", "dam.pdf"),
+                ("comprovante_pagamento_dam", "comprovante_pagamento_dam.pdf"),
+                ("alvara_evento", "alvara_evento.pdf"),
+            ]
+        )
+    for document_type, file_name in attachments:
+        existing = (
+            db.query(AttachmentModel)
+            .filter_by(permit_request_id=request.id, tipo_documento=document_type)
+            .first()
+        )
+        if existing:
+            continue
+        db.add(
+            AttachmentModel(
+                permit_request_id=request.id,
+                tipo_documento=document_type,
+                nome_arquivo=f"{request.protocolo.lower()}_{file_name}",
+                arquivo_url=f"/uploads/{request.protocolo}/{file_name}",
+                mime_type="application/pdf",
+                tamanho_bytes=90000,
+            )
+        )
+
+
+def historical_answers(row, event_type):
+    return {
+        "tem_som": text_is_yes(row["meio_ambiente"]) or event_type in {"musical_entretenimento", "festa_popular_tradicional"},
+        "bloqueia_via": text_is_yes(row["bloqueio_via"]) or "bloco" in row["descricao"].lower(),
+        "precisa_guarda": text_is_yes(row["guarda"]),
+        "precisa_avcb": text_is_yes(row["bombeiros"]),
+        "precisa_ambulancia": text_is_yes(row["ambulancia"]),
+        "tem_alimentacao": event_type == "gastronomico",
+        "precisa_brigadista": normalize_public(row["publico"]) >= 500,
+    }
+
+
+def infer_event_type(row):
+    text_value = f"{row['descricao']} {row['local']}".lower()
+    if any(term in text_value for term in ["corrida", "torneio", "futebol", "bavi", "jiu-jitsu"]):
+        return "esportivo"
+    if any(term in text_value for term in ["igreja", "evangel", "congresso", "procissão", "lavagem"]):
+        return "religioso"
+    if any(term in text_value for term in ["moto", "veiculo", "veículo", "automotivo", "fiat"]):
+        return "automotivo_motociclistico"
+    if any(term in text_value for term in ["festival de tortas", "gastron", "acarajé", "feira gastron"]):
+        return "gastronomico"
+    if any(term in text_value for term in ["bloco", "carnaval", "são joão", "são pedro", "lavagem"]):
+        return "festa_popular_tradicional"
+    if any(term in text_value for term in ["show", "seresta", "karaok", "baile", "som ao vivo"]):
+        return "musical_entretenimento"
+    if any(term in text_value for term in ["bingo", "beneficente", "ação social"]):
+        return "social_comunitario"
+    if any(term in text_value for term in ["ballet", "artística", "cultural"]):
+        return "cultural"
+    return "outros"
+
+
+def split_time_range(value):
+    matches = re.findall(r"\d{1,2}[:h]\d{0,2}", value or "", flags=re.IGNORECASE)
+    normalized = [normalize_time(match) for match in matches]
+    normalized = [item for item in normalized if item]
+    if len(normalized) >= 2:
+        return normalized[0], normalized[1]
+    if len(normalized) == 1:
+        return normalized[0], "22:00"
+    return "08:00", "22:00"
+
+
+def normalize_time(value):
+    match = re.match(r"^(\d{1,2})(?:[:h](\d{0,2}))?$", value.strip(), flags=re.IGNORECASE)
+    if not match:
+        return ""
+    hour = int(match.group(1))
+    minute_text = match.group(2) or "00"
+    minute = int(minute_text or "00")
+    if hour > 23 or minute > 59:
+        return ""
+    return f"{hour:02d}:{minute:02d}"
+
+
+def normalize_public(value):
+    match = re.search(r"\d+", value or "")
+    return int(match.group(0)) if match else 0
+
+
+def extract_neighborhood(value):
+    text_value = clean_text(value)
+    if " - " in text_value:
+        return text_value.split(" - ")[-1].strip()
+    if "," in text_value:
+        return text_value.split(",")[-1].strip()
+    return text_value
+
+
+def text_is_yes(value):
+    return clean_text(value).lower() in {"sim", "s", "ok", "fez aqui"}
+
+
+def clean_text(value):
+    return re.sub(r"\s+", " ", str(value or "").replace("\n", " ")).strip()
+
+
+def limit_text(value, max_length):
+    return clean_text(value)[:max_length]
+
+
+def normalize_phone(value):
+    text_value = clean_text(value)
+    if len(text_value) <= 20:
+        return text_value
+    digits = only_digits(text_value)
+    if digits:
+        return digits[:20]
+    return text_value[:20]
+
+
+def only_digits(value):
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def normalize_excel_date(value):
+    text_value = clean_text(value)
+    if not text_value:
+        return ""
+    try:
+        number = float(text_value)
+    except ValueError:
+        return text_value
+    if number < 20000:
+        return text_value
+    return (datetime(1899, 12, 30) + timedelta(days=int(number))).date().isoformat()
+
+
+def is_iso_date(value):
+    try:
+        date.fromisoformat(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def excel_column_index(reference):
+    letters = "".join(char for char in reference if char.isalpha())
+    index = 0
+    for char in letters:
+        index = index * 26 + ord(char.upper()) - 64
+    return index - 1
 
 
 def seed_permit_request(db, users, secretarias):
@@ -1379,6 +1882,8 @@ def main():
     ensure_question_definition_columns()
     ensure_event_credential_columns()
     ensure_requirement_inspection_columns()
+    ensure_orla_inn_columns()
+    ensure_orla_vehicle_columns()
     db = SessionLocal()
     try:
         roles = seed_roles(db)
@@ -1390,6 +1895,7 @@ def main():
         seed_public_ranges(db)
         seed_permit_request(db, users, secretarias)
         seed_test_scenarios(db, users, secretarias)
+        seed_historical_event_requests(db, roles, secretarias, users)
         seed_home_content(db, users)
         db.commit()
         print("Seed executado com sucesso.")

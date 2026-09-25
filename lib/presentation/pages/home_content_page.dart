@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
-import '../../shared/widgets/app_scaffold.dart';
 import '../../core/session_expiration.dart';
+import '../../core/session_store.dart';
+import '../../shared/widgets/app_scaffold.dart';
 
 class HomeContentPage extends StatefulWidget {
   const HomeContentPage({super.key, required this.userType});
@@ -18,7 +18,6 @@ class HomeContentPage extends StatefulWidget {
 
 class _HomeContentPageState extends State<HomeContentPage> {
   final _api = PermitApiService();
-  final _storage = const FlutterSecureStorage();
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
@@ -37,6 +36,7 @@ class _HomeContentPageState extends State<HomeContentPage> {
   };
 
   List<Map<String, dynamic>> _cards = [];
+  List<Map<String, dynamic>> _services = [];
   String _selectedScope = 'prefeitura';
   String? _currentRole;
   String? _currentSecretaria;
@@ -63,7 +63,7 @@ class _HomeContentPageState extends State<HomeContentPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final rawUser = await _storage.read(key: 'user');
+      final rawUser = await const SessionStore().readUserJson();
       if (rawUser != null) {
         final user = jsonDecode(rawUser) as Map<String, dynamic>;
         _currentRole = user['role'] as String?;
@@ -79,8 +79,15 @@ class _HomeContentPageState extends State<HomeContentPage> {
         return;
       }
       final cards = await _api.listHomeContent(token);
+      final services =
+          _currentRole == 'admin'
+              ? await _api.listServiceConfigs(accessToken: token)
+              : <Map<String, dynamic>>[];
       if (!mounted) return;
-      setState(() => _cards = cards);
+      setState(() {
+        _cards = cards;
+        _services = services;
+      });
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
         await SessionExpiration.logout(context);
@@ -143,6 +150,46 @@ class _HomeContentPageState extends State<HomeContentPage> {
       _showMessage(error.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _toggleService(String key, bool isActive) async {
+    final token = await SessionExpiration.readAccessToken();
+    if (token == null) {
+      if (!mounted) return;
+      await SessionExpiration.logout(context);
+      return;
+    }
+    try {
+      await _api.updateServiceConfig(
+        accessToken: token,
+        serviceKey: key,
+        isActive: isActive,
+      );
+      await _load();
+      _showMessage(isActive ? 'Serviço ativado.' : 'Serviço desativado.');
+    } on PermitApiException catch (error) {
+      _showMessage(error.toString(), isError: true);
+    }
+  }
+
+  Future<void> _approveBanner(int cardId, bool approved) async {
+    final token = await SessionExpiration.readAccessToken();
+    if (token == null) return;
+    try {
+      await _api.approveHomeContent(
+        accessToken: token,
+        cardId: cardId,
+        approved: approved,
+      );
+      await _load();
+      _showMessage(
+        approved
+            ? 'Banner aprovado e publicado.'
+            : 'Banner retirado da página inicial.',
+      );
+    } on PermitApiException catch (error) {
+      _showMessage(error.toString(), isError: true);
     }
   }
 
@@ -226,6 +273,50 @@ class _HomeContentPageState extends State<HomeContentPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (_currentRole == 'admin' &&
+                            _services.isNotEmpty) ...[
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Serviços da aplicação',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Ative ou desative serviços exibidos no catálogo da prefeitura.',
+                                  ),
+                                  const Divider(height: 22),
+                                  ..._services.map(
+                                    (service) => SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(
+                                        service['title']?.toString() ?? '',
+                                      ),
+                                      subtitle: Text(
+                                        service['description']?.toString() ??
+                                            '',
+                                      ),
+                                      value: service['is_active'] == true,
+                                      onChanged:
+                                          (value) => _toggleService(
+                                            service['key'].toString(),
+                                            value,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         Card(
                           child: Padding(
                             padding: const EdgeInsets.all(18),
@@ -242,6 +333,30 @@ class _HomeContentPageState extends State<HomeContentPage> {
                                         .textTheme
                                         .titleMedium
                                         ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                          .withValues(alpha: .45),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: const Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.aspect_ratio_outlined),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'Carrossel principal — recomendado: 1600 x 600 px para web e 1080 x 1350 px para mobile. O tamanho não é obrigatório. Como a imagem se adapta à tela, mantenha textos, pessoas e logos na área central para evitar cortes.',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                   const SizedBox(height: 14),
                                   DropdownButtonFormField<String>(
@@ -361,14 +476,22 @@ class _HomeContentPageState extends State<HomeContentPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        ..._cards.map(
-                          (card) => Card(
+                        ..._cards.map((card) {
+                          final establishment =
+                              card['scope']?.toString().startsWith(
+                                'establishment:',
+                              ) ==
+                              true;
+                          final approved = card['is_active'] == true;
+                          return Card(
                             child: ListTile(
                               leading: SizedBox(
                                 width: 72,
                                 height: 48,
                                 child: Image.network(
-                                  card['image_url'] as String? ?? '',
+                                  _api.resolveFileUrl(
+                                    card['image_url'] as String? ?? '',
+                                  ),
                                   fit: BoxFit.cover,
                                   errorBuilder:
                                       (_, __, ___) =>
@@ -377,16 +500,35 @@ class _HomeContentPageState extends State<HomeContentPage> {
                               ),
                               title: Text(card['title'] as String? ?? ''),
                               subtitle: Text(
-                                '${_secretarias[card['scope']] ?? card['scope']} - ${card['is_active'] == true ? 'Ativo' : 'Inativo'}',
+                                establishment
+                                    ? '${card['owner_name'] ?? 'Estabelecimento'} • ${approved ? 'Aprovado e publicado' : 'Aguardando aprovação'}'
+                                    : '${_secretarias[card['scope']] ?? card['scope']} - ${approved ? 'Ativo' : 'Inativo'}',
                               ),
-                              trailing: IconButton(
-                                tooltip: 'Editar',
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: () => _edit(card),
-                              ),
+                              trailing:
+                                  establishment && _currentRole == 'admin'
+                                      ? FilledButton.tonalIcon(
+                                        onPressed:
+                                            () => _approveBanner(
+                                              card['id'] as int,
+                                              !approved,
+                                            ),
+                                        icon: Icon(
+                                          approved
+                                              ? Icons.visibility_off_outlined
+                                              : Icons.check_circle_outline,
+                                        ),
+                                        label: Text(
+                                          approved ? 'Retirar' : 'Aprovar',
+                                        ),
+                                      )
+                                      : IconButton(
+                                        tooltip: 'Editar',
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () => _edit(card),
+                                      ),
                             ),
-                          ),
-                        ),
+                          );
+                        }),
                       ],
                     ),
                   ),

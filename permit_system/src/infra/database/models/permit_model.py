@@ -41,6 +41,7 @@ class QuestionDefinitionModel(Base):
     secretaria_dam = Column(String(150), nullable=True)
     tipos_resposta = Column(JSON, nullable=False)
     campos_obrigatorios = Column(JSON, nullable=False)
+    opcoes_resposta = Column(JSON, nullable=True)
     modelo_documento_nome = Column(String(255), nullable=True)
     modelo_documento_url = Column(String(500), nullable=True)
     requer_vistoria = Column(Boolean, default=False, nullable=False)
@@ -152,6 +153,10 @@ class EventCredentialModel(Base):
     issued_at = Column(DateTime(timezone=True), server_default=func.now())
     issued_by = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
+    verified_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    verified_secretaria = Column(String(120), nullable=True)
+    verification_status = Column(String(50), nullable=True)
+    verification_notes = Column(Text, nullable=True)
     verification_count = Column(Integer, default=0, nullable=False)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     revoked_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
@@ -159,6 +164,7 @@ class EventCredentialModel(Base):
 
     permit_request = relationship("PermitRequestModel", back_populates="credentials")
     issuer = relationship("UserModel", foreign_keys=[issued_by])
+    verifier = relationship("UserModel", foreign_keys=[verified_by])
     revoker = relationship("UserModel", foreign_keys=[revoked_by])
 
 

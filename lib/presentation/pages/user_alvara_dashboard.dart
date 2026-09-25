@@ -111,6 +111,16 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildBullet(
+                          'Nome do solicitante / Responsável pelo evento',
+                        ),
+                        _buildBullet('CPF'),
+                        _buildBullet('Endereço residencial'),
+                        _buildBullet('Telefone de contato'),
+                        _buildBullet('Nome do evento'),
+                        _buildBullet('Data, local e horário do evento'),
+                        _buildBullet('Expectativa de público'),
+                        SizedBox(height: 8),
                         if (widget.eventTypes.isNotEmpty)
                           _EventTypeGuidanceCard(
                             eventTypes: widget.eventTypes,
@@ -122,56 +132,6 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
                           ),
 
                         SizedBox(height: 4),
-                        _buildBullet(
-                          'Nome do solicitante / Responsável pelo evento',
-                        ),
-                        _buildBullet('CPF'),
-                        _buildBullet('Endereço residencial'),
-                        _buildBullet('Telefone de contato'),
-                        _buildBullet('Nome do evento'),
-                        _buildBullet('Data, local e horário do evento'),
-                        _buildBullet('Expectativa de público'),
-                        SizedBox(height: 8),
-                        // Text(
-                        //   'Documentos obrigatórios:',
-                        //   style: TextStyle(fontWeight: FontWeight.bold),
-                        // ),
-                        // _buildBullet('Foto ou cópia do RG e CPF'),
-                        // _buildBullet('Comprovante de residência'),
-                        // _buildBullet('Alvará de funcionamento do local'),
-                        // SizedBox(height: 8),
-                        // _buildBullet(
-                        //   'Termo de Responsabilidade Ambiental (Meio Ambiente)',
-                        // ),
-                        // _buildBullet(
-                        //   'Vistoria de palco/gerador (Infraestrutura)',
-                        // ),
-                        // _buildBullet(
-                        //   'Vistoria de trio elétrico e motorista + mapa do circuito (DMTRAN)',
-                        // ),
-                        // _buildBullet(
-                        //   'Autorização para uso/bloqueio de vias públicas (DMTRAN)',
-                        // ),
-                        // _buildBullet(
-                        //   'Vistoria da alimentação (Vigilância Sanitária)',
-                        // ),
-                        // _buildBullet(
-                        //   'Ofício à Guarda Civil Municipal, se necessário',
-                        // ),
-                        // _buildBullet('Contratação de brigadista, se exigido'),
-                        // SizedBox(height: 8),
-                        // Text(
-                        //   'Após todas as autorizações, realizar o pagamento do DAM na Receita Municipal para emissão da Licença/Alvará.',
-                        // ),
-                        // SizedBox(height: 4),
-                        // Text(
-                        //   'Observação: Eventos beneficentes são isentos do pagamento, mas devem encaminhar uma declaração com a instituição beneficiada.',
-                        //   style: TextStyle(
-                        //     fontStyle: FontStyle.italic,
-                        //     color: Colors.red,
-                        //   ),
-                        // ),
-                        // SizedBox(height: 12),
                       ],
                     ),
                   ),
@@ -509,8 +469,8 @@ class _PermitDashboardPageState extends State<PermitDashboardPage> {
           icon: const Icon(Icons.qr_code_2),
           label: Text(
             _isCredentialVerified(form)
-                ? 'Evento verificado'
-                : 'Validar evento / QR Code',
+                ? 'Ver alvará verificado'
+                : 'Ver alvará com QR Code',
           ),
         ),
       ),
@@ -624,18 +584,25 @@ class _EventTypeGuidanceCard extends StatelessWidget {
             'Selecione o tipo que melhor representa seu evento para ver exemplos e documentos necessários antes de criar a solicitação.',
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children:
-                eventTypes.map((eventType) {
-                  final key = eventType['key']?.toString() ?? '';
-                  return ChoiceChip(
-                    label: Text(eventType['name']?.toString() ?? key),
-                    selected: key == selectedKey,
-                    onSelected: (_) => onSelected(key),
-                  );
-                }).toList(),
+          OutlinedButton.icon(
+            onPressed: () => _openSelector(context),
+            icon: const Icon(Icons.arrow_drop_down_circle_outlined),
+            label: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                selected == null
+                    ? 'Selecionar tipo de evento'
+                    : selected['name']?.toString() ?? 'Tipo selecionado',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
           ),
           if (selected != null) ...[
             const SizedBox(height: 14),
@@ -681,6 +648,66 @@ class _EventTypeGuidanceCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _openSelector(BuildContext context) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder:
+          (context) => SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.72,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: eventTypes.length + 1,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Selecione o tipo de evento',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    );
+                  }
+                  final eventType = eventTypes[index - 1];
+                  final key = eventType['key']?.toString() ?? '';
+                  final isSelected = key == selectedKey;
+                  final description =
+                      (eventType['description'] ?? eventType['descricao'])
+                          ?.toString()
+                          .trim();
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    title: Text(eventType['name']?.toString() ?? key),
+                    subtitle: Text(
+                      description != null && description.isNotEmpty
+                          ? description
+                          : eventType['examples']?.toString() ??
+                              'Sem descrição cadastrada.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.pop(context, key),
+                  );
+                },
+              ),
+            ),
+          ),
+    );
+    if (selected != null && selected.isNotEmpty) onSelected(selected);
   }
 }
 

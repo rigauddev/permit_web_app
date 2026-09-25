@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/permit_api_service.dart';
 import '../../core/routes/app_routes.dart';
+import '../../core/session_expiration.dart';
 import '../../data/providers/user_provider.dart';
 
 class CustomDrawer extends ConsumerStatefulWidget
@@ -35,8 +37,39 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
   bool get isManager => widget.userType == 'gestor';
   bool get isOperator => widget.userType == 'operador';
   bool get isOperatorOrManager => isOperator || isManager;
-  bool get canManageSystem => isAdmin || isManager;
+  bool get canManageSystem => isAdmin;
   bool get canManageServices => isAdmin || isManager;
+  bool get canAccessServiceOperations => isAdmin || isManager || isOperator;
+
+  Set<String> _activeServices = const {'alvara_evento', 'acesso_orla'};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActiveServices();
+  }
+
+  Future<void> _loadActiveServices() async {
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) return;
+      final configs = await PermitApiService().listServiceConfigs(
+        accessToken: token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _activeServices =
+            configs
+                .where((item) => item['is_active'] == true)
+                .map((item) => item['key'].toString())
+                .toSet();
+      });
+    } catch (_) {
+      // Mantém os serviços principais visíveis se a configuração não carregar.
+    }
+  }
+
+  bool _serviceActive(String key) => _activeServices.contains(key);
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +77,25 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
     final colorScheme = Theme.of(context).colorScheme;
     final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
     final collapsed = widget.compactMode || _collapsed;
+    final isTourismBusiness =
+        isUser &&
+        const {
+          'pousada_hotel',
+          'restaurante',
+          'quiosque',
+        }.contains(user?.businessCategory);
+    final canManageOrlaDashboard =
+        isAdmin ||
+        user?.secretaria == 'semop' ||
+        user?.secretaria == 'dmtran' ||
+        user?.secretaria == 'guarda_civil';
+    final canManageOrlaInspection =
+        isAdmin ||
+        user?.secretaria == 'dmtran' ||
+        user?.secretaria == 'guarda_civil';
+    final canShowServiceManagement =
+        canAccessServiceOperations &&
+        (_serviceActive('alvara_evento') || canManageOrlaDashboard);
     const drawerBackground = Color(0xFFF8FBF7);
     final content = SafeArea(
       child: Column(
@@ -51,8 +103,9 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
           _DrawerHeader(
             collapsed: collapsed,
             primaryColor: colorScheme.primary,
-            textColor: colorScheme.onPrimary,
+            textColor: colorScheme.onSurface,
             userName: user?.name ?? '',
+            userPhotoUrl: user?.photoUrl ?? '',
             compactMode: widget.compactMode,
             showToggle:
                 !widget.asDrawer &&
@@ -72,57 +125,132 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                   collapsed: collapsed,
                   icon: Icons.home,
                   title: 'Início',
-                  route: '/home',
+                  route: AppRoutes.home,
                   currentRoute: currentRoute,
                 ),
+                if (_serviceActive('acesso_orla') ||
+                    _serviceActive('alvara_evento') ||
+                    _serviceActive('alvara_funcionamento') ||
+                    _serviceActive('iptu'))
+                  _DrawerTile(
+                    collapsed: collapsed,
+                    icon: Icons.design_services_outlined,
+                    title: 'Serviços',
+                    route: AppRoutes.services,
+                    currentRoute: currentRoute,
+                  ),
                 if (isUser)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.event,
-                    title: 'Serviços',
-                    routes: const [
-                      '/services',
-                      '/favorite-services',
-                      '/my-requests',
+                    icon: Icons.folder_special_outlined,
+                    title: 'Meus serviços',
+                    routes: [
+                      AppRoutes.myRequests,
+                      AppRoutes.orlaVehicles,
+                      if (isTourismBusiness) AppRoutes.orlaGuests,
+                      if (isTourismBusiness) AppRoutes.orlaBanners,
+                      AppRoutes.favoriteServices,
                     ],
                     currentRoute: currentRoute,
-                    children: const [
-                      _DrawerSectionItem('Serviços', '/services'),
-                      _DrawerSectionItem('Favoritos', '/favorite-services'),
-                      _DrawerSectionItem('Minhas solicitações', '/my-requests'),
-                    ],
-                  ),
-                if (isOperatorOrManager || isAdmin)
-                  _DrawerSection(
-                    collapsed: collapsed,
-                    icon: Icons.assignment_outlined,
-                    title: 'Atendimento',
-                    routes: const [
-                      '/secretaria-requests',
-                      '/inspections',
-                      '/event-map',
-                      '/reports',
-                    ],
-                    currentRoute: currentRoute,
-                    children: const [
-                      _DrawerSectionItem(
-                        'Central de solicitações',
-                        '/secretaria-requests',
+                    children: [
+                      const _DrawerSectionItem(
+                        'Minhas solicitações',
+                        AppRoutes.myRequests,
                       ),
-                      _DrawerSectionItem('Vistorias', '/inspections'),
-                      _DrawerSectionItem('Mapa de eventos', '/event-map'),
-                      _DrawerSectionItem('Relatórios', '/reports'),
+                      if (_serviceActive('acesso_orla'))
+                        const _DrawerSectionItem(
+                          'Veículos',
+                          AppRoutes.orlaVehicles,
+                        ),
+                      if (isTourismBusiness &&
+                          user?.businessCategory == 'pousada_hotel')
+                        const _DrawerSectionItem(
+                          'Hóspedes',
+                          AppRoutes.orlaGuests,
+                        ),
+                      if (isTourismBusiness)
+                        const _DrawerSectionItem(
+                          'Banners',
+                          AppRoutes.orlaBanners,
+                        ),
+                      const _DrawerSectionItem(
+                        'Favoritos',
+                        AppRoutes.favoriteServices,
+                      ),
                     ],
                   ),
-                if (canManageServices)
+                if (canShowServiceManagement)
                   _DrawerSection(
                     collapsed: collapsed,
-                    icon: Icons.design_services_outlined,
+                    icon: Icons.tune_outlined,
                     title: 'Gestão de Serviços',
-                    routes: const ['/questions'],
+                    routes: const [
+                      AppRoutes.inspections,
+                      AppRoutes.secretariaRequests,
+                      AppRoutes.verifyEvent,
+                      AppRoutes.reports,
+                      AppRoutes.eventMap,
+                      AppRoutes.contentManagement,
+                      AppRoutes.orlaDashboard,
+                      AppRoutes.orlaInspection,
+                    ],
                     currentRoute: currentRoute,
-                    children: const [
-                      _DrawerSectionItem('Perguntas e regras', '/questions'),
+                    children: [
+                      if (_serviceActive('alvara_evento'))
+                        const _DrawerSectionGroup(
+                          title: 'Alvará',
+                          children: [
+                            _DrawerSectionGroup(
+                              title: 'Alvará de Eventos',
+                              children: [
+                                _DrawerSectionGroup(
+                                  title: 'Gestão do serviço',
+                                  children: [
+                                    _DrawerSectionItem(
+                                      'Solicitações',
+                                      AppRoutes.secretariaRequests,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Vistorias',
+                                      AppRoutes.inspections,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Fiscalização',
+                                      AppRoutes.verifyEvent,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Relatórios',
+                                      AppRoutes.reports,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Mapa de eventos',
+                                      AppRoutes.eventMap,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Configurar mapa de eventos',
+                                      AppRoutes.contentManagement,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      if (canManageOrlaDashboard)
+                        _DrawerSectionGroup(
+                          title: 'Acesso à Orla',
+                          children: [
+                            const _DrawerSectionItem(
+                              'Dashboard',
+                              AppRoutes.orlaDashboard,
+                            ),
+                            if (canManageOrlaInspection)
+                              const _DrawerSectionItem(
+                                'Fiscalização',
+                                AppRoutes.orlaInspection,
+                              ),
+                          ],
+                        ),
                     ],
                   ),
                 if (canManageSystem)
@@ -131,26 +259,57 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     icon: Icons.admin_panel_settings_outlined,
                     title: 'Gestão do Sistema',
                     routes: const [
-                      '/users',
-                      '/permissions',
-                      '/secretarias',
-                      '/home-content',
+                      AppRoutes.users,
+                      AppRoutes.permissions,
+                      AppRoutes.secretarias,
+                      AppRoutes.homeContent,
+                      AppRoutes.contentManagement,
+                      AppRoutes.emailTemplates,
                     ],
                     currentRoute: currentRoute,
                     children: [
-                      const _DrawerSectionItem('Usuários', '/users'),
+                      const _DrawerSectionItem('Usuários', AppRoutes.users),
                       if (isAdmin)
                         const _DrawerSectionItem(
                           'Tipos de usuário e permissões',
-                          '/permissions',
+                          AppRoutes.permissions,
                         ),
-                      const _DrawerSectionItem('Secretarias', '/secretarias'),
+                      const _DrawerSectionItem(
+                        'Secretarias',
+                        AppRoutes.secretarias,
+                      ),
                       const _DrawerSectionItem(
                         'Conteúdo da página inicial',
-                        '/home-content',
+                        AppRoutes.homeContent,
+                      ),
+                      const _DrawerSectionItem(
+                        'Mapas e conteúdo turístico',
+                        AppRoutes.contentManagement,
+                      ),
+                      const _DrawerSectionItem(
+                        'Modelos de e-mail',
+                        AppRoutes.emailTemplates,
                       ),
                     ],
                   ),
+                _DrawerSection(
+                  collapsed: collapsed,
+                  icon: Icons.help_outline,
+                  title: 'Ajuda',
+                  routes: const [AppRoutes.help, AppRoutes.operatorHelp],
+                  currentRoute: currentRoute,
+                  children: [
+                    const _DrawerSectionItem(
+                      'Ajuda do usuário',
+                      AppRoutes.help,
+                    ),
+                    if (!isUser)
+                      const _DrawerSectionItem(
+                        'Ajuda dos operadores',
+                        AppRoutes.operatorHelp,
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -200,6 +359,7 @@ class _DrawerHeader extends StatelessWidget {
     required this.primaryColor,
     required this.textColor,
     required this.userName,
+    required this.userPhotoUrl,
     required this.compactMode,
     required this.showToggle,
     required this.onToggle,
@@ -209,6 +369,7 @@ class _DrawerHeader extends StatelessWidget {
   final Color primaryColor;
   final Color textColor;
   final String userName;
+  final String userPhotoUrl;
   final bool compactMode;
   final bool showToggle;
   final VoidCallback onToggle;
@@ -216,13 +377,9 @@ class _DrawerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [primaryColor.withValues(alpha: 0.92), primaryColor],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: const BorderRadius.only(bottomRight: Radius.circular(24)),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FBF7),
+        border: Border(bottom: BorderSide(color: Color(0xFFD8E0D8))),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
@@ -235,7 +392,7 @@ class _DrawerHeader extends StatelessWidget {
                 Tooltip(
                   message: collapsed ? 'Expandir menu' : 'Ocultar menu',
                   child: IconButton(
-                    color: Colors.white,
+                    color: primaryColor,
                     icon: Icon(
                       collapsed
                           ? Icons.keyboard_double_arrow_right
@@ -253,7 +410,21 @@ class _DrawerHeader extends StatelessWidget {
               onTap: () => Navigator.pushReplacementNamed(context, '/profile'),
               child: CircleAvatar(
                 radius: collapsed ? 22 : 42,
-                backgroundImage: const AssetImage('assets/images/avatar.jpg'),
+                backgroundColor: const Color(0xFFE5F4EA),
+                backgroundImage:
+                    _avatarImage(userPhotoUrl) == null
+                        ? null
+                        : NetworkImage(_avatarImage(userPhotoUrl)!),
+                child:
+                    _avatarImage(userPhotoUrl) == null
+                        ? Text(
+                          _initials(userName),
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        )
+                        : null,
               ),
             ),
           ),
@@ -263,24 +434,54 @@ class _DrawerHeader extends StatelessWidget {
               userName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
+              style: TextStyle(
+                color: textColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
+            OutlinedButton(
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white70),
+                foregroundColor: primaryColor,
+                side: BorderSide(color: primaryColor.withValues(alpha: 0.35)),
               ),
               onPressed:
                   () => Navigator.pushReplacementNamed(context, '/profile'),
-              icon: const Icon(Icons.person_outline, size: 18),
-              label: const Text('Meu perfil'),
+              child: const Text('Meu perfil'),
             ),
           ],
         ],
       ),
     );
   }
+}
+
+String? _avatarImage(String rawUrl) {
+  final value = rawUrl.trim();
+  if (value.isEmpty) return null;
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value;
+  }
+  if (value.startsWith('/uploads/')) {
+    const baseUrl = String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: String.fromEnvironment(
+        'API_URL',
+        defaultValue: 'http://127.0.0.1:8000',
+      ),
+    );
+    return '$baseUrl$value';
+  }
+  return null;
+}
+
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  if (parts.isEmpty || parts.first.isEmpty) return 'U';
+  final first = parts.first.characters.first;
+  final second = parts.length > 1 ? parts.last.characters.first : '';
+  return (first + second).toUpperCase();
 }
 
 class _DrawerTile extends StatelessWidget {
@@ -372,16 +573,18 @@ class _DrawerSection extends StatelessWidget {
   final String title;
   final List<String> routes;
   final String currentRoute;
-  final List<_DrawerSectionItem> children;
+  final List<_DrawerSectionEntry> children;
 
   @override
   Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+
     final selected = routes.contains(currentRoute);
     const selectedBackground = Color(0xFFE5F4EA);
     const selectedForeground = Color(0xFF0E5F2F);
     const defaultForeground = Color(0xFF26342A);
     if (collapsed) {
-      final targetRoute = children.first.route;
+      final targetRoute = children.first.primaryRoute;
       return Tooltip(
         message: title,
         child: ListTile(
@@ -430,20 +633,35 @@ class _DrawerSection extends StatelessWidget {
       backgroundColor: selected ? selectedBackground : null,
       children:
           children
-              .map(
-                (item) =>
-                    _DrawerSubTile(item: item, currentRoute: currentRoute),
-              )
+              .map((item) => item.build(context, currentRoute: currentRoute))
               .toList(),
     );
   }
 }
 
+abstract class _DrawerSectionEntry {
+  const _DrawerSectionEntry();
+
+  List<String> get routes;
+  String get primaryRoute;
+
+  Widget build(
+    BuildContext context, {
+    required String currentRoute,
+    int level = 0,
+  });
+}
+
 class _DrawerSubTile extends StatelessWidget {
-  const _DrawerSubTile({required this.item, required this.currentRoute});
+  const _DrawerSubTile({
+    required this.item,
+    required this.currentRoute,
+    required this.level,
+  });
 
   final _DrawerSectionItem item;
   final String currentRoute;
+  final int level;
 
   @override
   Widget build(BuildContext context) {
@@ -456,7 +674,7 @@ class _DrawerSubTile extends StatelessWidget {
       selectedColor: selectedForeground,
       textColor: defaultForeground,
       selectedTileColor: selectedBackground,
-      contentPadding: const EdgeInsets.only(left: 72, right: 16),
+      contentPadding: EdgeInsets.only(left: 72 + (level * 18), right: 16),
       title: Text(
         item.title,
         style: TextStyle(
@@ -477,9 +695,76 @@ class _DrawerSubTile extends StatelessWidget {
   }
 }
 
-class _DrawerSectionItem {
+class _DrawerSectionItem extends _DrawerSectionEntry {
   const _DrawerSectionItem(this.title, this.route);
 
   final String title;
   final String route;
+
+  @override
+  List<String> get routes => [route];
+
+  @override
+  String get primaryRoute => route;
+
+  @override
+  Widget build(
+    BuildContext context, {
+    required String currentRoute,
+    int level = 0,
+  }) {
+    return _DrawerSubTile(item: this, currentRoute: currentRoute, level: level);
+  }
+}
+
+class _DrawerSectionGroup extends _DrawerSectionEntry {
+  const _DrawerSectionGroup({required this.title, required this.children});
+
+  final String title;
+  final List<_DrawerSectionEntry> children;
+
+  @override
+  List<String> get routes => children.expand((child) => child.routes).toList();
+
+  @override
+  String get primaryRoute => children.first.primaryRoute;
+
+  @override
+  Widget build(
+    BuildContext context, {
+    required String currentRoute,
+    int level = 0,
+  }) {
+    final selected = routes.contains(currentRoute);
+    const selectedForeground = Color(0xFF0E5F2F);
+    const defaultForeground = Color(0xFF26342A);
+    return ExpansionTile(
+      key: PageStorageKey('$title-$level'),
+      initiallyExpanded: selected,
+      tilePadding: EdgeInsets.only(left: 56 + (level * 18), right: 16),
+      childrenPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(
+        title,
+        style: TextStyle(
+          color: selected ? selectedForeground : defaultForeground,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        ),
+      ),
+      iconColor: selected ? selectedForeground : defaultForeground,
+      collapsedIconColor: selected ? selectedForeground : defaultForeground,
+      textColor: selectedForeground,
+      collapsedTextColor: selected ? selectedForeground : defaultForeground,
+      children:
+          children
+              .map(
+                (entry) => entry.build(
+                  context,
+                  currentRoute: currentRoute,
+                  level: level + 1,
+                ),
+              )
+              .toList(),
+    );
+  }
 }

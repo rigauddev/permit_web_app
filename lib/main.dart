@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:permit_web_app/core/auth_service.dart';
 import 'package:permit_web_app/core/routes/app_routes.dart';
 import 'package:permit_web_app/core/session_store.dart';
 import 'package:permit_web_app/core/themes/customer_theme.dart';
@@ -11,8 +13,12 @@ import 'package:permit_web_app/data/providers/user_provider.dart';
 
 import 'features/services/receita_municipal/ui/receita_municipal_services_page.dart';
 import 'presentation/pages/login_page.dart';
+import 'presentation/pages/change_password_page.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/home_content_page.dart';
+import 'presentation/pages/content_management_page.dart';
+import 'presentation/pages/email_templates_page.dart';
+import 'presentation/pages/help_page.dart';
 import 'presentation/pages/event_map_page.dart';
 import 'presentation/pages/my_requests_page.dart';
 import 'presentation/pages/permissions_page.dart';
@@ -28,6 +34,7 @@ import 'presentation/pages/question_page.dart';
 import 'presentation/pages/secretarias_page.dart';
 
 void main() {
+  usePathUrlStrategy();
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -36,9 +43,7 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(userProvider);
-
-    return _SessionBootstrap(user: user, child: _AppRouter(user: user));
+    return const _SessionBootstrap();
   }
 }
 
@@ -65,10 +70,31 @@ class _AppRouter extends StatelessWidget {
             data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
             child: child ?? const SizedBox.shrink(),
           ),
-      initialRoute: user == null ? AppRoutes.login : null,
       routes: {
         AppRoutes.login: (context) => const LoginPage(),
+        AppRoutes.serverLogin:
+            (context) => const LoginPage(initialAccessProfile: 'servidor'),
+        AppRoutes.adminLogin:
+            (context) =>
+                user?.role != 'admin'
+                    ? const LoginPage(initialAccessProfile: 'admin')
+                    : _GuardedRoute(
+                      user: user,
+                      allowedRoles: const {'admin'},
+                      child: UserHomePage(userType: user?.userType ?? 'admin'),
+                    ),
         AppRoutes.recoveryPassword: (context) => RecoveryPassword(),
+        AppRoutes.changePassword:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+                'cidadao',
+              },
+              child: const ChangePasswordPage(),
+            ),
         AppRoutes.home:
             (context) => _GuardedRoute(
               user: user,
@@ -94,20 +120,20 @@ class _AppRouter extends StatelessWidget {
         AppRoutes.users:
             (context) => _GuardedRoute(
               user: user,
-              allowedRoles: const {'admin', 'gestor_secretaria'},
+              allowedRoles: const {'admin'},
               child: UsersListPage(userType: user?.userType ?? ''),
             ),
         AppRoutes.registerUser: (context) => const UserRegistrationPage(),
         AppRoutes.createUser:
             (context) => _GuardedRoute(
               user: user,
-              allowedRoles: const {'admin', 'gestor_secretaria'},
+              allowedRoles: const {'admin'},
               child: UserCreatePage(userType: user?.userType ?? ''),
             ),
         AppRoutes.userCreate:
             (context) => _GuardedRoute(
               user: user,
-              allowedRoles: const {'admin', 'gestor_secretaria'},
+              allowedRoles: const {'admin'},
               child: UserCreatePage(userType: user?.userType ?? ''),
             ),
         AppRoutes.homeContent:
@@ -116,10 +142,22 @@ class _AppRouter extends StatelessWidget {
               allowedRoles: const {'admin', 'gestor_secretaria'},
               child: HomeContentPage(userType: user?.userType ?? ''),
             ),
-        AppRoutes.secretarias:
+        AppRoutes.contentManagement:
             (context) => _GuardedRoute(
               user: user,
               allowedRoles: const {'admin', 'gestor_secretaria'},
+              child: ContentManagementPage(userType: user?.userType ?? ''),
+            ),
+        AppRoutes.emailTemplates:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin'},
+              child: EmailTemplatesPage(userType: user?.userType ?? ''),
+            ),
+        AppRoutes.secretarias:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {'admin'},
               child: SecretariasPage(userType: user?.userType ?? ''),
             ),
         AppRoutes.permissions:
@@ -128,10 +166,39 @@ class _AppRouter extends StatelessWidget {
               allowedRoles: const {'admin'},
               child: PermissionsPage(userType: user?.userType ?? ''),
             ),
+        AppRoutes.help:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+                'cidadao',
+              },
+              child: HelpPage(userType: user?.userType ?? ''),
+            ),
+        AppRoutes.operatorHelp:
+            (context) => _GuardedRoute(
+              user: user,
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+              },
+              child: HelpPage(
+                userType: user?.userType ?? '',
+                operatorMode: true,
+              ),
+            ),
         AppRoutes.services:
             (context) => _GuardedRoute(
               user: user,
-              allowedRoles: const {'cidadao'},
+              allowedRoles: const {
+                'admin',
+                'gestor_secretaria',
+                'operador_secretaria',
+                'cidadao',
+              },
               child: ReceitaMunicipalServicesPage(
                 userType: user?.userType ?? '',
                 userProfile: user?.profile ?? '',
@@ -205,10 +272,7 @@ class _AppRouter extends StatelessWidget {
 }
 
 class _SessionBootstrap extends ConsumerStatefulWidget {
-  const _SessionBootstrap({required this.user, required this.child});
-
-  final UserModel? user;
-  final Widget child;
+  const _SessionBootstrap();
 
   @override
   ConsumerState<_SessionBootstrap> createState() => _SessionBootstrapState();
@@ -232,16 +296,27 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       if (mounted) setState(() => _checked = true);
       return;
     }
-    if (widget.user == null) {
-      ref
-          .read(userProvider.notifier)
-          .setUser(
-            UserModel.fromJson(
-              jsonDecode(session.userJson) as Map<String, dynamic>,
-            ),
-          );
+    UserModel? cachedUser;
+    try {
+      cachedUser = UserModel.fromJson(
+        jsonDecode(session.userJson) as Map<String, dynamic>,
+      );
+      ref.read(userProvider.notifier).setUser(cachedUser);
+    } catch (_) {
+      await _sessionStore.clear();
+      if (mounted) setState(() => _checked = true);
+      return;
     }
     if (mounted) setState(() => _checked = true);
+    try {
+      final currentUser = await AuthService().currentUser(
+        accessToken: session.accessToken,
+      );
+      await _sessionStore.updateUserJson(jsonEncode(currentUser.toJson()));
+      ref.read(userProvider.notifier).setUser(currentUser);
+    } catch (_) {
+      // Mantém a sessão local durante indisponibilidade temporária da API.
+    }
   }
 
   @override
@@ -252,11 +327,12 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
         home: Scaffold(body: Center(child: CircularProgressIndicator())),
       );
     }
-    return widget.child;
+    final user = ref.watch(userProvider);
+    return _AppRouter(user: user);
   }
 }
 
-class _GuardedRoute extends StatelessWidget {
+class _GuardedRoute extends ConsumerWidget {
   const _GuardedRoute({
     required this.user,
     required this.allowedRoles,
@@ -268,9 +344,10 @@ class _GuardedRoute extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    final role = user?.role ?? '';
-    if (user == null) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeUser = ref.watch(userProvider) ?? user;
+    final role = activeUser?.role ?? '';
+    if (activeUser == null) {
       return const _AccessBlockedPage(
         title: 'Sessão necessária',
         message: 'Faça login novamente para acessar esta área.',

@@ -1,15 +1,19 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth_service.dart';
+import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
 import '../../core/session_store.dart';
 import '../../data/models/user_model.dart';
 import '../../data/providers/user_provider.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/custom_appbar.dart';
+import 'change_password_page.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key, required this.userType});
@@ -27,9 +31,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  PlatformFile? _selectedPhoto;
   bool _saving = false;
   bool _loading = true;
   bool _loaded = false;
+  bool _mfaEmailEnabled = false;
 
   @override
   void initState() {
@@ -52,6 +58,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     _lastNameController.text = user.lastName;
     _phoneController.text = user.phone;
     _addressController.text = user.address;
+    _mfaEmailEnabled = user.mfaEmailEnabled;
     _loaded = true;
   }
 
@@ -87,16 +94,35 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
     setState(() => _saving = true);
     try {
+      String? uploadedPhotoName;
+      String? uploadedPhotoUrl;
+      if (_selectedPhoto != null) {
+        if (_selectedPhoto!.bytes == null) {
+          _showError('Não foi possível ler a foto selecionada.');
+          return;
+        }
+        final upload = await _authService.uploadFileBytes(
+          kind: 'usuarios/fotos',
+          fileName: _selectedPhoto!.name,
+          bytes: _selectedPhoto!.bytes!,
+        );
+        uploadedPhotoName = upload['file_name']?.toString();
+        uploadedPhotoUrl = upload['file_url']?.toString();
+      }
       final updated = await _authService.updateCurrentUser(
         accessToken: token,
         nome: _nameController.text.trim(),
         sobrenome: _lastNameController.text.trim(),
         telefone: _phoneController.text.trim(),
         endereco: _addressController.text.trim(),
+        userPhotoName: uploadedPhotoName,
+        userPhotoUrl: uploadedPhotoUrl,
+        mfaEmailEnabled: _mfaEmailEnabled,
       );
       await const SessionStore().updateUserJson(jsonEncode(updated.toJson()));
       ref.read(userProvider.notifier).setUser(updated);
       if (!mounted) return;
+      setState(() => _selectedPhoto = null);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Perfil atualizado.')));
@@ -111,10 +137,27 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
   }
 
+  Future<void> _pickProfilePhoto() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    setState(() => _selectedPhoto = result.files.single);
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
     _hydrate(user);
+    final photoUrl =
+        user?.photoUrl.isNotEmpty == true
+            ? PermitApiService().resolveFileUrl(user!.photoUrl)
+            : '';
+    final isCitizen =
+        (user?.userType ?? widget.userType) == 'user' ||
+        (user?.userType ?? widget.userType) == 'cidadao';
 
     return AppScaffold(
       userType: widget.userType,
@@ -135,6 +178,40 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              Center(
+                                child: Column(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 42,
+                                      backgroundImage:
+                                          photoUrl.isNotEmpty
+                                              ? NetworkImage(photoUrl)
+                                              : null,
+                                      child:
+                                          user?.photoUrl.isNotEmpty == true
+                                              ? null
+                                              : const Icon(
+                                                Icons.person_outline,
+                                                size: 42,
+                                              ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    OutlinedButton.icon(
+                                      onPressed:
+                                          _saving ? null : _pickProfilePhoto,
+                                      icon: const Icon(
+                                        Icons.photo_camera_outlined,
+                                      ),
+                                      label: Text(
+                                        _selectedPhoto == null
+                                            ? 'Trocar foto'
+                                            : _selectedPhoto!.name,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 18),
                               Text(
                                 'Dados do usuário',
                                 style: Theme.of(context).textTheme.titleLarge
@@ -166,22 +243,59 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                                   labelText: 'Contato / telefone',
                                 ),
                                 keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  _PhoneInputFormatter(),
+                                ],
+                                validator: (value) {
+                                  final digits = _onlyDigits(value ?? '');
+                                  if (digits.isEmpty) return null;
+                                  return digits.length < 10
+                                      ? 'Informe um telefone válido'
+                                      : null;
+                                },
                               ),
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                controller: _addressController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Endereço',
+                              if (isCitizen) ...[
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: _addressController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Endereço',
+                                  ),
                                 ),
-                              ),
+                              ],
                               const SizedBox(height: 16),
-                              _lockedField('E-mail', user?.email ?? ''),
-                              _lockedField('CPF/CNPJ', user?.cpfCnpj ?? ''),
-                              _lockedField('Perfil', user?.role ?? ''),
                               _lockedField(
-                                'Secretaria',
-                                user?.secretaria ?? 'Não se aplica',
+                                'E-mail',
+                                (user?.email ?? '').isEmpty
+                                    ? 'Não informado'
+                                    : user!.email,
                               ),
+                              _lockedField('CPF/CNPJ', user?.cpfCnpj ?? ''),
+                              const SizedBox(height: 6),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('MFA por e-mail'),
+                                subtitle: Text(
+                                  (user?.email ?? '').isEmpty
+                                      ? 'Informe um e-mail para ativar autenticação em duas etapas.'
+                                      : 'Ao entrar, o sistema solicitará um código enviado para o e-mail cadastrado.',
+                                ),
+                                value: _mfaEmailEnabled,
+                                onChanged:
+                                    _saving || (user?.email ?? '').isEmpty
+                                        ? null
+                                        : (value) => setState(
+                                          () => _mfaEmailEnabled = value,
+                                        ),
+                              ),
+                              if (!isCitizen) ...[
+                                _lockedField('Perfil', user?.role ?? ''),
+                                _lockedField(
+                                  'Secretaria',
+                                  user?.secretaria ?? 'Não se aplica',
+                                ),
+                              ],
                               const SizedBox(height: 18),
                               ElevatedButton.icon(
                                 onPressed: _saving ? null : _save,
@@ -189,6 +303,21 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                                 label: Text(
                                   _saving ? 'Salvando...' : 'Salvar perfil',
                                 ),
+                              ),
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (_) => const ChangePasswordPage(
+                                              firstAccess: false,
+                                            ),
+                                      ),
+                                    ),
+                                icon: const Icon(Icons.lock_reset_outlined),
+                                label: const Text('Alterar senha'),
                               ),
                             ],
                           ),
@@ -219,5 +348,36 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+String _onlyDigits(String value) => value.replaceAll(RegExp(r'\D'), '');
+
+class _PhoneInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = _onlyDigits(newValue.text);
+    final limited = digits.length > 11 ? digits.substring(0, 11) : digits;
+    final formatted = _formatPhone(limited);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  String _formatPhone(String value) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < value.length; i++) {
+      if (i == 0) buffer.write('(');
+      if (i == 2) buffer.write(') ');
+      if ((value.length <= 10 && i == 6) || (value.length > 10 && i == 7)) {
+        buffer.write('-');
+      }
+      buffer.write(value[i]);
+    }
+    return buffer.toString();
   }
 }

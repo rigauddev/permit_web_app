@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../presentation/pages/orla_page.dart';
 import 'package:permit_web_app/data/models/user_model.dart';
 // import 'package:permit_web_app/presentation/pages/login_page.dart';
 // import 'package:permit_web_app/presentation/pages/recovery_password.dart';
@@ -13,12 +14,23 @@ import 'package:permit_web_app/data/models/user_model.dart';
 import 'package:permit_web_app/presentation/pages/question_page.dart';
 import 'package:permit_web_app/presentation/pages/user_alvara_dashboard.dart';
 import 'package:permit_web_app/presentation/pages/event_credential_page.dart';
+import 'package:permit_web_app/presentation/pages/event_qr_scanner_page.dart';
 
 import '../../features/permit_request/pages/permit_request_page.dart';
 
 class AppRoutes {
+  static const String orla = '/orla';
+  static const String orlaVehicles = '/orla/veiculos';
+  static const String orlaDashboard = '/orla/dashboard';
+  static const String orlaInspection = '/orla/fiscalizacao';
+  static const String orlaEstablishments = '/orla/estabelecimentos';
+  static const String orlaGuests = '/orla/hospedes';
+  static const String orlaBanners = '/orla/banners';
   static const String login = '/';
+  static const String serverLogin = '/servidor';
+  static const String adminLogin = '/administrativo';
   static const String recoveryPassword = '/recovery-password';
+  static const String changePassword = '/change-password';
   static const String home = '/home';
   static const String profile = '/profile';
   static const String users = '/users';
@@ -34,12 +46,17 @@ class AppRoutes {
   static const String questions = '/questions';
   static const String userCreate = '/user-create';
   static const String homeContent = '/home-content';
+  static const String contentManagement = '/content-management';
+  static const String emailTemplates = '/email-templates';
   static const String secretarias = '/secretarias';
   static const String permissions = '/permissions';
+  static const String help = '/help';
+  static const String operatorHelp = '/help/operadores';
 
   static const String permitDashboard = '/permit-dashboard';
   static const String eventPermit = '/event-permit';
   static const String validateEvent = '/validar-evento';
+  static const String verifyEvent = '/verificar-evento';
 
   static Route<dynamic>? generateRoute(
     RouteSettings settings,
@@ -55,11 +72,58 @@ class AppRoutes {
               publicCode:
                   uri.pathSegments.length > 1 ? uri.pathSegments[1] : '',
               token: uri.queryParameters['t'],
+              userType: user?.userType ?? '',
+              userProfile: user?.profile ?? '',
             ),
       );
     }
 
     switch (settings.name) {
+      case orla:
+        if (!_canAccessOrla(user)) return _blockedRoute(user);
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const OrlaPage(),
+        );
+      case orlaVehicles:
+        if (!_canAccess(user, const {'cidadao'})) return _blockedRoute(user);
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const OrlaPage(section: OrlaSection.vehicles),
+        );
+      case orlaDashboard:
+        if (!_canAccessOrlaStaff(user)) return _blockedRoute(user);
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const OrlaPage(section: OrlaSection.dashboard),
+        );
+      case orlaInspection:
+        if (!_canAccessOrlaInspection(user)) return _blockedRoute(user);
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const OrlaPage(section: OrlaSection.inspection),
+        );
+      case orlaEstablishments:
+      case orlaGuests:
+        if (user == null) return _blockedRoute(user);
+        return MaterialPageRoute(
+          settings: settings,
+          builder:
+              (_) => const OrlaPage(
+                establishmentsOnly: true,
+                section: OrlaSection.guests,
+              ),
+        );
+      case orlaBanners:
+        if (user == null) return _blockedRoute(user);
+        return MaterialPageRoute(
+          settings: settings,
+          builder:
+              (_) => const OrlaPage(
+                establishmentsOnly: true,
+                section: OrlaSection.banners,
+              ),
+        );
       case permitDashboard:
         if (!_canAccess(user, const {'cidadao'})) {
           return _blockedRoute(user);
@@ -122,7 +186,23 @@ class AppRoutes {
       case validateEvent:
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const EventCredentialPage(),
+          builder:
+              (_) => EventCredentialPage(
+                userType: user?.userType ?? '',
+                userProfile: user?.profile ?? '',
+              ),
+        );
+      case verifyEvent:
+        if (user == null || user.role == 'cidadao') {
+          return _blockedRoute(user);
+        }
+        return MaterialPageRoute(
+          settings: settings,
+          builder:
+              (_) => EventQrScannerPage(
+                userType: user.userType,
+                userProfile: user.profile,
+              ),
         );
 
       default:
@@ -132,6 +212,36 @@ class AppRoutes {
 
   static bool _canAccess(UserModel? user, Set<String> allowedRoles) {
     return user != null && allowedRoles.contains(user.role);
+  }
+
+  static bool _canAccessOrla(UserModel? user) {
+    if (user == null) return false;
+    if (user.role == 'cidadao') return true;
+    return _canAccessOrlaStaff(user);
+  }
+
+  static bool _canAccessOrlaStaff(UserModel? user) {
+    if (user == null) return false;
+    if (user.role == 'admin') return true;
+    if (user.role == 'gestor_secretaria' ||
+        user.role == 'operador_secretaria') {
+      return const {
+        'semop',
+        'dmtran',
+        'guarda_civil',
+      }.contains(user.secretaria);
+    }
+    return false;
+  }
+
+  static bool _canAccessOrlaInspection(UserModel? user) {
+    if (user == null) return false;
+    if (user.role == 'admin') return true;
+    if (user.role == 'gestor_secretaria' ||
+        user.role == 'operador_secretaria') {
+      return const {'dmtran', 'guarda_civil'}.contains(user.secretaria);
+    }
+    return false;
   }
 
   static Route<dynamic> _blockedRoute(UserModel? user) {

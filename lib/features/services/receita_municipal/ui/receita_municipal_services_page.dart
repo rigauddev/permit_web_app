@@ -9,6 +9,9 @@ import '../../../../shared/widgets/app_scaffold.dart';
 import '../../../../core/session_expiration.dart';
 
 const favoriteEventPermitServiceKey = 'alvara_evento';
+const favoriteOrlaServiceKey = 'acesso_orla';
+const favoriteBusinessPermitServiceKey = 'alvara_funcionamento';
+const favoriteIptuServiceKey = 'iptu';
 const _favoriteServicesStorageKey = 'favorite_services';
 
 Future<String> _favoriteServicesKey() async {
@@ -57,12 +60,35 @@ class _ReceitaMunicipalServicesPageState
   bool _favoriteLoading = true;
   Set<String> _favoriteServices = {};
   List<Map<String, dynamic>> _eventTypes = [];
+  Set<String> _activeServices = {
+    favoriteEventPermitServiceKey,
+    favoriteOrlaServiceKey,
+  };
 
   @override
   void initState() {
     super.initState();
     _loadFavorites();
     _loadEventTypes();
+    _loadServiceConfigs();
+  }
+
+  Future<void> _loadServiceConfigs() async {
+    try {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null || token.isEmpty) return;
+      final services = await PermitApiService().listServiceConfigs(
+        accessToken: token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _activeServices =
+            services
+                .where((item) => item['is_active'] == true)
+                .map((item) => item['key'].toString())
+                .toSet();
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadEventTypes() async {
@@ -120,13 +146,11 @@ class _ReceitaMunicipalServicesPageState
       userProfile: widget.userProfile,
       appBar: AppBar(
         title: Text(isCitizen ? 'Serviços municipais' : 'Serviços da área'),
-        actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => _goBack(context),
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ],
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => _goBack(context),
+          icon: const Icon(Icons.arrow_back),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -145,7 +169,7 @@ class _ReceitaMunicipalServicesPageState
                 const SizedBox(height: 6),
                 Text(
                   isCitizen
-                      ? 'Os serviços estão organizados por categoria. Nesta primeira entrega, o serviço ativo é o Alvará de Evento.'
+                      ? 'Solicite alvarás de eventos e cadastre veículos para acesso à orla.'
                       : 'Acompanhe as solicitações relacionadas ao serviço de Alvará de Evento.',
                 ),
                 const SizedBox(height: 18),
@@ -154,54 +178,88 @@ class _ReceitaMunicipalServicesPageState
                   description:
                       'Serviços centralizados pela Prefeitura e acompanhados por mais de uma secretaria.',
                   children: [
-                    _ServiceCard(
-                      icon: Icons.event_available_outlined,
-                      title: 'Alvará de Evento',
-                      tag: 'MVP ativo',
-                      description:
-                          'Solicitação de autorização para festas e eventos, com análise das secretarias responsáveis.',
-                      loading: _loading,
-                      favoriteLoading: _favoriteLoading,
-                      isFavorite: _favoriteServices.contains(
-                        favoriteEventPermitServiceKey,
+                    if (_activeServices.contains(
+                          favoriteEventPermitServiceKey,
+                        ) ||
+                        _activeServices.contains(
+                          favoriteBusinessPermitServiceKey,
+                        ))
+                      _PermitGroupCard(
+                        eventActive: _activeServices.contains(
+                          favoriteEventPermitServiceKey,
+                        ),
+                        businessActive: _activeServices.contains(
+                          favoriteBusinessPermitServiceKey,
+                        ),
+                        loading: _loading,
+                        favoriteLoading: _favoriteLoading,
+                        eventFavorite: _favoriteServices.contains(
+                          favoriteEventPermitServiceKey,
+                        ),
+                        businessFavorite: _favoriteServices.contains(
+                          favoriteBusinessPermitServiceKey,
+                        ),
+                        onOpenEvent: _openEventPermit,
+                        onOpenBusiness:
+                            () => _showServiceUnavailable(
+                              'Alvará de Funcionamento',
+                            ),
+                        onToggleEvent:
+                            () =>
+                                _toggleFavorite(favoriteEventPermitServiceKey),
+                        onToggleBusiness:
+                            () => _toggleFavorite(
+                              favoriteBusinessPermitServiceKey,
+                            ),
                       ),
-                      onToggleFavorite:
-                          () => _toggleFavorite(favoriteEventPermitServiceKey),
-                      onTap: _openEventPermit,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const _ServiceCategorySection(
-                  title: 'Secretarias',
-                  description:
-                      'Na v2, cada secretaria terá seus próprios serviços neste catálogo.',
-                  children: [
-                    _FutureServiceCard(
-                      title: 'Meio Ambiente',
-                      description:
-                          'Serviços ambientais serão adicionados em versões futuras.',
-                    ),
-                    _FutureServiceCard(
-                      title: 'Infraestrutura',
-                      description:
-                          'Vistorias e serviços técnicos serão organizados aqui.',
-                    ),
-                    _FutureServiceCard(
-                      title: 'DMTRAN',
-                      description:
-                          'Serviços de mobilidade e trânsito serão incluídos na v2.',
-                    ),
-                    _FutureServiceCard(
-                      title: 'Vigilância Sanitária',
-                      description:
-                          'Serviços sanitários ficarão separados por secretaria.',
-                    ),
+                    if (_activeServices.contains(favoriteIptuServiceKey))
+                      _ServiceCard(
+                        icon: Icons.home_work_outlined,
+                        title: 'IPTU',
+                        tag: 'Prefeitura',
+                        description:
+                            'Consulta e serviços relacionados ao IPTU.',
+                        loading: false,
+                        favoriteLoading: _favoriteLoading,
+                        isFavorite: _favoriteServices.contains(
+                          favoriteIptuServiceKey,
+                        ),
+                        onToggleFavorite:
+                            () => _toggleFavorite(favoriteIptuServiceKey),
+                        onTap: () => _showServiceUnavailable('IPTU'),
+                      ),
+                    if (_activeServices.contains(favoriteOrlaServiceKey))
+                      _ServiceCard(
+                        icon: Icons.beach_access,
+                        title: 'Acesso à Orla',
+                        tag: 'SEMOP',
+                        description:
+                            'Cadastre veículos, gere QR Code e solicite acesso à Orla da praia de Guaibim.',
+                        loading: false,
+                        favoriteLoading: _favoriteLoading,
+                        isFavorite: _favoriteServices.contains(
+                          favoriteOrlaServiceKey,
+                        ),
+                        onToggleFavorite:
+                            () => _toggleFavorite(favoriteOrlaServiceKey),
+                        onTap:
+                            () => Navigator.pushNamed(context, AppRoutes.orla),
+                      ),
                   ],
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showServiceUnavailable(String serviceName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$serviceName está ativo no catálogo, mas o formulário ainda será publicado.',
         ),
       ),
     );
@@ -324,13 +382,156 @@ class _ServiceCategorySection extends StatelessWidget {
               shrinkWrap: true,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 2.2,
+              childAspectRatio: 1.45,
               physics: const NeverScrollableScrollPhysics(),
               children: children,
             );
           },
         ),
       ],
+    );
+  }
+}
+
+class _PermitGroupCard extends StatelessWidget {
+  const _PermitGroupCard({
+    required this.eventActive,
+    required this.businessActive,
+    required this.loading,
+    required this.favoriteLoading,
+    required this.eventFavorite,
+    required this.businessFavorite,
+    required this.onOpenEvent,
+    required this.onOpenBusiness,
+    required this.onToggleEvent,
+    required this.onToggleBusiness,
+  });
+
+  final bool eventActive;
+  final bool businessActive;
+  final bool loading;
+  final bool favoriteLoading;
+  final bool eventFavorite;
+  final bool businessFavorite;
+  final VoidCallback onOpenEvent;
+  final VoidCallback onOpenBusiness;
+  final VoidCallback onToggleEvent;
+  final VoidCallback onToggleBusiness;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFFE5F4EA),
+                  child: Icon(
+                    Icons.assignment_turned_in_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Alvarás',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text('Escolha o tipo de alvará que deseja solicitar.'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (eventActive)
+              _PermitSubServiceTile(
+                icon: Icons.event_available_outlined,
+                title: 'Alvará de Evento',
+                description: 'Festas, eventos e autorizações temporárias.',
+                loading: loading,
+                favoriteLoading: favoriteLoading,
+                isFavorite: eventFavorite,
+                onTap: onOpenEvent,
+                onToggleFavorite: onToggleEvent,
+              ),
+            if (businessActive)
+              _PermitSubServiceTile(
+                icon: Icons.store_mall_directory_outlined,
+                title: 'Alvará de Funcionamento',
+                description: 'Funcionamento de estabelecimentos e atividades.',
+                loading: false,
+                favoriteLoading: favoriteLoading,
+                isFavorite: businessFavorite,
+                onTap: onOpenBusiness,
+                onToggleFavorite: onToggleBusiness,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PermitSubServiceTile extends StatelessWidget {
+  const _PermitSubServiceTile({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.loading,
+    required this.favoriteLoading,
+    required this.isFavorite,
+    required this.onTap,
+    required this.onToggleFavorite,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final bool loading;
+  final bool favoriteLoading;
+  final bool isFavorite;
+  final VoidCallback onTap;
+  final VoidCallback onToggleFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FBF7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD8E0D8)),
+        ),
+        child: ListTile(
+          leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          subtitle: Text(description),
+          onTap: loading ? null : onTap,
+          trailing: IconButton(
+            tooltip:
+                isFavorite
+                    ? 'Remover dos favoritos'
+                    : 'Adicionar aos favoritos',
+            onPressed: favoriteLoading ? null : onToggleFavorite,
+            icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -483,49 +684,6 @@ class _ServiceCard extends StatelessWidget {
   }
 }
 
-class _FutureServiceCard extends StatelessWidget {
-  const _FutureServiceCard({required this.title, required this.description});
-
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              Icons.lock_clock_outlined,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    description,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class FavoriteServicesPage extends StatefulWidget {
   const FavoriteServicesPage({
     super.key,
@@ -580,13 +738,11 @@ class _FavoriteServicesPageState extends State<FavoriteServicesPage> {
       userProfile: widget.userProfile,
       appBar: AppBar(
         title: const Text('Serviços favoritos'),
-        actions: [
-          IconButton(
-            tooltip: 'Voltar',
-            onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ],
+        leading: IconButton(
+          tooltip: 'Voltar',
+          onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+          icon: const Icon(Icons.arrow_back),
+        ),
       ),
       body:
           _loading

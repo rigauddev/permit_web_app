@@ -25,6 +25,9 @@ class _EventMapPageState extends State<EventMapPage> {
   List<_MapEvent> _events = [];
   _MapEvent? _selected;
   DateTimeRange? _period;
+  String _pageTitle = 'Mapa de eventos autorizados';
+  String _pageDescription =
+      'Acompanhe eventos aprovados por período e abra a rota de cada local.';
 
   @override
   void initState() {
@@ -48,7 +51,12 @@ class _EventMapPageState extends State<EventMapPage> {
         if (mounted) await SessionExpiration.logout(context);
         return;
       }
-      final requests = await _api.listEventMapRequests(token);
+      final results = await Future.wait<dynamic>([
+        _api.listEventMapRequests(token),
+        _api.getContentSettings(accessToken: token),
+      ]);
+      final requests = results[0] as List<Map<String, dynamic>>;
+      final settings = results[1] as Map<String, dynamic>;
       final events =
           requests
               .map(_MapEvent.fromRequest)
@@ -60,6 +68,9 @@ class _EventMapPageState extends State<EventMapPage> {
       setState(() {
         _events = events;
         _selected = events.isNotEmpty ? events.first : null;
+        _pageTitle = settings['event_map_title']?.toString() ?? _pageTitle;
+        _pageDescription =
+            settings['event_map_description']?.toString() ?? _pageDescription;
       });
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -132,7 +143,10 @@ class _EventMapPageState extends State<EventMapPage> {
   }
 
   Future<void> _openAddress(_MapEvent event) async {
-    final query = Uri.encodeComponent('${event.address}, Valença, BA');
+    final query =
+        event.latitude != null && event.longitude != null
+            ? '${event.latitude},${event.longitude}'
+            : Uri.encodeComponent('${event.address}, Valença, BA');
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=$query',
     );
@@ -147,7 +161,8 @@ class _EventMapPageState extends State<EventMapPage> {
       builder:
           (context) => Dialog.fullscreen(
             child: _FullMapView(
-              events: events,
+              events: events.take(_mapLimit(context)).toList(),
+              overflowEvents: events.skip(_mapLimit(context)).toList(),
               selected: _selected,
               onSelect: (event) {
                 setState(() => _selected = event);
@@ -171,7 +186,7 @@ class _EventMapPageState extends State<EventMapPage> {
     return AppScaffold(
       userType: widget.userType,
       appBar: AppBar(
-        title: const Text('Mapa de eventos autorizados'),
+        title: Text(_pageTitle),
         actions: [
           IconButton(
             tooltip: 'Atualizar',
@@ -191,6 +206,8 @@ class _EventMapPageState extends State<EventMapPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _Header(
+                    title: _pageTitle,
+                    description: _pageDescription,
                     total: events.length,
                     period: _period,
                     onPickPeriod: _pickPeriod,
@@ -235,13 +252,21 @@ class _EventMapPageState extends State<EventMapPage> {
   }
 }
 
+int _mapLimit(BuildContext context) =>
+    MediaQuery.sizeOf(context).width < 700 ? 20 : 30;
+
 class _Header extends StatelessWidget {
   const _Header({
+    required this.title,
+    required this.description,
     required this.total,
     required this.period,
     required this.onPickPeriod,
     this.onOpenFullMap,
   });
+
+  final String title;
+  final String description;
 
   final int total;
   final DateTimeRange? period;
@@ -261,15 +286,13 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Eventos autorizados',
+                title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Acompanhe eventos aprovados por período no mapa gratuito do app e abra o endereço no Google Maps quando precisar navegar.',
-              ),
+              Text(description),
             ],
           ),
         ),
@@ -317,8 +340,11 @@ class _MapLayout extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 900;
+        final visibleLimit = _mapLimit(context);
+        final visibleEvents = events.take(visibleLimit).toList();
+        final overflowEvents = events.skip(visibleLimit).toList();
         final map = _OperationalMap(
-          events: events,
+          events: visibleEvents,
           selected: selected,
           onSelect: onSelect,
         );
@@ -335,10 +361,16 @@ class _MapLayout extends StatelessWidget {
               details,
               const SizedBox(height: 12),
               _EventTable(
-                events: events,
+                events: visibleEvents,
                 selected: selected,
                 onSelect: onSelect,
+                title:
+                    'Eventos no mapa (${visibleEvents.length} de ${events.length})',
               ),
+              if (overflowEvents.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _OverflowEventList(events: overflowEvents, onSelect: onSelect),
+              ],
             ],
           );
         }
@@ -353,7 +385,17 @@ class _MapLayout extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            _EventTable(events: events, selected: selected, onSelect: onSelect),
+            _EventTable(
+              events: visibleEvents,
+              selected: selected,
+              onSelect: onSelect,
+              title:
+                  'Eventos no mapa (${visibleEvents.length} de ${events.length})',
+            ),
+            if (overflowEvents.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _OverflowEventList(events: overflowEvents, onSelect: onSelect),
+            ],
           ],
         );
       },
@@ -391,7 +433,12 @@ class _OperationalMap extends StatelessWidget {
                 onSelect: onSelect,
               ),
             ),
-            Positioned(left: 18, top: 16, child: _Legend(events: events)),
+            Positioned(
+              left: 12,
+              top: 12,
+              right: 12,
+              child: _Legend(events: events),
+            ),
           ],
         ),
       ),
@@ -416,14 +463,14 @@ class _Legend extends StatelessWidget {
         spacing: 10,
         runSpacing: 8,
         children:
-            _TimelineStatus.values
+            _categoryLegend(events)
                 .map(
-                  (status) => Row(
+                  (entry) => Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.circle, size: 10, color: status.color),
+                      Icon(entry.icon, size: 14, color: entry.color),
                       const SizedBox(width: 5),
-                      Text(status.label, style: const TextStyle(fontSize: 12)),
+                      Text(entry.label, style: const TextStyle(fontSize: 12)),
                     ],
                   ),
                 )
@@ -513,60 +560,147 @@ class _EventTable extends StatelessWidget {
     required this.events,
     required this.selected,
     required this.onSelect,
+    required this.title,
   });
 
   final List<_MapEvent> events;
   final _MapEvent? selected;
   final ValueChanged<_MapEvent> onSelect;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE0E7E2)),
       ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: events.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final event = events[index];
-          final isSelected = selected?.requestId == event.requestId;
-          return ListTile(
-            selected: isSelected,
-            selectedTileColor: const Color(0xFFEAF5EF),
-            leading: CircleAvatar(
-              backgroundColor: event.timeline.color.withValues(alpha: 0.12),
-              child: Icon(Icons.location_on, color: event.timeline.color),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
-            title: Text(event.name),
-            subtitle: Text('${_formatDate(event.date)} | ${event.address}'),
-            trailing: _TimelineChip(status: event.timeline),
-            onTap: () => onSelect(event),
-          );
-        },
+          ),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: events.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final event = events[index];
+              final isSelected = selected?.requestId == event.requestId;
+              final style = event.categoryStyle;
+              return ListTile(
+                selected: isSelected,
+                selectedTileColor: const Color(0xFFEAF5EF),
+                leading: CircleAvatar(
+                  backgroundColor: style.color.withValues(alpha: 0.12),
+                  child: Icon(style.icon, color: style.color),
+                ),
+                title: Text(event.name),
+                subtitle: Text(
+                  '${_formatDate(event.date)} | ${event.eventTypeName} | ${event.address}',
+                ),
+                trailing: _TimelineChip(status: event.timeline),
+                onTap: () => onSelect(event),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
 
-class _FullMapView extends StatelessWidget {
+class _OverflowEventList extends StatelessWidget {
+  const _OverflowEventList({required this.events, required this.onSelect});
+
+  final List<_MapEvent> events;
+  final ValueChanged<_MapEvent> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE0E7E2)),
+      ),
+      child: ExpansionTile(
+        leading: const Icon(Icons.list_alt_outlined),
+        title: Text('Listar mais ${events.length} evento(s)'),
+        children:
+            events.map((event) {
+              final style = event.categoryStyle;
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: style.color.withValues(alpha: 0.12),
+                  child: Icon(style.icon, color: style.color),
+                ),
+                title: Text(event.name),
+                subtitle: Text(
+                  '${_formatDate(event.date)} | ${event.eventTypeName} | ${event.address}',
+                ),
+                onTap: () => onSelect(event),
+              );
+            }).toList(),
+      ),
+    );
+  }
+}
+
+class _FullMapView extends StatefulWidget {
   const _FullMapView({
     required this.events,
+    required this.overflowEvents,
     required this.selected,
     required this.onSelect,
   });
 
   final List<_MapEvent> events;
+  final List<_MapEvent> overflowEvents;
   final _MapEvent? selected;
   final ValueChanged<_MapEvent> onSelect;
 
   @override
+  State<_FullMapView> createState() => _FullMapViewState();
+}
+
+class _FullMapViewState extends State<_FullMapView> {
+  late final TransformationController _controller;
+  late _MapEvent? _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TransformationController();
+    _selected =
+        widget.selected ??
+        (widget.events.isNotEmpty ? widget.events.first : null);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _selectEvent(_MapEvent event) {
+    setState(() => _selected = event);
+    widget.onSelect(event);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = TransformationController();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mapa da cidade'),
@@ -582,17 +716,15 @@ class _FullMapView extends StatelessWidget {
         children: [
           Positioned.fill(
             child: InteractiveViewer(
-              transformationController: controller,
+              transformationController: _controller,
               minScale: 1,
               maxScale: 4,
               panEnabled: true,
               scaleEnabled: true,
               child: _OsmMapSurface(
-                events: events,
-                selected: selected,
-                onSelect: (event) {
-                  onSelect(event);
-                },
+                events: widget.events,
+                selected: _selected,
+                onSelect: _selectEvent,
                 fullScreen: true,
               ),
             ),
@@ -602,9 +734,9 @@ class _FullMapView extends StatelessWidget {
             right: 16,
             bottom: 16,
             child: _FullMapEventStrip(
-              events: events,
-              selected: selected,
-              onSelect: onSelect,
+              events: [...widget.events, ...widget.overflowEvents],
+              selected: _selected,
+              onSelect: _selectEvent,
             ),
           ),
         ],
@@ -649,6 +781,7 @@ class _OsmMapSurface extends StatelessWidget {
               final left = (projected.dx - center.dx) + size.width / 2;
               final top = (projected.dy - center.dy) + size.height / 2;
               final isSelected = selected?.requestId == event.requestId;
+              final style = event.categoryStyle;
               return Positioned(
                 left: left.clamp(18, size.width - 54).toDouble(),
                 top: top.clamp(54, size.height - 72).toDouble(),
@@ -662,7 +795,7 @@ class _OsmMapSurface extends StatelessWidget {
                       width: isSelected ? 48 : 40,
                       height: isSelected ? 48 : 40,
                       decoration: BoxDecoration(
-                        color: event.timeline.color,
+                        color: style.color,
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: Colors.white,
@@ -676,10 +809,10 @@ class _OsmMapSurface extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.location_on,
+                      child: Icon(
+                        style.icon,
                         color: Colors.white,
-                        size: 25,
+                        size: isSelected ? 25 : 22,
                       ),
                     ),
                   ),
@@ -921,6 +1054,8 @@ class _MapEvent {
     required this.publicLabel,
     required this.hasFinalPermit,
     required this.hasCredential,
+    required this.eventTypeKey,
+    required this.eventTypeName,
     this.latitude,
     this.longitude,
   });
@@ -936,6 +1071,8 @@ class _MapEvent {
   final String publicLabel;
   final bool hasFinalPermit;
   final bool hasCredential;
+  final String eventTypeKey;
+  final String eventTypeName;
   final double? latitude;
   final double? longitude;
 
@@ -954,6 +1091,9 @@ class _MapEvent {
     return _TimelineStatus.happening;
   }
 
+  _CategoryStyle get categoryStyle =>
+      _categoryStyle(eventTypeKey, eventTypeName);
+
   static _MapEvent? fromRequest(Map<String, dynamic> request) {
     final requestId = request['formId'] as int? ?? request['id'] as int?;
     final date = DateTime.tryParse(request['data_do_evento']?.toString() ?? '');
@@ -967,6 +1107,14 @@ class _MapEvent {
     );
     final hasCredential =
         (request['credentials'] as List<dynamic>? ?? const []).isNotEmpty;
+    final eventData = request['dados_evento'] as Map<String, dynamic>? ?? {};
+    final eventTypeKey = eventData['tipo_evento']?.toString() ?? '';
+    final eventTypeName =
+        eventData['tipo_evento_nome']?.toString().trim().isNotEmpty == true
+            ? eventData['tipo_evento_nome'].toString()
+            : eventTypeKey.isEmpty
+            ? 'Tipo não informado'
+            : eventTypeKey;
     return _MapEvent(
       requestId: requestId,
       protocol: request['protocolo']?.toString() ?? '-',
@@ -978,6 +1126,8 @@ class _MapEvent {
       status: request['status']?.toString() ?? '',
       hasFinalPermit: hasFinalPermit,
       hasCredential: hasCredential,
+      eventTypeKey: eventTypeKey,
+      eventTypeName: eventTypeName,
       latitude: double.tryParse(request['latitude_evento']?.toString() ?? ''),
       longitude: double.tryParse(request['longitude_evento']?.toString() ?? ''),
       publicLabel:
@@ -997,6 +1147,98 @@ enum _TimelineStatus {
 
   final String label;
   final Color color;
+}
+
+class _CategoryStyle {
+  const _CategoryStyle({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+List<_CategoryStyle> _categoryLegend(List<_MapEvent> events) {
+  final styles = <String, _CategoryStyle>{};
+  for (final event in events) {
+    final style = event.categoryStyle;
+    styles.putIfAbsent(style.label, () => style);
+  }
+  return styles.values.toList()..sort((a, b) => a.label.compareTo(b.label));
+}
+
+_CategoryStyle _categoryStyle(String key, String name) {
+  final value = '${key.toLowerCase()} ${name.toLowerCase()}';
+  if (value.contains('show') ||
+      value.contains('mus') ||
+      value.contains('som') ||
+      value.contains('trio')) {
+    return _CategoryStyle(
+      label: _friendlyCategoryLabel(name, 'Show/Música'),
+      icon: Icons.music_note,
+      color: const Color(0xFF7C3AED),
+    );
+  }
+  if (value.contains('relig') ||
+      value.contains('prociss') ||
+      value.contains('igreja')) {
+    return _CategoryStyle(
+      label: _friendlyCategoryLabel(name, 'Religioso'),
+      icon: Icons.church_outlined,
+      color: const Color(0xFF2563EB),
+    );
+  }
+  if (value.contains('esport') ||
+      value.contains('corrida') ||
+      value.contains('caminhada')) {
+    return _CategoryStyle(
+      label: _friendlyCategoryLabel(name, 'Esportivo'),
+      icon: Icons.directions_run,
+      color: const Color(0xFF0E7C3A),
+    );
+  }
+  if (value.contains('feira') ||
+      value.contains('comerc') ||
+      value.contains('gastron')) {
+    return _CategoryStyle(
+      label: _friendlyCategoryLabel(name, 'Feira/Comércio'),
+      icon: Icons.storefront_outlined,
+      color: const Color(0xFFF59E0B),
+    );
+  }
+  if (value.contains('carnaval') ||
+      value.contains('festa') ||
+      value.contains('sao joao') ||
+      value.contains('são joão')) {
+    return _CategoryStyle(
+      label: _friendlyCategoryLabel(name, 'Festa popular'),
+      icon: Icons.celebration_outlined,
+      color: const Color(0xFFE11D48),
+    );
+  }
+  if (value.contains('palestra') ||
+      value.contains('semin') ||
+      value.contains('confer')) {
+    return _CategoryStyle(
+      label: _friendlyCategoryLabel(name, 'Institucional'),
+      icon: Icons.school_outlined,
+      color: const Color(0xFF0891B2),
+    );
+  }
+  return _CategoryStyle(
+    label: _friendlyCategoryLabel(name, 'Outros eventos'),
+    icon: Icons.event_available_outlined,
+    color: const Color(0xFF667085),
+  );
+}
+
+String _friendlyCategoryLabel(String name, String fallback) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty || trimmed == 'Tipo não informado') return fallback;
+  return trimmed.length > 22 ? fallback : trimmed;
 }
 
 String _formatDate(DateTime date) {

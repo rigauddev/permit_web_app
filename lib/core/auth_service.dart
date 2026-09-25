@@ -10,6 +10,7 @@ class LoginChallenge {
   final List<String> availableMethods;
   final String defaultMethod;
   final String? accessToken;
+  final String? expiresAt;
   final UserModel? user;
 
   LoginChallenge({
@@ -18,6 +19,7 @@ class LoginChallenge {
     required this.availableMethods,
     required this.defaultMethod,
     this.accessToken,
+    this.expiresAt,
     this.user,
   });
 
@@ -30,6 +32,7 @@ class LoginChallenge {
       ),
       defaultMethod: json['default_method'] as String? ?? 'email',
       accessToken: json['access_token'] as String?,
+      expiresAt: json['expires_at'] as String?,
       user:
           json['user'] is Map<String, dynamic>
               ? UserModel.fromApiSession(json['user'] as Map<String, dynamic>)
@@ -56,13 +59,19 @@ class MfaGeneration {
 
 class AuthSession {
   final String accessToken;
+  final String expiresAt;
   final UserModel user;
 
-  AuthSession({required this.accessToken, required this.user});
+  AuthSession({
+    required this.accessToken,
+    required this.expiresAt,
+    required this.user,
+  });
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     return AuthSession(
       accessToken: json['access_token'] as String,
+      expiresAt: json['expires_at'] as String,
       user: UserModel.fromApiSession(json['user'] as Map<String, dynamic>),
     );
   }
@@ -101,11 +110,29 @@ class AuthService {
           baseUrl ??
           const String.fromEnvironment(
             'API_BASE_URL',
-            defaultValue: 'http://127.0.0.1:8000',
+            defaultValue: String.fromEnvironment(
+              'API_URL',
+              defaultValue: 'http://127.0.0.1:8000',
+            ),
           );
 
   final http.Client _client;
   final String _baseUrl;
+
+  Future<Map<String, dynamic>> uploadFileBytes({
+    required String kind,
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$_baseUrl/uploads'))
+          ..fields['kind'] = kind
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+          );
+    final response = await http.Response.fromStream(await request.send());
+    return _decodeResponse(response);
+  }
 
   Future<LoginChallenge> startLogin(
     String identifier,
@@ -158,13 +185,36 @@ class AuthService {
     required String senha,
     String? telefone,
     String? endereco,
+    String? cep,
+    String? enderecoLatitude,
+    String? enderecoLongitude,
+    String tipoUsuario = 'morador',
+    String? businessCategory,
+    String? managedInnName,
+    int? managedInnCapacity,
+    int? managedInnGuestCapacity,
+    String? tipoEstadia,
+    String? estadiaEndereco,
+    String? estadiaCep,
+    String? estadiaLatitude,
+    String? estadiaLongitude,
+    String? estadiaInicio,
+    String? estadiaFim,
+    int? pousadaId,
+    bool orlaAccessRequested = false,
+    Map<String, dynamic>? orlaVehicle,
     String? emailVerificationToken,
     required bool responsibilityTermAccepted,
     required String userPhotoName,
+    String? identityDocumentName,
+    String? identityDocumentUrl,
+    String? identityDocumentType,
     required String residenceProofName,
     required String residenceProofType,
     String? userPhotoUrl,
     String? residenceProofUrl,
+    String? businessPermitName,
+    String? businessPermitUrl,
     bool mfaEmailEnabled = false,
   }) async {
     final response = await _post('/auth/register', {
@@ -177,14 +227,37 @@ class AuthService {
       'senha': senha,
       'telefone': telefone,
       'endereco': endereco,
+      'cep': cep,
+      'endereco_latitude': enderecoLatitude,
+      'endereco_longitude': enderecoLongitude,
+      'tipo_usuario': tipoUsuario,
+      'business_category': businessCategory,
+      'managed_inn_name': managedInnName,
+      'managed_inn_capacity': managedInnCapacity,
+      'managed_inn_guest_capacity': managedInnGuestCapacity,
+      'tipo_estadia': tipoEstadia,
+      'estadia_endereco': estadiaEndereco,
+      'estadia_cep': estadiaCep,
+      'estadia_latitude': estadiaLatitude,
+      'estadia_longitude': estadiaLongitude,
+      'estadia_inicio': estadiaInicio,
+      'estadia_fim': estadiaFim,
+      'pousada_id': pousadaId,
+      'orla_access_requested': orlaAccessRequested,
+      'orla_vehicle': orlaVehicle,
       'role': 'cidadao',
       'email_verification_token': emailVerificationToken,
       'termo_responsabilidade_aceito': responsibilityTermAccepted,
       'foto_usuario_nome': userPhotoName,
       'foto_usuario_url': userPhotoUrl,
+      'documento_identificacao_nome': identityDocumentName,
+      'documento_identificacao_url': identityDocumentUrl,
+      'documento_identificacao_tipo': identityDocumentType,
       'comprovante_residencia_nome': residenceProofName,
       'comprovante_residencia_url': residenceProofUrl,
       'comprovante_residencia_tipo': residenceProofType,
+      'alvara_funcionamento_nome': businessPermitName,
+      'alvara_funcionamento_url': businessPermitUrl,
       'mfa_email_enabled': mfaEmailEnabled,
     });
     return UserModel.fromApiUser(response);
@@ -242,18 +315,36 @@ class AuthService {
     return UserModel.fromApiUser(response);
   }
 
+  Future<AuthSession> changePassword({
+    required String accessToken,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _post('/auth/change-password', {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    }, accessToken: accessToken);
+    return AuthSession.fromJson(response);
+  }
+
   Future<UserModel> updateCurrentUser({
     required String accessToken,
     required String nome,
     String? sobrenome,
     String? telefone,
     String? endereco,
+    String? userPhotoName,
+    String? userPhotoUrl,
+    bool? mfaEmailEnabled,
   }) async {
     final response = await _patch('/auth/me', {
       'nome': nome,
       'sobrenome': sobrenome,
       'telefone': telefone,
       'endereco': endereco,
+      'foto_usuario_nome': userPhotoName,
+      'foto_usuario_url': userPhotoUrl,
+      'mfa_email_enabled': mfaEmailEnabled,
     }, accessToken: accessToken);
     return UserModel.fromApiUser(response);
   }

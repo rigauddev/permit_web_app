@@ -106,52 +106,67 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
     }
   }
 
-  Future<void> _saveDraft() async {
+  Future<void> _clearDraft() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_draftKey);
+  }
+
+  Future<void> _exitFlow() async {
+    final action = await showDialog<String>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Sair da solicitação'),
+            content: const Text(
+              'Você pode salvar o preenchimento neste dispositivo para continuar depois.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'stay'),
+                child: const Text('Continuar aqui'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'leave'),
+                child: const Text('Sair sem salvar'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context, 'save'),
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Salvar e sair'),
+              ),
+            ],
+          ),
+    );
+    if (action == null || action == 'stay' || !mounted) return;
+    if (action == 'save') {
+      await _saveDraft(showMessage: false);
+    } else {
+      await _clearDraft();
+    }
+    final controller = ref.read(permitRequestControllerProvider.notifier);
+    controller.resetForm();
+    controller.initializeQuestions(
+      widget.questions,
+      eventTypes: widget.eventTypes,
+    );
+    if (widget.eventType != null) {
+      controller.selectEventType(widget.eventType!);
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _saveDraft({bool showMessage = true}) async {
     final controller = ref.read(permitRequestControllerProvider.notifier);
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(
       _draftKey,
       jsonEncode(controller.toDraftJson()),
     );
-    if (!mounted) return;
+    if (!mounted || !showMessage) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Rascunho salvo para continuar depois.')),
     );
-  }
-
-  Future<void> _clearDraft() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.remove(_draftKey);
-  }
-
-  Future<void> _cancelDraft() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Cancelar solicitação'),
-            content: const Text(
-              'A solicitação em preenchimento será descartada neste dispositivo.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Voltar'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Cancelar solicitação'),
-              ),
-            ],
-          ),
-    );
-    if (confirm != true || !mounted) return;
-    await _clearDraft();
-    final controller = ref.read(permitRequestControllerProvider.notifier);
-    controller.resetForm();
-    controller.initializeQuestions(widget.questions);
-    if (!mounted) return;
-    Navigator.of(context).pop();
   }
 
   @override
@@ -161,6 +176,7 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
     final isReviewStep = state.currentStep == state.totalSteps - 1;
     final termAccepted = state.eventData['termo_aceite'] == 'true';
     final submitBlockedByTerm = isReviewStep && !termAccepted;
+    final nextBlockedByValidation = controller.validateCurrentStep() != null;
 
     return AppScaffold(
       userType: widget.userType,
@@ -198,135 +214,187 @@ class _PermitRequestPageState extends ConsumerState<PermitRequestPage> {
                 ),
               );
             }
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Passo ${state.currentStep + 1} de ${state.totalSteps}',
-                      ),
-                      const SizedBox(height: 20),
-                      Expanded(child: PermitRequestFormBuilder()),
-                      const SizedBox(height: 8),
-                      if (submitBlockedByTerm) ...[
-                        const Text(
-                          'Leia e aceite o termo de responsabilidade para liberar o envio.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        spacing: 12,
-                        runSpacing: 8,
+            return Stack(
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                         children: [
-                          SizedBox(
-                            width:
-                                MediaQuery.of(context).size.width < 420
-                                    ? 140
-                                    : null,
-                            child: TextButton.icon(
-                              onPressed: state.isSubmitting ? null : _saveDraft,
-                              icon: const Icon(Icons.save_outlined),
-                              label: const Text('Salvar'),
-                            ),
+                          Text(
+                            'Passo ${state.currentStep + 1} de ${state.totalSteps}',
                           ),
-                          SizedBox(
-                            width:
-                                MediaQuery.of(context).size.width < 420
-                                    ? 140
-                                    : null,
-                            child: TextButton.icon(
-                              onPressed:
-                                  state.isSubmitting ? null : _cancelDraft,
-                              icon: const Icon(Icons.close),
-                              label: const Text('Cancelar'),
+                          const SizedBox(height: 20),
+                          Expanded(child: PermitRequestFormBuilder()),
+                          const SizedBox(height: 8),
+                          if (submitBlockedByTerm) ...[
+                            const Text(
+                              'Leia e aceite o termo de responsabilidade para liberar o envio.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.w600),
                             ),
-                          ),
-                          SizedBox(
-                            width:
-                                MediaQuery.of(context).size.width < 420
-                                    ? 140
-                                    : null,
-                            child: OutlinedButton(
-                              onPressed: () {
-                                if (state.currentStep == 0) {
-                                  controller.resetForm();
-                                  Navigator.of(context).pop();
-                                } else {
-                                  controller.previousStep();
+                            const SizedBox(height: 8),
+                          ],
+                          _RequestNavigationBar(
+                            currentStep: state.currentStep,
+                            isLastStep:
+                                state.currentStep == state.totalSteps - 1,
+                            isSubmitting: state.isSubmitting,
+                            submitBlockedByTerm:
+                                submitBlockedByTerm || nextBlockedByValidation,
+                            onBack: controller.previousStep,
+                            onExit: _exitFlow,
+                            onNext: () async {
+                              if (!controller.canGoNext(context)) return;
+                              if (state.currentStep == state.totalSteps - 1) {
+                                final protocolo = await controller
+                                    .submitRequest(context);
+                                if (protocolo == null || !context.mounted) {
+                                  return;
                                 }
-                              },
-                              child: const Text('Voltar'),
-                            ),
-                          ),
-                          SizedBox(
-                            width:
-                                MediaQuery.of(context).size.width < 420
-                                    ? 140
-                                    : null,
-                            child: ElevatedButton(
-                              onPressed:
-                                  state.isSubmitting || submitBlockedByTerm
-                                      ? null
-                                      : () async {
-                                        if (!controller.canGoNext(context)) {
-                                          return;
-                                        }
-                                        if (state.currentStep ==
-                                            state.totalSteps - 1) {
-                                          final protocolo = await controller
-                                              .submitRequest(context);
-                                          if (protocolo == null ||
-                                              !context.mounted) {
-                                            return;
-                                          }
-                                          await _clearDraft();
-                                          if (!context.mounted) return;
-                                          controller.resetForm();
-                                          Navigator.pushReplacement(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder:
-                                                  (_) => PermitDashboardPage(
-                                                    userType: widget.userType,
-                                                    userProfile:
-                                                        widget.userProfile,
-                                                    permitType:
-                                                        widget.permitType,
-                                                    questions: widget.questions,
-                                                    forms: const [],
-                                                    eventTypes:
-                                                        widget.eventTypes,
-                                                  ),
-                                            ),
-                                          );
-                                        } else {
-                                          controller.nextStep();
-                                        }
-                                      },
-                              child: Text(
-                                state.isSubmitting
-                                    ? 'Enviando...'
-                                    : state.currentStep == state.totalSteps - 1
-                                    ? 'Enviar'
-                                    : 'Avançar',
-                              ),
-                            ),
+                                await _clearDraft();
+                                if (!context.mounted) return;
+                                controller.resetForm();
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => PermitDashboardPage(
+                                          userType: widget.userType,
+                                          userProfile: widget.userProfile,
+                                          permitType: widget.permitType,
+                                          questions: widget.questions,
+                                          forms: const [],
+                                          eventTypes: widget.eventTypes,
+                                        ),
+                                  ),
+                                );
+                              } else {
+                                controller.nextStep();
+                              }
+                            },
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                if (state.isSubmitting)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      child: Center(
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 360),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    state.uploadProgressMessage ??
+                                        'Enviando solicitação...',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _RequestNavigationBar extends StatelessWidget {
+  const _RequestNavigationBar({
+    required this.currentStep,
+    required this.isLastStep,
+    required this.isSubmitting,
+    required this.submitBlockedByTerm,
+    required this.onBack,
+    required this.onExit,
+    required this.onNext,
+  });
+
+  final int currentStep;
+  final bool isLastStep;
+  final bool isSubmitting;
+  final bool submitBlockedByTerm;
+  final VoidCallback onBack;
+  final VoidCallback onExit;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 520;
+    final buttons = <Widget>[
+      if (currentStep > 0)
+        OutlinedButton.icon(
+          onPressed: isSubmitting ? null : onBack,
+          icon: const Icon(Icons.arrow_back),
+          label: const Text('Voltar'),
+        ),
+      TextButton.icon(
+        onPressed: isSubmitting ? null : onExit,
+        icon: const Icon(Icons.exit_to_app),
+        label: const Text('Sair'),
+      ),
+      ElevatedButton.icon(
+        onPressed: isSubmitting || submitBlockedByTerm ? null : onNext,
+        icon: Icon(isLastStep ? Icons.send_outlined : Icons.arrow_forward),
+        label: Text(
+          isSubmitting
+              ? 'Enviando...'
+              : isLastStep
+              ? 'Enviar'
+              : 'Avançar',
+        ),
+      ),
+    ];
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children:
+            buttons
+                .map(
+                  (button) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: button,
+                  ),
+                )
+                .toList(),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          if (currentStep > 0) buttons.first,
+          const Spacer(),
+          if (currentStep > 0) const SizedBox(width: 8),
+          buttons[currentStep > 0 ? 1 : 0],
+          const SizedBox(width: 8),
+          buttons.last,
+        ],
       ),
     );
   }

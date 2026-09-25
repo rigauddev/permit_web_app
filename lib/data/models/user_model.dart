@@ -16,6 +16,11 @@ class UserModel {
   final String cpfCnpj;
   final String? secretaria;
   final List<String> permissions;
+  final String photoUrl;
+  final bool mustChangePassword;
+  final bool mfaEmailEnabled;
+  final String? businessCategory;
+  final int? managedInnId;
 
   UserModel({
     this.id,
@@ -35,6 +40,11 @@ class UserModel {
     required this.zipCode,
     this.secretaria,
     this.permissions = const [],
+    this.photoUrl = '',
+    this.mustChangePassword = false,
+    this.mfaEmailEnabled = false,
+    this.businessCategory,
+    this.managedInnId,
   });
 
   Map<String, dynamic> toJson() {
@@ -56,6 +66,11 @@ class UserModel {
       'zipCode': zipCode,
       'secretaria': secretaria,
       'permissions': permissions,
+      'foto_usuario_url': photoUrl,
+      'must_change_password': mustChangePassword,
+      'mfa_email_enabled': mfaEmailEnabled,
+      'business_category': businessCategory,
+      'managed_inn_id': managedInnId,
     };
   }
 
@@ -81,6 +96,11 @@ class UserModel {
       zipCode: json['zipCode'] as String? ?? '',
       secretaria: json['secretaria'] as String?,
       permissions: _permissionsFromJson(json['permissions']),
+      photoUrl: json['foto_usuario_url'] as String? ?? '',
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
+      mfaEmailEnabled: json['mfa_email_enabled'] as bool? ?? false,
+      businessCategory: json['business_category'] as String?,
+      managedInnId: json['managed_inn_id'] as int?,
     );
   }
 
@@ -104,6 +124,11 @@ class UserModel {
       cpfCnpj: '',
       secretaria: json['secretaria'] as String?,
       permissions: _permissionsFromJson(json['permissions']),
+      photoUrl: json['foto_usuario_url'] as String? ?? '',
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
+      mfaEmailEnabled: json['mfa_email_enabled'] as bool? ?? false,
+      businessCategory: json['business_category'] as String?,
+      managedInnId: json['managed_inn_id'] as int?,
     );
   }
 
@@ -127,6 +152,11 @@ class UserModel {
       cpfCnpj: json['cpf_cnpj'] as String? ?? '',
       secretaria: json['secretaria'] as String?,
       permissions: _permissionsFromJson(json['permissions']),
+      photoUrl: json['foto_usuario_url'] as String? ?? '',
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
+      mfaEmailEnabled: json['mfa_email_enabled'] as bool? ?? false,
+      businessCategory: json['business_category'] as String?,
+      managedInnId: json['managed_inn_id'] as int?,
     );
   }
 

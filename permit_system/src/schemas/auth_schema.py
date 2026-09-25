@@ -5,7 +5,7 @@ class LoginRequest(BaseModel):
     identifier: str | None = None
     email: str | None = None
     senha: str = Field(..., min_length=6)
-    access_type: str | None = Field(None, pattern="^(cidadao|interno)$")
+    access_type: str | None = Field(None, pattern="^(cidadao|servidor|admin|interno)$")
     client_type: str = Field("web", pattern="^(web|app)$")
 
 
@@ -16,6 +16,10 @@ class UserSessionResponse(BaseModel):
     role: str
     secretaria: str | None = None
     permissions: list[str] = Field(default_factory=list)
+    foto_usuario_url: str | None = None
+    must_change_password: bool = False
+    business_category: str | None = None
+    managed_inn_id: int | None = None
 
 
 class LoginStartResponse(BaseModel):
@@ -24,6 +28,7 @@ class LoginStartResponse(BaseModel):
     available_methods: list[str] = Field(default_factory=list)
     default_method: str | None = None
     access_token: str | None = None
+    expires_at: str | None = None
     token_type: str = "bearer"
     user: UserSessionResponse | None = None
 
@@ -72,5 +77,11 @@ class EmailVerificationConfirmResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    expires_at: str
     token_type: str = "bearer"
     user: UserSessionResponse
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)
