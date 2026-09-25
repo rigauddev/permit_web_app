@@ -71,7 +71,20 @@ class _AppRouter extends StatelessWidget {
             child: child ?? const SizedBox.shrink(),
           ),
       routes: {
-        AppRoutes.login: (context) => const LoginPage(),
+        AppRoutes.login:
+            (context) =>
+                user == null
+                    ? const LoginPage()
+                    : _GuardedRoute(
+                      user: user,
+                      allowedRoles: const {
+                        'admin',
+                        'gestor_secretaria',
+                        'operador_secretaria',
+                        'cidadao',
+                      },
+                      child: UserHomePage(userType: user?.userType ?? ''),
+                    ),
         AppRoutes.serverLogin:
             (context) => const LoginPage(initialAccessProfile: 'servidor'),
         AppRoutes.adminLogin:

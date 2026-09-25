@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/permit_api_service.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/session_expiration.dart';
+import '../../core/session_store.dart';
 import '../../data/providers/user_provider.dart';
 
 class CustomDrawer extends ConsumerStatefulWidget
@@ -322,6 +323,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
             route: '/',
             currentRoute: currentRoute,
             replaceAll: true,
+            onTap: () => _logout(context),
           ),
         ],
       ),
@@ -350,6 +352,17 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
     }
 
     return menu;
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    await const SessionStore().clear();
+    ref.read(userProvider.notifier).logout();
+    if (!context.mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.login,
+      (route) => false,
+    );
   }
 }
 
@@ -493,6 +506,7 @@ class _DrawerTile extends StatelessWidget {
     required this.currentRoute,
     this.iconColor,
     this.replaceAll = false,
+    this.onTap,
   });
 
   final bool collapsed;
@@ -502,6 +516,7 @@ class _DrawerTile extends StatelessWidget {
   final String currentRoute;
   final Color? iconColor;
   final bool replaceAll;
+  final Future<void> Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -534,7 +549,11 @@ class _DrawerTile extends StatelessWidget {
           collapsed
               ? const EdgeInsets.symmetric(horizontal: 28)
               : const EdgeInsets.symmetric(horizontal: 16),
-      onTap: () {
+      onTap: () async {
+        if (onTap != null) {
+          await onTap!();
+          return;
+        }
         if (replaceAll) {
           Navigator.pushNamedAndRemoveUntil(context, route, (route) => false);
           return;
