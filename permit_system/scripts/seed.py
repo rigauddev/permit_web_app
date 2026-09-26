@@ -30,8 +30,10 @@ from src.infra.database.models import (
     RoleModel,
     RolePermissionModel,
     SecretariaModel,
+    ServiceConfigModel,
     UserModel,
 )
+from src.infra.database.models.orla_model import OrlaAccess, OrlaAccount, OrlaInn, OrlaVehicle
 from src.infra.database.mysql_db import SessionLocal, create_tables, engine
 
 
@@ -802,6 +804,177 @@ def seed_users(db, roles, secretarias):
             user.comprovante_residencia_tipo = "luz"
             user.comprovante_residencia_status = "pre_validado"
     return created
+
+
+def seed_orla_service(db, roles, users):
+    """Cria um cenário repetível da Orla para homologação interna."""
+    admin = users["admin@prefeitura.local"]
+    service_configs = {
+        "acesso_orla": (
+            "Acesso à Orla",
+            "Cadastro e validação de veículos na Orla de Guaibim.",
+            True,
+        ),
+        "alvara_evento": (
+            "Alvará de Evento",
+            "Serviço desativado nesta homologação focada na Orla.",
+            False,
+        ),
+        "alvara_funcionamento": (
+            "Alvará de Funcionamento",
+            "Serviço desativado nesta homologação focada na Orla.",
+            False,
+        ),
+        "iptu": (
+            "IPTU",
+            "Serviço desativado nesta homologação focada na Orla.",
+            False,
+        ),
+    }
+    for key, (title, description, is_active) in service_configs.items():
+        config = get_or_create(
+            db,
+            ServiceConfigModel,
+            key=key,
+            defaults={
+                "title": title,
+                "description": description,
+                "is_active": is_active,
+                "updated_by": admin.id,
+            },
+        )
+        config.title = title
+        config.description = description
+        config.is_active = is_active
+        config.updated_by = admin.id
+
+    inn = get_or_create(
+        db,
+        OrlaInn,
+        name="Pousada Mar de Guaibim",
+        defaults={
+            "address": "Avenida Beira-Mar, 523, Guaibim, Valença - BA",
+            "cep": "45400-000",
+            "latitude": "-13.285700",
+            "longitude": "-38.962700",
+            "capacity": 12,
+            "guest_capacity": 24,
+            "beachfront": True,
+            "approval_status": "approved",
+        },
+    )
+    inn.address = "Avenida Beira-Mar, 523, Guaibim, Valença - BA"
+    inn.cep = "45400-000"
+    inn.latitude = "-13.285700"
+    inn.longitude = "-38.962700"
+    inn.capacity = 12
+    inn.guest_capacity = 24
+    inn.beachfront = True
+    inn.approval_status = "approved"
+    db.flush()
+
+    today = date.today()
+    tourist = get_or_create(
+        db,
+        UserModel,
+        email="turista@orla.teste.local",
+        defaults={
+            "tipo_pessoa": "PF",
+            "nome": "João Turista",
+            "cpf_cnpj": "11144477735",
+            "senha_hash": hash_password("123456"),
+            "telefone": "(75) 99999-1001",
+            "role_id": roles["cidadao"].id,
+        },
+    )
+    tourist.nome = "João Turista"
+    tourist.cpf_cnpj = "11144477735"
+    tourist.role_id = roles["cidadao"].id
+    tourist.tipo_usuario = "turista"
+    tourist.tipo_estadia = "pousada"
+    tourist.pousada_id = inn.id
+    tourist.estadia_inicio = (today - timedelta(days=2)).isoformat()
+    tourist.estadia_fim = (today + timedelta(days=7)).isoformat()
+    tourist.orla_access_requested = True
+    tourist.orla_access_status = "aprovado"
+    tourist.is_active = True
+
+    inn_user = get_or_create(
+        db,
+        UserModel,
+        email="pousada@orla.teste.local",
+        defaults={
+            "tipo_pessoa": "PJ",
+            "nome": "Pousada Mar de Guaibim",
+            "razao_social": "Pousada Mar de Guaibim LTDA",
+            "cpf_cnpj": "11222333000181",
+            "senha_hash": hash_password("123456"),
+            "telefone": "(75) 99999-1002",
+            "role_id": roles["cidadao"].id,
+        },
+    )
+    inn_user.nome = "Pousada Mar de Guaibim"
+    inn_user.razao_social = "Pousada Mar de Guaibim LTDA"
+    inn_user.cpf_cnpj = "11222333000181"
+    inn_user.role_id = roles["cidadao"].id
+    inn_user.tipo_pessoa = "PJ"
+    inn_user.tipo_usuario = "morador"
+    inn_user.business_category = "pousada_hotel"
+    inn_user.managed_inn_id = inn.id
+    inn_user.is_active = True
+    db.flush()
+
+    for user, limit in ((tourist, 1), (inn_user, 2)):
+        account = get_or_create(
+            db,
+            OrlaAccount,
+            user_id=user.id,
+            defaults={"vehicle_limit": limit},
+        )
+        account.vehicle_limit = limit
+
+    vehicle = get_or_create(
+        db,
+        OrlaVehicle,
+        plate="GUA1B26",
+        defaults={
+            "user_id": tourist.id,
+            "brand": "Volkswagen",
+            "model": "T-Cross",
+            "color": "Prata",
+            "establishment_name": inn.name,
+            "qr_token": "seed-orla-gua1b26",
+        },
+    )
+    vehicle.user_id = tourist.id
+    vehicle.brand = "Volkswagen"
+    vehicle.model = "T-Cross"
+    vehicle.color = "Prata"
+    vehicle.establishment_name = inn.name
+    vehicle.is_excursion = False
+    vehicle.qr_token = "seed-orla-gua1b26"
+
+    operator = users["operador_dmtran@prefeitura.local"]
+    manager = users["gestor_dmtran@prefeitura.local"]
+    operator.credential_number = "DMTRAN-ORLA-OPERADOR"
+    manager.credential_number = "DMTRAN-ORLA-GESTOR"
+    existing_access = (
+        db.query(OrlaAccess)
+        .filter_by(vehicle_id=vehicle.id, operator_id=operator.id, action="entrada")
+        .first()
+    )
+    if not existing_access:
+        db.add(
+            OrlaAccess(
+                vehicle_id=vehicle.id,
+                operator_id=operator.id,
+                action="entrada",
+                method="qrcode",
+            )
+        )
+
+    users["turista@orla.teste.local"] = tourist
+    users["pousada@orla.teste.local"] = inn_user
 
 
 def seed_question_definitions(db):
@@ -1890,6 +2063,7 @@ def main():
         seed_permissions(db, roles)
         secretarias = seed_secretarias(db)
         users = seed_users(db, roles, secretarias)
+        seed_orla_service(db, roles, users)
         seed_event_types(db)
         seed_question_definitions(db)
         seed_public_ranges(db)
@@ -1902,6 +2076,7 @@ def main():
         if reset:
             print("Banco zerado e recriado com dados de teste.")
         print("Usuários de teste: admin@prefeitura.local, cidadao@teste.local")
+        print("Orla: turista@orla.teste.local, pousada@orla.teste.local, gestor_dmtran@prefeitura.local, operador_dmtran@prefeitura.local")
         print("Cada secretaria possui gestor_<secretaria>@prefeitura.local e operador_<secretaria>@prefeitura.local")
         print("Senha padrão: 123456")
     finally:

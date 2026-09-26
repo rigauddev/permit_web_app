@@ -96,6 +96,15 @@ class _AppRouter extends StatelessWidget {
                       allowedRoles: const {'admin'},
                       child: UserHomePage(userType: user?.userType ?? 'admin'),
                     ),
+        AppRoutes.legacyAdminLogin:
+            (context) =>
+                user?.role != 'admin'
+                    ? const LoginPage(initialAccessProfile: 'admin')
+                    : _GuardedRoute(
+                      user: user,
+                      allowedRoles: const {'admin'},
+                      child: UserHomePage(userType: user?.userType ?? 'admin'),
+                    ),
         AppRoutes.recoveryPassword: (context) => RecoveryPassword(),
         AppRoutes.changePassword:
             (context) => _GuardedRoute(

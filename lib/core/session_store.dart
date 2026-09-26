@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'session_web_storage_stub.dart'
+    if (dart.library.html) 'session_web_storage_html.dart';
+
 class SavedSession {
   const SavedSession({
     required this.accessToken,
@@ -39,14 +42,13 @@ class SessionStore {
   }) async {
     final preferences = await SharedPreferences.getInstance();
     if (kIsWeb) {
-      await preferences.setString(
-        _webSessionKey,
-        jsonEncode({
-          'accessToken': accessToken,
-          'userJson': userJson,
-          'expiresAt': expiresAt,
-        }),
-      );
+      final saved = jsonEncode({
+        'accessToken': accessToken,
+        'userJson': userJson,
+        'expiresAt': expiresAt,
+      });
+      await preferences.setString(_webSessionKey, saved);
+      await writeWebSessionBackup(saved);
       return;
     }
     await preferences.setString(accessTokenKey, accessToken);
@@ -104,6 +106,7 @@ class SessionStore {
     if (kIsWeb) {
       final preferences = await SharedPreferences.getInstance();
       await preferences.remove(_webSessionKey);
+      await clearWebSessionBackup();
       // Limpa também o formato usado pelas versões anteriores.
       await preferences.remove(accessTokenKey);
       await preferences.remove(userKey);
@@ -183,7 +186,8 @@ class SessionStore {
 
   Future<SavedSession?> _readWebSession() async {
     final preferences = await SharedPreferences.getInstance();
-    final saved = preferences.getString(_webSessionKey);
+    final saved =
+        readWebSessionBackup() ?? preferences.getString(_webSessionKey);
     if (saved == null || saved.isEmpty) {
       return _migrateLegacyWebSession(preferences);
     }
@@ -205,6 +209,10 @@ class SessionStore {
         await clear();
         return null;
       }
+      // Regrava os dois armazenamentos para recuperar sessões salvas por
+      // versões anteriores do aplicativo ou pelo cache do navegador.
+      await preferences.setString(_webSessionKey, saved);
+      await writeWebSessionBackup(saved);
       return SavedSession(
         accessToken: accessToken,
         userJson: userJson,
