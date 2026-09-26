@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -55,6 +56,7 @@ class _AppRouter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      key: ValueKey('session-${user?.id ?? 'signed-out'}'),
       debugShowCheckedModeBanner: false,
       title: 'Sistema de Serviços da Prefeitura',
       theme: customTheme,
@@ -303,17 +305,19 @@ class _SessionBootstrap extends ConsumerStatefulWidget {
 class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
   static const _sessionStore = SessionStore();
   bool _checked = false;
+  Timer? _expirationTimer;
 
   @override
   void initState() {
     super.initState();
+    SessionStore.sessionExpirationChanged.addListener(_handleSessionChange);
     _restoreSession();
   }
 
   Future<void> _restoreSession() async {
     final session = await _sessionStore.read();
     if (session == null ||
-        session.expiresAt.toUtc().isBefore(DateTime.now().toUtc())) {
+        !session.expiresAt.toUtc().isAfter(DateTime.now().toUtc())) {
       await _sessionStore.clear();
       if (mounted) setState(() => _checked = true);
       return;
@@ -329,6 +333,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       if (mounted) setState(() => _checked = true);
       return;
     }
+    _scheduleSessionExpiration(session.expiresAt);
     if (mounted) setState(() => _checked = true);
     try {
       final currentUser = await AuthService().currentUser(
@@ -339,6 +344,39 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     } catch (_) {
       // Mantém a sessão local durante indisponibilidade temporária da API.
     }
+  }
+
+  void _scheduleSessionExpiration(DateTime expiresAt) {
+    _expirationTimer?.cancel();
+    final delay = expiresAt.toUtc().difference(DateTime.now().toUtc());
+    if (delay <= Duration.zero) {
+      _expireSession();
+      return;
+    }
+    _expirationTimer = Timer(delay, _expireSession);
+  }
+
+  Future<void> _expireSession() async {
+    await _sessionStore.clear();
+  }
+
+  void _handleSessionChange() {
+    _expirationTimer?.cancel();
+    final expiresAt = SessionStore.sessionExpirationChanged.value;
+    if (expiresAt != null && expiresAt.isAfter(DateTime.now().toUtc())) {
+      _scheduleSessionExpiration(expiresAt);
+      return;
+    }
+    if (!mounted) return;
+    ref.read(userProvider.notifier).logout();
+    setState(() => _checked = true);
+  }
+
+  @override
+  void dispose() {
+    _expirationTimer?.cancel();
+    SessionStore.sessionExpirationChanged.removeListener(_handleSessionChange);
+    super.dispose();
   }
 
   @override

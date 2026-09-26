@@ -32,6 +32,8 @@ class SessionStore {
   // antigos durante a inicialização do Flutter.
   static const _webSessionKey = 'permit_web_session_v1';
   static const _secureStorageTimeout = Duration(milliseconds: 800);
+  static final ValueNotifier<DateTime?> sessionExpirationChanged =
+      ValueNotifier(null);
 
   final FlutterSecureStorage _secureStorage;
 
@@ -49,6 +51,7 @@ class SessionStore {
       });
       await preferences.setString(_webSessionKey, saved);
       await writeWebSessionBackup(saved);
+      _notifySessionExpiration(expiresAt);
       return;
     }
     await preferences.setString(accessTokenKey, accessToken);
@@ -67,6 +70,7 @@ class SessionStore {
     } catch (_) {
       // SharedPreferences mantém a sessão como fallback quando o storage seguro falha.
     }
+    _notifySessionExpiration(expiresAt);
   }
 
   Future<SavedSession?> read() async {
@@ -111,6 +115,7 @@ class SessionStore {
       await preferences.remove(accessTokenKey);
       await preferences.remove(userKey);
       await preferences.remove(sessionExpiresAtKey);
+      sessionExpirationChanged.value = null;
       return;
     }
     try {
@@ -128,6 +133,7 @@ class SessionStore {
     await preferences.remove(accessTokenKey);
     await preferences.remove(userKey);
     await preferences.remove(sessionExpiresAtKey);
+    sessionExpirationChanged.value = null;
   }
 
   Future<String?> readUserJson() async {
@@ -251,5 +257,9 @@ class SessionStore {
       userJson: userJson,
       expiresAt: expiresAt,
     );
+  }
+
+  void _notifySessionExpiration(String expiresAt) {
+    sessionExpirationChanged.value = DateTime.tryParse(expiresAt)?.toUtc();
   }
 }
