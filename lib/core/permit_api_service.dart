@@ -529,6 +529,27 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> updateHomeVisibility({
+    required String accessToken,
+    required bool showHomeCarousel,
+    required bool showTourismMap,
+    required bool showEstablishmentNotices,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/settings/home-visibility'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'show_home_carousel': showHomeCarousel,
+        'show_tourism_map': showTourismMap,
+        'show_establishment_notices': showEstablishmentNotices,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getEmailTemplates({
     required String accessToken,
   }) async {

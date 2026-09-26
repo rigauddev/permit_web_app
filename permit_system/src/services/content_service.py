@@ -11,6 +11,7 @@ from src.schemas.content_schema import (
     EmailTemplatesResponse,
     HomeContentCardRequest,
     HomeContentCardResponse,
+    HomeVisibilityRequest,
     ServiceConfigResponse,
     TourismPointRequest,
     TourismPointResponse,
@@ -47,6 +48,9 @@ DEFAULT_CONTENT_SETTINGS = {
     "event_map_title": "Mapa de eventos autorizados",
     "event_map_description": "Consulte os eventos autorizados por período e abra a rota de cada local.",
     "event_map_editor_secretarias": "[]",
+    "show_home_carousel": "true",
+    "show_tourism_map": "true",
+    "show_establishment_notices": "true",
     "email_templates": json.dumps({
         "welcome": {
             "subject": "Boas-vindas ao Sistema de Serviços de Valença",
@@ -207,8 +211,12 @@ class ContentService:
             event_map_title=values["event_map_title"],
             event_map_description=values["event_map_description"],
             event_map_editor_secretarias=editors,
+            show_home_carousel=self._decode_bool(values.get("show_home_carousel")),
+            show_tourism_map=self._decode_bool(values.get("show_tourism_map")),
+            show_establishment_notices=self._decode_bool(values.get("show_establishment_notices")),
             can_edit_event_map=can_edit,
             can_manage_editors=role == "admin",
+            can_manage_home_visibility=role == "admin",
         )
 
     def update_settings(self, payload: ContentSettingsRequest, current_user: UserModel) -> ContentSettingsResponse:
@@ -222,6 +230,32 @@ class ContentService:
             "event_map_title": payload.event_map_title.strip(),
             "event_map_description": payload.event_map_description.strip(),
             "event_map_editor_secretarias": json.dumps(sorted(set(editor_secretarias))),
+        }
+        for key, value in values.items():
+            row = self.db.query(ContentSettingModel).filter(ContentSettingModel.key == key).first()
+            if row:
+                row.value = value
+                row.updated_by = current_user.id
+            else:
+                self.db.add(ContentSettingModel(key=key, value=value, updated_by=current_user.id))
+        self.db.commit()
+        return self.get_settings(current_user)
+
+    def update_home_visibility(
+        self,
+        payload: HomeVisibilityRequest,
+        current_user: UserModel,
+    ) -> ContentSettingsResponse:
+        if current_user.role.slug != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Somente o administrador pode alterar a visibilidade da página inicial",
+            )
+        self._ensure_default_settings()
+        values = {
+            "show_home_carousel": json.dumps(payload.show_home_carousel),
+            "show_tourism_map": json.dumps(payload.show_tourism_map),
+            "show_establishment_notices": json.dumps(payload.show_establishment_notices),
         }
         for key, value in values.items():
             row = self.db.query(ContentSettingModel).filter(ContentSettingModel.key == key).first()
@@ -355,6 +389,10 @@ class ContentService:
             return [str(item) for item in decoded] if isinstance(decoded, list) else []
         except (TypeError, ValueError):
             return []
+
+    @staticmethod
+    def _decode_bool(value: str | None) -> bool:
+        return str(value).strip().lower() in {"true", "1", "yes", "sim"}
 
     @staticmethod
     def _resolve_scope(scope: str | None, current_user: UserModel) -> str:

@@ -43,9 +43,19 @@ class ContentSettingsRequest(BaseModel):
     event_map_editor_secretarias: list[str] = Field(default_factory=list)
 
 
+class HomeVisibilityRequest(BaseModel):
+    show_home_carousel: bool = True
+    show_tourism_map: bool = True
+    show_establishment_notices: bool = True
+
+
 class ContentSettingsResponse(ContentSettingsRequest):
+    show_home_carousel: bool = True
+    show_tourism_map: bool = True
+    show_establishment_notices: bool = True
     can_edit_event_map: bool = False
     can_manage_editors: bool = False
+    can_manage_home_visibility: bool = False
 
 
 class EmailTemplateInput(BaseModel):

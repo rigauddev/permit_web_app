@@ -105,6 +105,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
                 contentFuture: _contentFuture,
                 servicesFuture: _servicesFuture,
                 tourismPointsFuture: _tourismPointsFuture,
+                contentSettingsFuture: _contentSettingsFuture,
               )
               : _InternalHome(
                 user: user,
@@ -152,11 +153,13 @@ class _CitizenHome extends StatelessWidget {
     required this.contentFuture,
     required this.servicesFuture,
     required this.tourismPointsFuture,
+    required this.contentSettingsFuture,
   });
 
   final Future<List<Map<String, dynamic>>> contentFuture;
   final Future<List<Map<String, dynamic>>> servicesFuture;
   final Future<List<Map<String, dynamic>>> tourismPointsFuture;
+  final Future<Map<String, dynamic>> contentSettingsFuture;
 
   @override
   Widget build(BuildContext context) {
@@ -176,73 +179,111 @@ class _CitizenHome extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    FutureBuilder<List<Map<String, dynamic>>>(
-                      future: contentFuture,
-                      builder: (context, snapshot) {
-                        final cards =
-                            snapshot.data ?? const <Map<String, dynamic>>[];
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const SizedBox(
-                            height: 320,
-                            child: Center(child: CircularProgressIndicator()),
-                          );
-                        }
-                        final mainCards =
-                            cards
-                                .where(
-                                  (card) =>
-                                      !(card['scope']?.toString().startsWith(
-                                            'establishment:',
-                                          ) ??
-                                          false),
-                                )
-                                .toList();
-                        return _HomeCarousel(
-                          cards:
-                              mainCards.isEmpty
-                                  ? _UserHomePageState._fallbackCards
-                                  : mainCards,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    FutureBuilder<List<Map<String, dynamic>>>(
-                      future: tourismPointsFuture,
-                      builder:
-                          (context, snapshot) => _GuaibimEventsMapCard(
-                            points:
-                                (snapshot.data ?? const [])
-                                    .where((item) => item['is_active'] != false)
-                                    .map(_TourismPoint.fromMap)
-                                    .toList(),
-                          ),
-                    ),
-                    const SizedBox(height: 18),
-                    _HomeServicesCard(servicesFuture: servicesFuture),
-                    const SizedBox(height: 18),
-                    FutureBuilder<List<Map<String, dynamic>>>(
-                      future: contentFuture,
-                      builder: (context, snapshot) {
-                        final establishmentCards =
-                            (snapshot.data ?? const <Map<String, dynamic>>[])
-                                .where(
-                                  (card) =>
-                                      card['scope']?.toString().startsWith(
-                                        'establishment:',
-                                      ) ??
-                                      false,
-                                )
-                                .toList();
-                        if (establishmentCards.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
+                    FutureBuilder<Map<String, dynamic>>(
+                      future: contentSettingsFuture,
+                      builder: (context, settingsSnapshot) {
+                        final settings =
+                            settingsSnapshot.data ?? const <String, dynamic>{};
+                        final showCarousel =
+                            settings['show_home_carousel'] != false;
+                        final showTourismMap =
+                            settings['show_tourism_map'] != false;
+                        final showEstablishmentNotices =
+                            settings['show_establishment_notices'] != false;
                         return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _EstablishmentHighlightsCarousel(
-                              cards: establishmentCards,
-                            ),
+                            if (showCarousel) ...[
+                              FutureBuilder<List<Map<String, dynamic>>>(
+                                future: contentFuture,
+                                builder: (context, snapshot) {
+                                  final cards =
+                                      snapshot.data ??
+                                      const <Map<String, dynamic>>[];
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
+                                    return const SizedBox(
+                                      height: 320,
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    );
+                                  }
+                                  final mainCards =
+                                      cards
+                                          .where(
+                                            (card) =>
+                                                !(card['scope']
+                                                        ?.toString()
+                                                        .startsWith(
+                                                          'establishment:',
+                                                        ) ??
+                                                    false),
+                                          )
+                                          .toList();
+                                  return _HomeCarousel(
+                                    cards:
+                                        mainCards.isEmpty
+                                            ? _UserHomePageState._fallbackCards
+                                            : mainCards,
+                                  );
+                                },
+                              ),
+                            ],
+                            if (showCarousel && showTourismMap)
+                              const SizedBox(height: 18),
+                            if (showTourismMap) ...[
+                              FutureBuilder<List<Map<String, dynamic>>>(
+                                future: tourismPointsFuture,
+                                builder:
+                                    (context, snapshot) =>
+                                        _GuaibimEventsMapCard(
+                                          points:
+                                              (snapshot.data ?? const [])
+                                                  .where(
+                                                    (item) =>
+                                                        item['is_active'] !=
+                                                        false,
+                                                  )
+                                                  .map(_TourismPoint.fromMap)
+                                                  .toList(),
+                                        ),
+                              ),
+                            ],
+                            if (showTourismMap) const SizedBox(height: 18),
                             const SizedBox(height: 18),
+                            _HomeServicesCard(servicesFuture: servicesFuture),
+                            const SizedBox(height: 18),
+                            if (showEstablishmentNotices)
+                              FutureBuilder<List<Map<String, dynamic>>>(
+                                future: contentFuture,
+                                builder: (context, snapshot) {
+                                  final establishmentCards =
+                                      (snapshot.data ??
+                                              const <Map<String, dynamic>>[])
+                                          .where(
+                                            (card) =>
+                                                card['scope']
+                                                    ?.toString()
+                                                    .startsWith(
+                                                      'establishment:',
+                                                    ) ??
+                                                false,
+                                          )
+                                          .toList();
+                                  if (establishmentCards.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    children: [
+                                      _EstablishmentHighlightsCarousel(
+                                        cards: establishmentCards,
+                                      ),
+                                      const SizedBox(height: 18),
+                                    ],
+                                  );
+                                },
+                              ),
                           ],
                         );
                       },
@@ -1174,14 +1215,12 @@ class _TourismMarker extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final left = constraints.maxWidth * point.x;
-      final top = constraints.maxHeight * point.y;
-      final labelVisible = !compact || constraints.maxWidth > 560;
-      return Positioned(
-        left: (left - 22).clamp(8, constraints.maxWidth - 180),
-        top: (top - 20).clamp(8, constraints.maxHeight - 76),
+  Widget build(BuildContext context) {
+    final labelVisible = !compact || MediaQuery.sizeOf(context).width > 560;
+    return Align(
+      alignment: Alignment(point.x * 2 - 1, point.y * 2 - 1),
+      child: Transform.translate(
+        offset: const Offset(-22, -20),
         child: Tooltip(
           message: '${point.title}\n${point.detail}',
           child: Row(
@@ -1250,9 +1289,9 @@ class _TourismMarker extends StatelessWidget {
             ],
           ),
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
 
 class _TourismPoint {

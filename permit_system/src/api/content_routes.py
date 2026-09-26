@@ -11,6 +11,7 @@ from src.schemas.content_schema import (
     EmailTemplatesResponse,
     HomeContentCardRequest,
     HomeContentCardResponse,
+    HomeVisibilityRequest,
     ServiceConfigRequest,
     ServiceConfigResponse,
     TourismPointRequest,
@@ -55,6 +56,15 @@ def update_content_settings(
     current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
 ):
     return ContentService(db).update_settings(payload, current_user)
+
+
+@router.put("/settings/home-visibility", response_model=ContentSettingsResponse)
+def update_home_visibility(
+    payload: HomeVisibilityRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin")),
+):
+    return ContentService(db).update_home_visibility(payload, current_user)
 
 
 @router.get('/email-templates', response_model=EmailTemplatesResponse)

@@ -43,6 +43,9 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
   final Set<String> _editors = {};
   int? _editingPointId;
   bool _pointActive = true;
+  bool _showHomeCarousel = true;
+  bool _showTourismMap = true;
+  bool _showEstablishmentNotices = true;
   bool _loading = true;
   bool _saving = false;
   String? _error;
@@ -90,6 +93,10 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
       _eventTitle.text = settings['event_map_title']?.toString() ?? '';
       _eventDescription.text =
           settings['event_map_description']?.toString() ?? '';
+      _showHomeCarousel = settings['show_home_carousel'] != false;
+      _showTourismMap = settings['show_tourism_map'] != false;
+      _showEstablishmentNotices =
+          settings['show_establishment_notices'] != false;
       _editors
         ..clear()
         ..addAll(
@@ -128,6 +135,21 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
       );
       if (mounted) setState(() => _settings = settings);
       _message('Configuração do mapa de eventos salva.');
+    });
+  }
+
+  Future<void> _saveHomeVisibility() async {
+    await _execute(() async {
+      final token = await SessionExpiration.readAccessToken();
+      if (token == null) throw PermitApiException('Sessão expirada.');
+      final settings = await _api.updateHomeVisibility(
+        accessToken: token,
+        showHomeCarousel: _showHomeCarousel,
+        showTourismMap: _showTourismMap,
+        showEstablishmentNotices: _showEstablishmentNotices,
+      );
+      if (mounted) setState(() => _settings = settings);
+      _message('Visibilidade da página inicial salva.');
     });
   }
 
@@ -259,6 +281,10 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (_isAdmin) ...[
+                          _homeVisibilityCard(),
+                          const SizedBox(height: 16),
+                        ],
                         _eventMapCard(),
                         const SizedBox(height: 16),
                         _tourismImageGuide(),
@@ -347,6 +373,74 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
               ),
             ),
           ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _homeVisibilityCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Visibilidade da página inicial',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Estes controles são globais e ficam disponíveis apenas para o administrador do sistema.',
+          ),
+          const SizedBox(height: 12),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _showHomeCarousel,
+            onChanged:
+                _saving
+                    ? null
+                    : (value) => setState(() => _showHomeCarousel = value),
+            title: const Text('Carrossel da página inicial'),
+            subtitle: const Text(
+              'Exibe os comunicados e destaques da Prefeitura.',
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _showTourismMap,
+            onChanged:
+                _saving
+                    ? null
+                    : (value) => setState(() => _showTourismMap = value),
+            title: const Text('Mapa turístico de Guaibim'),
+            subtitle: const Text(
+              'Exibe pontos turísticos, rotas e estabelecimentos.',
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _showEstablishmentNotices,
+            onChanged:
+                _saving
+                    ? null
+                    : (value) =>
+                        setState(() => _showEstablishmentNotices = value),
+            title: const Text('Eventos e avisos dos estabelecimentos'),
+            subtitle: const Text(
+              'Exibe banners aprovados de pousadas, hotéis e quiosques.',
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _saving ? null : _saveHomeVisibility,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Salvar visibilidade'),
+            ),
+          ),
         ],
       ),
     ),
