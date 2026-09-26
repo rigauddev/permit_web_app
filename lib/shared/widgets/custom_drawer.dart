@@ -95,7 +95,9 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
         user?.secretaria == 'dmtran' ||
         user?.secretaria == 'guarda_civil';
     final canShowServiceManagement =
-        canAccessServiceOperations && canManageOrlaDashboard;
+        canAccessServiceOperations &&
+        (_serviceActive('alvara_evento') ||
+            (_serviceActive('acesso_orla') && canManageOrlaDashboard));
     const drawerBackground = Color(0xFFF8FBF7);
     final content = SafeArea(
       child: Column(
@@ -128,7 +130,10 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                   route: AppRoutes.home,
                   currentRoute: currentRoute,
                 ),
-                if (_serviceActive('acesso_orla'))
+                if (_serviceActive('acesso_orla') ||
+                    _serviceActive('alvara_evento') ||
+                    _serviceActive('alvara_funcionamento') ||
+                    _serviceActive('iptu'))
                   _DrawerTile(
                     collapsed: collapsed,
                     icon: Icons.design_services_outlined,
@@ -142,12 +147,18 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     icon: Icons.folder_special_outlined,
                     title: 'Meus serviços',
                     routes: [
+                      AppRoutes.myRequests,
                       AppRoutes.orlaVehicles,
                       if (isTourismBusiness) AppRoutes.orlaGuests,
                       if (isTourismBusiness) AppRoutes.orlaBanners,
+                      AppRoutes.favoriteServices,
                     ],
                     currentRoute: currentRoute,
                     children: [
+                      const _DrawerSectionItem(
+                        'Minhas solicitações',
+                        AppRoutes.myRequests,
+                      ),
                       if (_serviceActive('acesso_orla'))
                         const _DrawerSectionItem(
                           'Veículos',
@@ -164,6 +175,10 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                           'Banners',
                           AppRoutes.orlaBanners,
                         ),
+                      const _DrawerSectionItem(
+                        'Favoritos',
+                        AppRoutes.favoriteServices,
+                      ),
                     ],
                   ),
                 if (canShowServiceManagement)
@@ -172,12 +187,59 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     icon: Icons.tune_outlined,
                     title: 'Gestão de Serviços',
                     routes: const [
+                      AppRoutes.inspections,
+                      AppRoutes.secretariaRequests,
+                      AppRoutes.verifyEvent,
+                      AppRoutes.reports,
+                      AppRoutes.eventMap,
+                      AppRoutes.contentManagement,
                       AppRoutes.orlaDashboard,
                       AppRoutes.orlaInspection,
                     ],
                     currentRoute: currentRoute,
                     children: [
-                      if (canManageOrlaDashboard)
+                      if (_serviceActive('alvara_evento'))
+                        const _DrawerSectionGroup(
+                          title: 'Alvará',
+                          children: [
+                            _DrawerSectionGroup(
+                              title: 'Alvará de Eventos',
+                              children: [
+                                _DrawerSectionGroup(
+                                  title: 'Gestão do serviço',
+                                  children: [
+                                    _DrawerSectionItem(
+                                      'Solicitações',
+                                      AppRoutes.secretariaRequests,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Vistorias',
+                                      AppRoutes.inspections,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Fiscalização',
+                                      AppRoutes.verifyEvent,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Relatórios',
+                                      AppRoutes.reports,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Mapa de eventos',
+                                      AppRoutes.eventMap,
+                                    ),
+                                    _DrawerSectionItem(
+                                      'Configurar mapa de eventos',
+                                      AppRoutes.contentManagement,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      if (canManageOrlaDashboard &&
+                          _serviceActive('acesso_orla'))
                         _DrawerSectionGroup(
                           title: 'Acesso à Orla',
                           children: [

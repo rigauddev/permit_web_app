@@ -59,15 +59,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
     if (token == null || token.isEmpty) return _fallbackServices;
     try {
       final services = await _api.listServiceConfigs(accessToken: token);
-      final active =
-          services
-              .where(
-                (service) =>
-                    service['is_active'] == true &&
-                    service['key']?.toString() == 'acesso_orla',
-              )
-              .toList();
-      return active.isEmpty ? _fallbackServices : active;
+      return services.where((service) => service['is_active'] == true).toList();
     } catch (_) {
       return _fallbackServices;
     }
@@ -117,6 +109,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
               : _InternalHome(
                 user: user,
                 contentSettingsFuture: _contentSettingsFuture,
+                servicesFuture: _servicesFuture,
               ),
     );
   }
@@ -139,6 +132,16 @@ class _UserHomePageState extends ConsumerState<UserHomePage> {
       'image_url':
           'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80',
       'display_order': 0,
+      'is_active': true,
+    },
+    {
+      'scope': 'prefeitura',
+      'title': 'Central de Eventos',
+      'body':
+          'Solicite alvará de evento e acompanhe as etapas em um único sistema.',
+      'image_url':
+          'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=1200&q=80',
+      'display_order': 1,
       'is_active': true,
     },
   ];
@@ -486,10 +489,12 @@ class _InternalHome extends StatelessWidget {
   const _InternalHome({
     required this.user,
     required this.contentSettingsFuture,
+    required this.servicesFuture,
   });
 
   final UserModel? user;
   final Future<Map<String, dynamic>> contentSettingsFuture;
+  final Future<List<Map<String, dynamic>>> servicesFuture;
 
   bool get _canManageUsers =>
       user?.userType == 'admin' || user?.userType == 'gestor_secretaria';
@@ -550,71 +555,141 @@ class _InternalHome extends StatelessWidget {
                   ],
                 ),
               ),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final crossAxisCount =
-                      constraints.maxWidth < 680
-                          ? 1
-                          : constraints.maxWidth < 980
-                          ? 2
-                          : 3;
-                  return GridView.count(
-                    crossAxisCount: crossAxisCount,
-                    shrinkWrap: true,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: constraints.maxWidth < 680 ? 2.7 : 1.55,
-                    physics: const NeverScrollableScrollPhysics(),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: servicesFuture,
+                builder: (context, snapshot) {
+                  final activeServices =
+                      (snapshot.data ?? const <Map<String, dynamic>>[])
+                          .map((service) => service['key']?.toString())
+                          .whereType<String>()
+                          .toSet();
+                  final eventServiceActive = activeServices.contains(
+                    'alvara_evento',
+                  );
+                  final orlaServiceActive = activeServices.contains(
+                    'acesso_orla',
+                  );
+                  return Column(
                     children: [
-                      if (_canAccessOrla)
-                        const _HomeActionCard(
-                          icon: Icons.beach_access,
-                          title: 'Acesso à Orla',
-                          description:
-                              'Valide veículos cadastrados por QR Code ou placa e registre entradas.',
-                          route: '/orla',
+                      if (eventServiceActive) ...[
+                        const SizedBox(height: 24),
+                        _InternalOperationsPreview(
+                          contentSettingsFuture: contentSettingsFuture,
                         ),
-                      if (_canManageUsers)
-                        const _HomeActionCard(
-                          icon: Icons.people_outline,
-                          title: 'Usuários',
-                          description:
-                              'Consulte e cadastre usuários conforme o escopo da secretaria.',
-                          route: '/users',
-                        ),
-                      if (user?.userType == 'admin')
-                        const _HomeActionCard(
-                          icon: Icons.security_outlined,
-                          title: 'Tipos de usuário e permissões',
-                          description:
-                              'Controle permissões por perfil e categoria do sistema.',
-                          route: '/permissions',
-                        ),
-                      if (_canManageUsers)
-                        const _HomeActionCard(
-                          icon: Icons.view_carousel_outlined,
-                          title: 'Conteúdo da página inicial',
-                          description:
-                              'Crie até 5 cards de carrossel para sua secretaria ou prefeitura.',
-                          route: '/home-content',
-                        ),
-                      if (_canManageUsers)
-                        const _HomeActionCard(
-                          icon: Icons.account_balance_outlined,
-                          title: 'Secretarias',
-                          description:
-                              'Configure e-mail, logo e textos usados em notificações e documentos.',
-                          route: '/secretarias',
-                        ),
-                      if (user?.userType == 'admin' ||
-                          user?.userType == 'gestor_secretaria')
-                        const _HomeActionCard(
-                          icon: Icons.design_services_outlined,
-                          title: 'Gestão de Serviços',
-                          description:
-                              'Configure perguntas, tipos de resposta, documentos modelo e regras por secretaria.',
-                          route: '/questions',
-                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final crossAxisCount =
+                              constraints.maxWidth < 680
+                                  ? 1
+                                  : constraints.maxWidth < 980
+                                  ? 2
+                                  : 3;
+                          return GridView.count(
+                            crossAxisCount: crossAxisCount,
+                            shrinkWrap: true,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio:
+                                constraints.maxWidth < 680 ? 2.7 : 1.55,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: [
+                              if (eventServiceActive)
+                                const _HomeActionCard(
+                                  icon: Icons.assignment_turned_in_outlined,
+                                  title: 'Solicitações da secretaria',
+                                  description:
+                                      'Analise aprovações, recusas e pedidos de correção pertinentes ao seu órgão.',
+                                  route: '/secretaria-requests',
+                                ),
+                              if (eventServiceActive)
+                                const _HomeActionCard(
+                                  icon: Icons.fact_check_outlined,
+                                  title: 'Vistorias e pendências',
+                                  description:
+                                      'Acompanhe exigências técnicas, documentos e retornos do cidadão.',
+                                  route: '/inspections',
+                                ),
+                              if (eventServiceActive)
+                                const _HomeActionCard(
+                                  icon: Icons.qr_code_scanner_outlined,
+                                  title: 'Verificar evento',
+                                  description:
+                                      'Leia o QR Code do alvará e registre a fiscalização do evento autorizado.',
+                                  route: '/verificar-evento',
+                                ),
+                              if (orlaServiceActive && _canAccessOrla)
+                                const _HomeActionCard(
+                                  icon: Icons.beach_access,
+                                  title: 'Acesso à Orla',
+                                  description:
+                                      'Valide veículos cadastrados por QR Code ou placa e registre entradas.',
+                                  route: '/orla',
+                                ),
+                              if (eventServiceActive)
+                                const _HomeActionCard(
+                                  icon: Icons.analytics_outlined,
+                                  title: 'Relatórios',
+                                  description:
+                                      'Analise eventos por período, ano, tipo, secretaria e frequência mensal.',
+                                  route: '/reports',
+                                ),
+                              if (_canManageUsers)
+                                const _HomeActionCard(
+                                  icon: Icons.people_outline,
+                                  title: 'Usuários',
+                                  description:
+                                      'Consulte e cadastre usuários conforme o escopo da secretaria.',
+                                  route: '/users',
+                                ),
+                              if (user?.userType == 'admin')
+                                const _HomeActionCard(
+                                  icon: Icons.security_outlined,
+                                  title: 'Tipos de usuário e permissões',
+                                  description:
+                                      'Controle permissões por perfil e categoria do sistema.',
+                                  route: '/permissions',
+                                ),
+                              if (_canManageUsers)
+                                const _HomeActionCard(
+                                  icon: Icons.view_carousel_outlined,
+                                  title: 'Conteúdo da página inicial',
+                                  description:
+                                      'Crie até 5 cards de carrossel para sua secretaria ou prefeitura.',
+                                  route: '/home-content',
+                                ),
+                              if (eventServiceActive &&
+                                  (user?.role == 'admin' ||
+                                      user?.role == 'gestor_secretaria'))
+                                const _HomeActionCard(
+                                  icon: Icons.add_location_alt_outlined,
+                                  title: 'Mapas e conteúdo turístico',
+                                  description:
+                                      'Edite pontos turísticos, rotas e responsáveis pelo mapa de eventos.',
+                                  route: AppRoutes.contentManagement,
+                                ),
+                              if (_canManageUsers)
+                                const _HomeActionCard(
+                                  icon: Icons.account_balance_outlined,
+                                  title: 'Secretarias',
+                                  description:
+                                      'Configure e-mail, logo e textos usados em notificações e documentos.',
+                                  route: '/secretarias',
+                                ),
+                              if (user?.userType == 'admin' ||
+                                  user?.userType == 'gestor_secretaria')
+                                const _HomeActionCard(
+                                  icon: Icons.design_services_outlined,
+                                  title: 'Gestão de Serviços',
+                                  description:
+                                      'Configure perguntas, tipos de resposta, documentos modelo e regras por secretaria.',
+                                  route: '/questions',
+                                ),
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   );
                 },

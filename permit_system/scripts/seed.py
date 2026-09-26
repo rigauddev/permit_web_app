@@ -817,17 +817,17 @@ def seed_orla_service(db, roles, users):
         ),
         "alvara_evento": (
             "Alvará de Evento",
-            "Serviço desativado nesta homologação focada na Orla.",
+            "Serviço indisponível nesta homologação da Orla.",
             False,
         ),
         "alvara_funcionamento": (
             "Alvará de Funcionamento",
-            "Serviço desativado nesta homologação focada na Orla.",
+            "Serviço indisponível nesta homologação da Orla.",
             False,
         ),
         "iptu": (
             "IPTU",
-            "Serviço desativado nesta homologação focada na Orla.",
+            "Serviço indisponível nesta homologação da Orla.",
             False,
         ),
     }
