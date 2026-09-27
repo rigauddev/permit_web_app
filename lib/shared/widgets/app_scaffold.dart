@@ -111,6 +111,7 @@ class AppScaffold extends StatelessWidget {
   }
 
   static const _mainRoutes = {
+    AppRoutes.login,
     AppRoutes.home,
     AppRoutes.services,
     AppRoutes.help,
@@ -168,7 +169,7 @@ class _MobileBottomNavigationBar extends StatelessWidget {
   String get _servicesRoute => AppRoutes.services;
 
   int get _selectedIndex {
-    if (currentRoute == _homeRoute) return 0;
+    if (currentRoute == _homeRoute) return 2;
     if (currentRoute == _servicesRoute) return 1;
     return 0;
   }
@@ -178,13 +179,13 @@ class _MobileBottomNavigationBar extends StatelessWidget {
     return NavigationBar(
       selectedIndex: _selectedIndex,
       onDestinationSelected: (index) {
-        if (index == 2) {
+        if (index == 0) {
           Scaffold.of(context).openDrawer();
           return;
         }
 
         final targetRoute = switch (index) {
-          0 => _homeRoute,
+          2 => _homeRoute,
           1 => _servicesRoute,
           _ => _homeRoute,
         };
@@ -201,9 +202,9 @@ class _MobileBottomNavigationBar extends StatelessWidget {
       },
       destinations: const [
         NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
-          label: 'Início',
+          icon: Icon(Icons.menu),
+          selectedIcon: Icon(Icons.menu_open),
+          label: 'Menu',
         ),
         NavigationDestination(
           icon: Icon(Icons.design_services_outlined),
@@ -211,9 +212,9 @@ class _MobileBottomNavigationBar extends StatelessWidget {
           label: 'Serviços',
         ),
         NavigationDestination(
-          icon: Icon(Icons.menu),
-          selectedIcon: Icon(Icons.menu),
-          label: 'Menu',
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Início',
         ),
       ],
     );
@@ -242,17 +243,17 @@ class _SystemFooter extends StatelessWidget {
         runSpacing: 4,
         children: [
           Text(
-            'Secretaria de Mobilidade Pública - SEMOP',
+            'Secretaria de Mobilidade Pública - SEMOP | Prefeitura de valença - BA',
             style: textStyle,
             textAlign: TextAlign.center,
           ),
           Text(
-            'Desenvolvido por: Matheus Rigaud',
+            'Diretor de inteligência de dados: Matheus Rigaud',
             style: textStyle,
             textAlign: TextAlign.center,
           ),
           Text(
-            'Diretor: Rael Costa',
+            'Secretário SEMOP: Rael Costa',
             style: textStyle,
             textAlign: TextAlign.center,
           ),

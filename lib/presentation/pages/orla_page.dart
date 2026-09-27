@@ -1350,45 +1350,89 @@ class _OrlaPageState extends State<OrlaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hóspedes da pousada/hotel',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const Text(
-                      'Cadastre hóspedes, veículos e excursões. O sistema gera QR Code para acesso à Orla.',
-                    ),
-                  ],
-                ),
-              ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton.icon(
-                    onPressed:
-                        _busy
-                            ? null
-                            : () => _createGuestPass(isExcursion: false),
-                    icon: const Icon(Icons.person_add_alt_1),
-                    label: const Text('Cadastrar hóspede'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed:
-                        _busy
-                            ? null
-                            : () => _createGuestPass(isExcursion: true),
-                    icon: const Icon(Icons.directions_bus_outlined),
-                    label: const Text('Cadastrar excursão'),
-                  ),
-                ],
-              ),
-            ],
+          LayoutBuilder(
+            builder:
+                (context, constraints) =>
+                    constraints.maxWidth < 700
+                        ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Hóspedes da pousada/hotel',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const Text(
+                              'Cadastre hóspedes, veículos e excursões. O sistema gera QR Code para acesso à Orla.',
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed:
+                                  _busy
+                                      ? null
+                                      : () =>
+                                          _createGuestPass(isExcursion: false),
+                              icon: const Icon(Icons.person_add_alt_1),
+                              label: const Text('Cadastrar hóspede'),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed:
+                                  _busy
+                                      ? null
+                                      : () =>
+                                          _createGuestPass(isExcursion: true),
+                              icon: const Icon(Icons.directions_bus_outlined),
+                              label: const Text('Cadastrar excursão'),
+                            ),
+                          ],
+                        )
+                        : Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Hóspedes da pousada/hotel',
+                                    style:
+                                        Theme.of(context).textTheme.titleLarge,
+                                  ),
+                                  const Text(
+                                    'Cadastre hóspedes, veículos e excursões. O sistema gera QR Code para acesso à Orla.',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed:
+                                      _busy
+                                          ? null
+                                          : () => _createGuestPass(
+                                            isExcursion: false,
+                                          ),
+                                  icon: const Icon(Icons.person_add_alt_1),
+                                  label: const Text('Cadastrar hóspede'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      _busy
+                                          ? null
+                                          : () => _createGuestPass(
+                                            isExcursion: true,
+                                          ),
+                                  icon: const Icon(
+                                    Icons.directions_bus_outlined,
+                                  ),
+                                  label: const Text('Cadastrar excursão'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
           ),
           const SizedBox(height: 12),
           _stayRequestsSection(),
@@ -2720,6 +2764,34 @@ class _OrlaPageState extends State<OrlaPage> {
 
   Future<void> _photo() async {
     String? detected;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Posicione a placa para leitura'),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.crop_free, size: 64, color: Color(0xFF0E5F2F)),
+                SizedBox(height: 12),
+                Text(
+                  'Mantenha a placa centralizada, inteira no enquadramento, com boa luz e sem reflexos. Aproxime o celular até letras e números ficarem nítidos.',
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Abrir câmera'),
+              ),
+            ],
+          ),
+    );
+    if (proceed != true) return;
     await _run(() async {
       final photo = await ImagePicker().pickImage(
         source: ImageSource.camera,
@@ -2753,7 +2825,7 @@ class _OrlaPageState extends State<OrlaPage> {
       );
     });
     if (detected != null && mounted && await _checkPlateSecurity(detected!)) {
-      await _plate(detected!);
+      await _run(() => _validate(detected!, 'plate'));
     }
   }
 
