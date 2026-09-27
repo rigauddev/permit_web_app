@@ -606,7 +606,12 @@ class _OrlaPageState extends State<OrlaPage> {
     if (profile['is_tourist'] != true) return const SizedBox.shrink();
     final active = profile['authorized'] == true;
     final pending = profile['extension_pending'] == true;
-    final history = (profile['history'] as List? ?? const []);
+    final history = List<dynamic>.from(profile['history'] as List? ?? const [])
+      ..sort(
+        (a, b) => (b['created_at']?.toString() ?? '').compareTo(
+          a['created_at']?.toString() ?? '',
+        ),
+      );
     return Card(
       color: active ? const Color(0xFFEAF7F0) : const Color(0xFFFFF6E6),
       child: Padding(
@@ -2795,8 +2800,8 @@ class _OrlaPageState extends State<OrlaPage> {
     await _run(() async {
       final photo = await ImagePicker().pickImage(
         source: ImageSource.camera,
-        maxWidth: 1920,
-        imageQuality: 85,
+        maxWidth: 2560,
+        imageQuality: 100,
       );
       if (photo == null) return;
       final result = await _api.recognize(photo);
@@ -2912,6 +2917,13 @@ class _OrlaPageState extends State<OrlaPage> {
       context: context,
       builder:
           (ctx) => AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            titleTextStyle: Theme.of(
+              ctx,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             icon: Icon(
               v['authorized'] == true
                   ? Icons.verified_user_outlined
@@ -2927,7 +2939,10 @@ class _OrlaPageState extends State<OrlaPage> {
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
-            content: SingleChildScrollView(child: _validationContent(v)),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: SingleChildScrollView(child: _validationContent(v)),
+            ),
             actionsAlignment: MainAxisAlignment.spaceBetween,
             actions: [
               TextButton(
@@ -2955,6 +2970,13 @@ class _OrlaPageState extends State<OrlaPage> {
       context: context,
       builder:
           (ctx) => AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            titleTextStyle: Theme.of(
+              ctx,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             icon: const Icon(
               Icons.check_circle_outline,
               color: Color(0xFF0E5F2F),
@@ -2965,10 +2987,13 @@ class _OrlaPageState extends State<OrlaPage> {
               textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.w900),
             ),
-            content: SingleChildScrollView(
-              child: _validationContent(
-                Map<String, dynamic>.from(result),
-                registered: true,
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: SingleChildScrollView(
+                child: _validationContent(
+                  Map<String, dynamic>.from(result),
+                  registered: true,
+                ),
               ),
             ),
             actions: [
