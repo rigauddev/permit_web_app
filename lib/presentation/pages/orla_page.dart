@@ -14,6 +14,7 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/orla_api_service.dart';
+import '../../core/plate_ocr.dart';
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
 import '../../shared/widgets/app_scaffold.dart';
@@ -2804,11 +2805,22 @@ class _OrlaPageState extends State<OrlaPage> {
         imageQuality: 100,
       );
       if (photo == null) return;
-      final result = await _api.recognize(photo);
-      final candidates = result['candidates'] as List;
+      final localCandidates = await recognizePlateCandidates(photo);
+      List<Map<String, String>> candidates =
+          localCandidates.map((plate) => {'plate': plate}).toList();
+
+      // A leitura no dispositivo é usada em Android/iOS. A API continua como
+      // alternativa para a versão web e para imagens sem texto legível local.
+      if (candidates.isEmpty) {
+        final result = await _api.recognize(photo);
+        candidates =
+            (result['candidates'] as List)
+                .map((value) => Map<String, String>.from(value as Map))
+                .toList();
+      }
       if (candidates.isEmpty) {
         throw PermitApiException(
-          'Placa não identificada. Tente outra foto ou digite a placa.',
+          'Não foi possível ler a placa. Centralize-a, aproxime a câmera e evite reflexos; ou digite a placa.',
         );
       }
       if (!mounted) return;
@@ -2822,7 +2834,7 @@ class _OrlaPageState extends State<OrlaPage> {
                       .map(
                         (c) => SimpleDialogOption(
                           onPressed: () => Navigator.pop(ctx, c['plate']),
-                          child: Text(c['plate']),
+                          child: Text(c['plate']!),
                         ),
                       )
                       .toList(),
