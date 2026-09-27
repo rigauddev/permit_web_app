@@ -14,7 +14,14 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./permit_system.db")
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    # O MySQL pode reiniciar independentemente da API. Testa a conexão retirada
+    # do pool e recria conexões antigas, evitando reutilizar sockets inválidos.
+    pool_pre_ping=not DATABASE_URL.startswith("sqlite"),
+    pool_recycle=1800 if not DATABASE_URL.startswith("sqlite") else -1,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
