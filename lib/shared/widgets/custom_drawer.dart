@@ -148,6 +148,7 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                     title: 'Meus serviços',
                     routes: [
                       AppRoutes.myRequests,
+                      if (_serviceActive('acesso_orla')) AppRoutes.orla,
                       AppRoutes.orlaVehicles,
                       if (isTourismBusiness) AppRoutes.orlaGuests,
                       if (isTourismBusiness) AppRoutes.orlaBanners,
@@ -159,6 +160,11 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
                         'Minhas solicitações',
                         AppRoutes.myRequests,
                       ),
+                      if (_serviceActive('acesso_orla'))
+                        const _DrawerSectionItem(
+                          'Acesso à Orla',
+                          AppRoutes.orla,
+                        ),
                       if (_serviceActive('acesso_orla'))
                         const _DrawerSectionItem(
                           'Veículos',

@@ -16,7 +16,7 @@ from src.api.dependencies import get_current_user
 from src.core.security import hash_password
 from src.infra.database.mysql_db import get_db
 from src.infra.database.models import RoleModel, UserModel
-from src.infra.database.models.orla_model import OrlaAccount, OrlaVehicle, OrlaAccess, OrlaInn, OrlaGuestPass, OrlaNotification
+from src.infra.database.models.orla_model import OrlaAccount, OrlaVehicle, OrlaAccess, OrlaInn, OrlaGuestPass, OrlaNotification, OrlaStayExtensionRequest
 from src.services.orla_area import is_inside_orla
 
 router = APIRouter(prefix='/orla', tags=['Acesso à Orla'])
@@ -339,6 +339,10 @@ class StayRequestApprovalInput(BaseModel):
     approved: bool
 
 
+class StayExtensionInput(BaseModel):
+    requested_end: str = Field(min_length=10, max_length=10)
+
+
 def inn_data(inn):
     return {
         'id': inn.id,
@@ -466,6 +470,9 @@ def approve_inn(inn_id: int, payload: InnApprovalInput, db: Session = Depends(ge
 def me(db: Session = Depends(get_db), user=Depends(get_current_user)):
     if user.role.slug != 'cidadao' and not staff(user):
         raise HTTPException(403, 'Serviço disponível ao cidadão e à fiscalização da orla.')
+    stay_allowed, stay_message = _stay_allows_orla_access(db, user)
+    history_rows = db.query(OrlaAccess, OrlaVehicle).join(OrlaVehicle, OrlaAccess.vehicle_id == OrlaVehicle.id).filter(OrlaVehicle.user_id == user.id).order_by(OrlaAccess.id.desc()).limit(50).all()
+    extension = db.query(OrlaStayExtensionRequest).filter_by(user_id=user.id, status='pending').order_by(OrlaStayExtensionRequest.id.desc()).first()
     return dict(vehicle_limit=account(db, user.id), is_staff=bool(staff(user)),
                 role=user.role.slug,
                 secretaria=user.secretaria.slug if user.secretaria else None,
@@ -475,7 +482,26 @@ def me(db: Session = Depends(get_db), user=Depends(get_current_user)):
                 managed_inn_id=user.managed_inn_id,
                 can_register_guests=bool(user.role.slug == 'cidadao' and user.business_category == 'pousada_hotel' and user.managed_inn_id),
                 responsible_secretarias=list(RESPONSIBLE_SECRETARIAS.values()),
-                vehicles=[vehicle_data(db, v, True) for v in db.query(OrlaVehicle).filter_by(user_id=user.id).all()])
+                vehicles=[vehicle_data(db, v, True) for v in db.query(OrlaVehicle).filter_by(user_id=user.id).all()],
+                access_profile=dict(is_tourist=user.tipo_usuario == 'turista', authorized=bool(user.is_active and stay_allowed), status=user.orla_access_status, stay_start=user.estadia_inicio, stay_end=user.estadia_fim, stay_type=user.tipo_estadia, inn_name=(db.get(OrlaInn, user.pousada_id).name if user.pousada_id and db.get(OrlaInn, user.pousada_id) else None), message=stay_message, extension_pending=extension is not None, requested_end=extension.requested_end if extension else None,
+                    history=[dict(id=row.id, plate=vehicle.plate, action=row.action, method=row.method, created_at=row.created_at) for row, vehicle in history_rows]))
+
+
+@router.post('/stay-extension-requests', status_code=201)
+def request_stay_extension(payload: StayExtensionInput, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if user.role.slug != 'cidadao' or user.tipo_usuario != 'turista' or user.tipo_estadia != 'pousada' or not user.pousada_id:
+        raise HTTPException(403, 'A prorrogação está disponível para turistas vinculados a pousada/hotel.')
+    requested_end = _parse_stay_date(payload.requested_end)
+    current_end = _parse_stay_date(user.estadia_fim)
+    if not requested_end or not current_end or requested_end <= current_end:
+        raise HTTPException(422, 'Informe uma nova data final posterior ao período atual.')
+    pending = db.query(OrlaStayExtensionRequest).filter_by(user_id=user.id, status='pending').first()
+    if pending:
+        pending.requested_end = payload.requested_end
+    else:
+        db.add(OrlaStayExtensionRequest(user_id=user.id, inn_id=user.pousada_id, current_end=user.estadia_fim, requested_end=payload.requested_end))
+    db.commit()
+    return {'status': 'pending', 'requested_end': payload.requested_end}
 
 
 @router.post('/vehicles', status_code=201)
@@ -579,6 +605,33 @@ def approve_stay_request(guest_id: int, payload: StayRequestApprovalInput,
     ))
     db.commit()
     return stay_request_data(db, guest)
+
+
+@router.get('/stay-extension-requests')
+def stay_extension_requests(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if not (user.role.slug == 'cidadao' and user.business_category == 'pousada_hotel' and user.managed_inn_id):
+        raise HTTPException(403, 'Acesso restrito à pousada/hotel responsável.')
+    rows = db.query(OrlaStayExtensionRequest).filter_by(inn_id=user.managed_inn_id).order_by(OrlaStayExtensionRequest.id.desc()).limit(100).all()
+    return [dict(id=row.id, guest_name=' '.join(filter(None, [db.get(UserModel, row.user_id).nome, db.get(UserModel, row.user_id).sobrenome])), current_end=row.current_end, requested_end=row.requested_end, status=row.status) for row in rows]
+
+
+@router.put('/stay-extension-requests/{request_id}/approval')
+def approve_stay_extension(request_id: int, payload: StayRequestApprovalInput, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if not (user.role.slug == 'cidadao' and user.business_category == 'pousada_hotel' and user.managed_inn_id):
+        raise HTTPException(403, 'Acesso restrito à pousada/hotel responsável.')
+    row = db.get(OrlaStayExtensionRequest, request_id)
+    if not row or row.inn_id != user.managed_inn_id or row.status != 'pending':
+        raise HTTPException(404, 'Solicitação de prorrogação não encontrada.')
+    guest = db.get(UserModel, row.user_id)
+    row.status = 'approved' if payload.approved else 'rejected'
+    row.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    if payload.approved:
+        guest.estadia_fim = row.requested_end
+        guest.orla_access_status = 'aprovado'
+    inn = db.get(OrlaInn, row.inn_id)
+    db.add(OrlaNotification(user_id=guest.id, title='Prorrogação do acesso à Orla', message=f'A pousada/hotel {inn.name if inn else "informada"} {"aprovou" if payload.approved else "recusou"} seu novo período até {row.requested_end}.', kind='prorrogacao_aprovada' if payload.approved else 'prorrogacao_recusada'))
+    db.commit()
+    return {'id': row.id, 'status': row.status}
 
 
 @router.get('/notifications')

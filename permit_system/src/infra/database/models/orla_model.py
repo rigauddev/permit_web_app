@@ -89,3 +89,15 @@ class OrlaNotification(Base):
     kind = Column(String(40), nullable=False, default='informacao')
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+
+
+class OrlaStayExtensionRequest(Base):
+    __tablename__ = 'orla_stay_extension_requests'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False, index=True)
+    inn_id = Column(Integer, ForeignKey('orla_inns.id'), nullable=False, index=True)
+    current_end = Column(String(10), nullable=False)
+    requested_end = Column(String(10), nullable=False)
+    status = Column(String(20), nullable=False, default='pending')
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    decided_at = Column(DateTime, nullable=True)

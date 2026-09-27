@@ -318,6 +318,11 @@ class _OrlaPageState extends State<OrlaPage> {
                   ] else
                     _establishmentsUnavailable(),
                 ] else ...[
+                  if (widget.section == OrlaSection.access &&
+                      _me?['access_profile'] is Map) ...[
+                    _touristAccessPanel(),
+                    const SizedBox(height: 16),
+                  ],
                   Text(
                     '${vehicles.length} de ${_me!['vehicle_limit']} veículos cadastrados',
                   ),
@@ -593,6 +598,126 @@ class _OrlaPageState extends State<OrlaPage> {
       ),
     ),
   );
+
+  Widget _touristAccessPanel() {
+    final profile = Map<String, dynamic>.from(
+      _me?['access_profile'] as Map? ?? const <String, dynamic>{},
+    );
+    if (profile['is_tourist'] != true) return const SizedBox.shrink();
+    final active = profile['authorized'] == true;
+    final pending = profile['extension_pending'] == true;
+    final history = (profile['history'] as List? ?? const []);
+    return Card(
+      color: active ? const Color(0xFFEAF7F0) : const Color(0xFFFFF6E6),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  active ? Icons.verified_user : Icons.schedule,
+                  color:
+                      active
+                          ? const Color(0xFF0E5F2F)
+                          : const Color(0xFF8A5A00),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    active
+                        ? 'Acesso autorizado à Orla'
+                        : 'Acesso à Orla indisponível',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text('Hospedagem: ${profile['inn_name'] ?? 'Não informada'}'),
+            Text(
+              'Período: ${profile['stay_start'] ?? '-'} até ${profile['stay_end'] ?? '-'}',
+            ),
+            if ((profile['message']?.toString() ?? '').isNotEmpty)
+              Text(profile['message'].toString()),
+            const SizedBox(height: 12),
+            const Text(
+              'Diretrizes: apresente o QR Code do veículo ao fiscal, respeite a área autorizada e realize uma nova validação após sair da orla.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (!active && !pending && profile['stay_type'] == 'pousada') ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _busy ? null : _requestExtension,
+                icon: const Icon(Icons.date_range_outlined),
+                label: const Text('Solicitar prorrogação de acesso'),
+              ),
+            ] else if (pending)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text(
+                  'Prorrogação solicitada até avaliação da pousada/hotel.',
+                ),
+              ),
+            const SizedBox(height: 14),
+            Text(
+              'Histórico de acessos',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            if (history.isEmpty)
+              const Text('Nenhuma entrada registrada.')
+            else
+              ...history
+                  .take(5)
+                  .map(
+                    (item) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.login),
+                      title: Text('${item['plate'] ?? 'Veículo'} • Entrada'),
+                      subtitle: Text(
+                        '${item['created_at'] ?? ''} • ${item['method'] == 'qr' ? 'QR Code' : 'Placa'}',
+                      ),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _requestExtension() async {
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: DateTime.now().add(const Duration(days: 7)),
+    );
+    if (picked == null) return;
+    await _run(() async {
+      await _api.request(
+        '/stay-extension-requests',
+        method: 'POST',
+        body: {
+          'requested_end':
+              '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}',
+        },
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Solicitação enviada para a pousada/hotel.'),
+          ),
+        );
+      }
+    });
+  }
 
   Widget _vehicle(Map<String, dynamic> v, {bool own = false}) {
     final owner =
