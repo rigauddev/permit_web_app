@@ -2844,15 +2844,39 @@ class _OrlaPageState extends State<OrlaPage> {
       );
       await Future<void>.delayed(const Duration(milliseconds: 120));
     }
-    late final dynamic v;
+    dynamic v;
+    PermitApiException? lookupError;
     try {
       v = await _api.request('/lookup', method: 'POST', body: body);
+    } on PermitApiException catch (error) {
+      lookupError = error;
     } finally {
       if (loadingOpen && mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
     }
     if (!mounted) return;
+    if (lookupError != null) {
+      await _showDeniedAccessDialog(
+        plate: value,
+        message: lookupError.message,
+        notFound: lookupError.statusCode == 404,
+      );
+      return;
+    }
+    final data = Map<String, dynamic>.from(v as Map);
+    if (data['authorized'] != true) {
+      await _showDeniedAccessDialog(
+        plate: data['plate']?.toString() ?? value,
+        message:
+            data['authorization_message']?.toString() ??
+            'Este veículo não está autorizado a acessar a Orla de Guaibim.',
+        owner: (data['guest_name'] ?? data['owner_name'])?.toString(),
+        establishment:
+            (data['inn_name'] ?? data['establishment_name'])?.toString(),
+      );
+      return;
+    }
     final action = await showDialog<String>(
       context: context,
       builder:
@@ -2865,23 +2889,18 @@ class _OrlaPageState extends State<OrlaPage> {
               ctx,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             icon: Icon(
-              v['authorized'] == true
-                  ? Icons.verified_user_outlined
-                  : Icons.gpp_bad_outlined,
-              color:
-                  v['authorized'] == true
-                      ? const Color(0xFF0E5F2F)
-                      : const Color(0xFFB3261E),
+              Icons.verified_user_outlined,
+              color: const Color(0xFF0E5F2F),
               size: 42,
             ),
             title: Text(
-              _validationTitle(v),
+              _validationTitle(data),
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
             content: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
-              child: SingleChildScrollView(child: _validationContent(v)),
+              child: SingleChildScrollView(child: _validationContent(data)),
             ),
             actionsAlignment: MainAxisAlignment.spaceBetween,
             actions: [
@@ -2889,12 +2908,11 @@ class _OrlaPageState extends State<OrlaPage> {
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Fechar'),
               ),
-              if (v['authorized'] == true)
-                FilledButton.icon(
-                  onPressed: () => Navigator.pop(ctx, 'entry'),
-                  icon: const Icon(Icons.login_outlined),
-                  label: const Text('Registrar entrada'),
-                ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(ctx, 'entry'),
+                icon: const Icon(Icons.login_outlined),
+                label: const Text('Registrar entrada'),
+              ),
             ],
           ),
     );
@@ -2949,6 +2967,115 @@ class _OrlaPageState extends State<OrlaPage> {
   String _validationTitle(Map<String, dynamic> data) {
     if (data['authorized'] == true) return 'Acesso autorizado';
     return 'Entrada não autorizada';
+  }
+
+  Future<void> _showDeniedAccessDialog({
+    required String plate,
+    required String message,
+    String? owner,
+    String? establishment,
+    bool notFound = false,
+  }) async {
+    final capturedPlate = plate.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (ctx) => AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            icon: const Icon(
+              Icons.do_not_disturb_on_rounded,
+              size: 52,
+              color: Color(0xFFB3261E),
+            ),
+            title: Text(
+              notFound ? 'Veículo não encontrado' : 'Acesso não autorizado',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF8B1A14),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFE8E5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE57373)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'PLACA CAPTURADA',
+                          style: TextStyle(
+                            color: Color(0xFF8B1A14),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          capturedPlate.isEmpty
+                              ? 'NÃO IDENTIFICADA'
+                              : capturedPlate,
+                          style: const TextStyle(
+                            color: Color(0xFF8B1A14),
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  if ((owner ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _DeniedAccessDetail('Responsável', owner!),
+                  ],
+                  if ((establishment ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _DeniedAccessDetail('Estabelecimento', establishment!),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB3261E),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Fechar e continuar fiscalização'),
+                ),
+              ),
+            ],
+          ),
+    );
   }
 
   Widget _validationContent(
@@ -4141,6 +4268,35 @@ class _ValidationDetail {
 
   final String label;
   final Object? value;
+}
+
+class _DeniedAccessDetail extends StatelessWidget {
+  const _DeniedAccessDetail(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF9F5F4),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: RichText(
+      text: TextSpan(
+        style: DefaultTextStyle.of(context).style,
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          TextSpan(text: value),
+        ],
+      ),
+    ),
+  );
 }
 
 class _ValidationLoadingDialog extends StatelessWidget {
