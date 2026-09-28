@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'package:http_parser/http_parser.dart';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
 import 'session_expiration.dart';
 import 'permit_api_service.dart';
 
@@ -28,38 +26,6 @@ class OrlaApiService {
       'Content-Type': 'application/json',
     });
     if (body != null) request.body = jsonEncode(body);
-    return _decode(
-      await http.Response.fromStream(
-        await request.send().timeout(const Duration(seconds: 30)),
-      ).timeout(const Duration(seconds: 30)),
-    );
-  }
-
-  Future<dynamic> recognize(XFile file) async {
-    final token = await SessionExpiration.readAccessToken();
-    if (token == null) {
-      throw PermitApiException('Sessão expirada.', statusCode: 401);
-    }
-    if (await file.length() > 5 * 1024 * 1024) {
-      throw PermitApiException('Envie uma foto de até 5 MB.');
-    }
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$_base/orla/recognize-plate'),
-    );
-    request.headers['Authorization'] = 'Bearer $token';
-    // MultipartFile infers no image MIME; set it through the HTTP parser.
-    final mime =
-        file.mimeType ??
-        (file.name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'file',
-        await file.readAsBytes(),
-        filename: file.name,
-        contentType: MediaType.parse(mime),
-      ),
-    );
     return _decode(
       await http.Response.fromStream(
         await request.send().timeout(const Duration(seconds: 30)),

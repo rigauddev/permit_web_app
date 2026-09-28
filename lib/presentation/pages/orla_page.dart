@@ -2806,21 +2806,12 @@ class _OrlaPageState extends State<OrlaPage> {
       );
       if (photo == null) return;
       final localCandidates = await recognizePlateCandidates(photo);
-      List<Map<String, String>> candidates =
+      final candidates =
           localCandidates.map((plate) => {'plate': plate}).toList();
 
-      // A leitura no dispositivo é usada em Android/iOS. A API continua como
-      // alternativa para a versão web e para imagens sem texto legível local.
-      if (candidates.isEmpty) {
-        final result = await _api.recognize(photo);
-        candidates =
-            (result['candidates'] as List)
-                .map((value) => Map<String, String>.from(value as Map))
-                .toList();
-      }
       if (candidates.isEmpty) {
         throw PermitApiException(
-          'Não foi possível ler a placa. Centralize-a, aproxime a câmera e evite reflexos; ou digite a placa.',
+          'Não foi possível ler a placa neste aparelho. Centralize-a, aproxime a câmera e evite reflexos; ou digite a placa.',
         );
       }
       if (!mounted) return;

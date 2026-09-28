@@ -4,7 +4,7 @@ import 'plate_ocr_stub.dart' if (dart.library.io) 'plate_ocr_mobile.dart';
 
 /// Identifica placas brasileiras em uma foto capturada pelo aparelho.
 ///
-/// Na web, a leitura é feita pela API como alternativa, pois o ML Kit é
-/// disponibilizado somente para Android e iOS.
+/// A imagem permanece no aparelho. O resultado é enviado somente como texto
+/// para a consulta de autorização no banco do sistema.
 Future<List<String>> recognizePlateCandidates(XFile image) =>
     recognizePlateCandidatesImpl(image);

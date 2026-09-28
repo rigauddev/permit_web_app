@@ -5,7 +5,7 @@ import secrets
 from datetime import date, datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal
 from sqlalchemy import update
@@ -959,34 +959,3 @@ def history(vehicle_id: int, offset: int = 0, db: Session = Depends(get_db), use
     return [dict(id=a.id, action=a.action, method=a.method, created_at=a.created_at)
             for a in db.query(OrlaAccess).filter_by(vehicle_id=vehicle_id)
             .order_by(OrlaAccess.id.desc()).offset(max(0, offset)).limit(100).all()]
-
-
-@router.post('/recognize-plate')
-async def recognize(file: UploadFile = File(...), user=Depends(require_inspection_staff)):
-    token = os.getenv('PLATE_RECOGNIZER_TOKEN', '')
-    if not token:
-        raise HTTPException(
-            503,
-            'Leitura automática de letras/números da placa não configurada. '
-            'Digite a placa manualmente ou leia o QR Code gerado pelo sistema.',
-        )
-    if file.content_type not in ('image/jpeg', 'image/png', 'image/webp'):
-        raise HTTPException(422, 'Envie uma foto JPEG, PNG ou WebP.')
-    image = await file.read(5 * 1024 * 1024 + 1)
-    if not image or len(image) > 5 * 1024 * 1024:
-        raise HTTPException(413, 'Envie uma foto de até 5 MB.')
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post('https://api.platerecognizer.com/v1/plate-reader/',
-                headers={'Authorization': 'Token ' + token}, data={'regions': 'br'},
-                files={'upload': ('plate.jpg', image, file.content_type)})
-            response.raise_for_status()
-            results = response.json()['results']
-        candidates = []
-        for result in results:
-            value = str(result.get('plate', '')).upper()
-            if re.fullmatch(r'[A-Z]{3}[0-9][A-Z0-9][0-9]{2}', value):
-                candidates.append({'plate': value, 'score': result.get('score', 0)})
-        return {'candidates': candidates}
-    except (httpx.HTTPError, ValueError, KeyError, TypeError):
-        raise HTTPException(502, 'Não foi possível ler a placa. Tente outra foto ou digite a placa.')
