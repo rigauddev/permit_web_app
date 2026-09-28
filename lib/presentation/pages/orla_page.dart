@@ -409,14 +409,9 @@ class _OrlaPageState extends State<OrlaPage> {
                       label: const Text('Escanear QR Code'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _busy ? null : () => _plate(),
+                      onPressed: _busy ? null : _plate,
                       icon: const Icon(Icons.directions_car),
                       label: const Text('Consultar placa'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _scanPlateCamera,
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text('Ler placa pela câmera'),
                     ),
                   ],
                 ),
@@ -2819,14 +2814,60 @@ class _OrlaPageState extends State<OrlaPage> {
   }
 
   Future<void> _plate([String initial = '']) async {
-    final value = await _input(
-      'Consultar placa',
-      'Confira a placa do veículo',
-      initial,
+    final controller = TextEditingController(text: initial);
+    const cameraAction = '__read_plate_with_camera__';
+    final value = await showDialog<String>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            titlePadding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+            title: Row(
+              children: [
+                const Expanded(child: Text('Consultar placa')),
+                IconButton(
+                  tooltip: 'Fechar',
+                  onPressed: () => Navigator.pop(dialogContext),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9-]')),
+                LengthLimitingTextInputFormatter(8),
+              ],
+              decoration: InputDecoration(
+                labelText: 'Placa do veículo',
+                hintText: 'ABC1D23',
+                suffixIcon: IconButton(
+                  tooltip: 'Ler placa pela câmera',
+                  onPressed: () => Navigator.pop(dialogContext, cameraAction),
+                  icon: const Icon(Icons.camera_alt),
+                ),
+              ),
+              onSubmitted:
+                  (value) => Navigator.pop(dialogContext, value.trim()),
+            ),
+            actions: [
+              FilledButton.icon(
+                onPressed:
+                    () => Navigator.pop(dialogContext, controller.text.trim()),
+                icon: const Icon(Icons.search),
+                label: const Text('Buscar'),
+              ),
+            ],
+          ),
     );
-    if (value != null && value.isNotEmpty && mounted) {
-      await _run(() => _validate(value, 'plate'));
+    controller.dispose();
+    if (!mounted || value == null) return;
+    if (value == cameraAction) {
+      await _scanPlateCamera();
+      return;
     }
+    if (value.isNotEmpty) await _run(() => _validate(value, 'plate'));
   }
 
   Future<void> _scanPlateCamera() async {
