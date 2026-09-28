@@ -142,7 +142,7 @@ Esse modo não baixa a imagem Flutter no servidor. Ele usa apenas Nginx para ser
 Em VPS pequena, mantenha `RUN_SEED=false` para a API subir rápido. Depois que os containers estiverem saudáveis, rode o seed manualmente:
 
 ```bash
-docker compose -f docker-compose.runtime.yml exec api python scripts/seed.py
+docker compose -f docker-compose.runtime.yml exec api python scripts/seed_orla.py
 ```
 
 Erros HTTP da API são preservados no volume `permit_logs_data`, sem gravar
