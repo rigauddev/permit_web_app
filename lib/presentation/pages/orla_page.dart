@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -14,7 +13,7 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/orla_api_service.dart';
-import '../../core/plate_ocr.dart';
+import '../../core/plate_live_scanner.dart';
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
 import '../../shared/widgets/app_scaffold.dart';
@@ -406,7 +405,7 @@ class _OrlaPageState extends State<OrlaPage> {
                       label: const Text('Consultar placa'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _busy ? null : _photo,
+                      onPressed: _busy ? null : _scanPlateCamera,
                       icon: const Icon(Icons.camera_alt),
                       label: const Text('Ler placa pela câmera'),
                     ),
@@ -2768,72 +2767,10 @@ class _OrlaPageState extends State<OrlaPage> {
     }
   }
 
-  Future<void> _photo() async {
-    String? detected;
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Posicione a placa para leitura'),
-            content: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.crop_free, size: 64, color: Color(0xFF0E5F2F)),
-                SizedBox(height: 12),
-                Text(
-                  'Mantenha a placa centralizada, inteira no enquadramento, com boa luz e sem reflexos. Aproxime o celular até letras e números ficarem nítidos.',
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Abrir câmera'),
-              ),
-            ],
-          ),
-    );
-    if (proceed != true) return;
-    await _run(() async {
-      final photo = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        maxWidth: 2560,
-        imageQuality: 100,
-      );
-      if (photo == null) return;
-      final localCandidates = await recognizePlateCandidates(photo);
-      final candidates =
-          localCandidates.map((plate) => {'plate': plate}).toList();
-
-      if (candidates.isEmpty) {
-        throw PermitApiException(
-          'Não foi possível ler a placa neste aparelho. Centralize-a, aproxime a câmera e evite reflexos; ou digite a placa.',
-        );
-      }
-      if (!mounted) return;
-      detected = await showDialog<String>(
-        context: context,
-        builder:
-            (ctx) => SimpleDialog(
-              title: const Text('Confira a placa identificada'),
-              children:
-                  candidates
-                      .map(
-                        (c) => SimpleDialogOption(
-                          onPressed: () => Navigator.pop(ctx, c['plate']),
-                          child: Text(c['plate']!),
-                        ),
-                      )
-                      .toList(),
-            ),
-      );
-    });
-    if (detected != null && mounted && await _checkPlateSecurity(detected!)) {
-      await _run(() => _validate(detected!, 'plate'));
+  Future<void> _scanPlateCamera() async {
+    final detected = await scanPlateWithLiveCamera(context);
+    if (detected != null && mounted && await _checkPlateSecurity(detected)) {
+      await _run(() => _validate(detected, 'plate'));
     }
   }
 
