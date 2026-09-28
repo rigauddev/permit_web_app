@@ -6,6 +6,8 @@ ENV PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN python -m pip install --upgrade pip && \
     pip install -r requirements.txt

@@ -69,6 +69,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
   String _citizenType = 'morador';
   String _stayType = 'casa_aluguel';
   String _vehicleColor = 'Branco';
+  String _vehicleType = 'carro';
   String _residenceProofType = 'luz';
   XFile? _userPhoto;
   PlatformFile? _identityDocument;
@@ -123,6 +124,13 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
     'Toyota': ['Corolla', 'Etios', 'Hilux', 'SW4', 'Yaris'],
     'Volkswagen': ['Gol', 'Polo', 'Saveiro', 'T-Cross', 'Voyage'],
   };
+  static const _vehicleTypes = <String, String>{
+    'motocicleta': 'Motocicleta',
+    'carro': 'Carro',
+    'quadriciclo': 'Quadriciclo',
+    'onibus': 'Ônibus',
+  };
+
   static const _vehicleColors = [
     'Branco',
     'Preto',
@@ -373,6 +381,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                   'brand': _vehicleBrandController.text.trim(),
                   'model': _vehicleModelController.text.trim(),
                   'color': _vehicleColor,
+                  'vehicle_type': _vehicleType,
                   'establishment_name': _selectedInnName(),
                 }
                 : null,
@@ -1617,6 +1626,26 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                                                   !_isValidPlate(value ?? '')
                                               ? 'Informe uma placa válida'
                                               : null,
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<String>(
+                                  initialValue: _vehicleType,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Tipo de veículo',
+                                  ),
+                                  items:
+                                      _vehicleTypes.entries
+                                          .map(
+                                            (entry) => DropdownMenuItem(
+                                              value: entry.key,
+                                              child: Text(entry.value),
+                                            ),
+                                          )
+                                          .toList(),
+                                  onChanged:
+                                      (value) => setState(
+                                        () => _vehicleType = value ?? 'carro',
+                                      ),
                                 ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(

@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pdf/pdf.dart';
@@ -33,6 +35,13 @@ const _vehicleColors = [
   'Laranja',
   'Vinho',
 ];
+
+const _vehicleTypes = <String, String>{
+  'motocicleta': 'Motocicleta',
+  'carro': 'Carro',
+  'quadriciclo': 'Quadriciclo',
+  'onibus': 'Ônibus',
+};
 
 const _vehicleModelsByBrand = <String, List<String>>{
   'Chevrolet': ['Onix', 'Prisma', 'Cobalt', 'Spin', 'Tracker', 'S10'],
@@ -788,7 +797,7 @@ class _OrlaPageState extends State<OrlaPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${v['brand'] ?? 'Marca não informada'} ${v['model'] ?? ''} • ${v['color'] ?? ''}',
+                          '${_vehicleTypes[v['vehicle_type']] ?? 'Carro'} • ${v['brand'] ?? 'Marca não informada'} ${v['model'] ?? ''} • ${v['color'] ?? ''}',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         if (owner.isNotEmpty) ...[
@@ -2072,6 +2081,7 @@ class _OrlaPageState extends State<OrlaPage> {
     String? selectedBrand;
     String? selectedModel;
     String? selectedColor;
+    String? selectedVehicleType;
     DateTimeRange? stayRange;
     var releaseOrlaAccess = false;
     final data = await showDialog<Map<String, dynamic>>(
@@ -2321,6 +2331,31 @@ class _OrlaPageState extends State<OrlaPage> {
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
+                            initialValue: selectedVehicleType,
+                            decoration: const InputDecoration(
+                              labelText: 'Tipo de veículo',
+                            ),
+                            items:
+                                _vehicleTypes.entries
+                                    .map(
+                                      (item) => DropdownMenuItem(
+                                        value: item.key,
+                                        child: Text(item.value),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged:
+                                (value) => setDialogState(
+                                  () => selectedVehicleType = value,
+                                ),
+                            validator:
+                                (value) =>
+                                    value == null
+                                        ? 'Informe o tipo de veículo'
+                                        : null,
+                          ),
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<String>(
                             initialValue: selectedBrand,
                             decoration: InputDecoration(labelText: 'Marca'),
                             items:
@@ -2427,6 +2462,7 @@ class _OrlaPageState extends State<OrlaPage> {
                         'vehicle_brand': selectedBrand,
                         'vehicle_model': selectedModel,
                         'vehicle_color': selectedColor,
+                        'vehicle_type': selectedVehicleType,
                         'is_excursion': isExcursion,
                         'excursion_responsible_name':
                             responsibleName.text.trim(),
@@ -2495,6 +2531,7 @@ class _OrlaPageState extends State<OrlaPage> {
     String? selectedBrand;
     String? selectedModel;
     String? selectedColor;
+    String? selectedVehicleType;
     var isExcursion = false;
     final data = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -2534,6 +2571,30 @@ class _OrlaPageState extends State<OrlaPage> {
                                         )
                                         ? null
                                         : 'Placa inválida',
+                          ),
+                          DropdownButtonFormField<String>(
+                            initialValue: selectedVehicleType,
+                            decoration: const InputDecoration(
+                              labelText: 'Tipo de veículo',
+                            ),
+                            items:
+                                _vehicleTypes.entries
+                                    .map(
+                                      (item) => DropdownMenuItem(
+                                        value: item.key,
+                                        child: Text(item.value),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged:
+                                (value) => setDialogState(
+                                  () => selectedVehicleType = value,
+                                ),
+                            validator:
+                                (value) =>
+                                    value == null
+                                        ? 'Informe o tipo de veículo'
+                                        : null,
                           ),
                           DropdownButtonFormField<String>(
                             initialValue: selectedBrand,
@@ -2669,6 +2730,7 @@ class _OrlaPageState extends State<OrlaPage> {
                           'brand': selectedBrand,
                           'model': selectedModel,
                           'color': selectedColor,
+                          'vehicle_type': selectedVehicleType,
                           'establishment_name':
                               establishment.text.trim().isEmpty
                                   ? null
@@ -2768,6 +2830,48 @@ class _OrlaPageState extends State<OrlaPage> {
   }
 
   Future<void> _scanPlateCamera() async {
+    if (kIsWeb) {
+      final shouldOpenCamera = await showDialog<bool>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Ler placa pela câmera'),
+              content: const Text(
+                'Centralize a placa no enquadramento, mantenha boa iluminação e evite reflexos. A foto será usada apenas nesta validação e não será salva.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Abrir câmera'),
+                ),
+              ],
+            ),
+      );
+      if (shouldOpenCamera != true || !mounted) return;
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        imageQuality: 92,
+      );
+      if (image == null || !mounted) return;
+      await _run(() async {
+        final result = await _api.recognize(image);
+        final candidates = result['candidates'] as List;
+        if (candidates.isEmpty) {
+          throw PermitApiException(
+            'Não foi possível ler a placa. Centralize-a e tente novamente.',
+          );
+        }
+        final plate = candidates.first['plate'].toString();
+        if (await _checkPlateSecurity(plate)) await _validate(plate, 'plate');
+      });
+      return;
+    }
     final detected = await scanPlateWithLiveCamera(context);
     if (detected != null && mounted && await _checkPlateSecurity(detected)) {
       await _run(() => _validate(detected, 'plate'));
@@ -3108,7 +3212,7 @@ class _OrlaPageState extends State<OrlaPage> {
       ),
       _ValidationDetail(
         'Veículo',
-        '${data['plate']} • ${data['brand'] ?? 'Marca não informada'} ${data['model'] ?? ''} • ${data['color'] ?? ''}',
+        '${_vehicleTypes[data['vehicle_type']] ?? 'Carro'} • ${data['plate']} • ${data['brand'] ?? 'Marca não informada'} ${data['model'] ?? ''} • ${data['color'] ?? ''}',
       ),
       if (stayLabel != null) _ValidationDetail('Tipo de estadia', stayLabel),
       if (establishment.trim().isNotEmpty)

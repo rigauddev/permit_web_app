@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -6,6 +8,7 @@ class UserVehicleCreateRequest(BaseModel):
     brand: str = Field(..., min_length=1, max_length=80)
     model: str = Field(..., min_length=1, max_length=100)
     color: str = Field(..., min_length=1, max_length=50)
+    vehicle_type: Literal['motocicleta', 'carro', 'quadriciclo', 'onibus'] = 'carro'
     establishment_name: str | None = Field(default=None, max_length=150)
     is_excursion: bool = False
     driver_name: str | None = Field(default=None, max_length=150)

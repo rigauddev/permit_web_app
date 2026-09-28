@@ -365,6 +365,7 @@ class AuthService:
                 brand=vehicle.brand.strip(),
                 model=vehicle.model.strip(),
                 color=vehicle.color.strip(),
+                vehicle_type=vehicle.vehicle_type,
                 establishment_name=(vehicle.establishment_name or "").strip() or None,
                 is_excursion=bool(vehicle.is_excursion),
                 driver_name=(vehicle.driver_name or "").strip() or None,

@@ -2,10 +2,13 @@
 import os
 import re
 import secrets
+import io
 from datetime import date, datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from PIL import Image, ImageOps
+import pytesseract
 from pydantic import BaseModel, Field
 from typing import Literal
 from sqlalchemy import update
@@ -225,6 +228,7 @@ def _ensure_guest_user(db: Session, payload, inn: OrlaInn):
             brand=payload.vehicle_brand.strip(),
             model=payload.vehicle_model.strip(),
             color=payload.vehicle_color.strip(),
+            vehicle_type=payload.vehicle_type,
             establishment_name=inn.name,
             is_excursion=payload.is_excursion,
             driver_name=(payload.excursion_responsible_name or '').strip() or None,
@@ -251,7 +255,7 @@ def vehicle_data(db, vehicle, include_qr=False):
     elif stay_message and ('ainda não iniciou' in stay_message.lower() or 'fora da área' in stay_message.lower()):
         status_label = stay_message
     data = dict(id=vehicle.id, user_id=owner.id, owner_name=owner.nome,
-                plate=vehicle.plate, brand=vehicle.brand, model=vehicle.model, color=vehicle.color,
+                plate=vehicle.plate, brand=vehicle.brand, model=vehicle.model, color=vehicle.color, vehicle_type=vehicle.vehicle_type,
                 establishment_name=vehicle.establishment_name,
                 access_type='vehicle',
                 user_type=owner.tipo_usuario,
@@ -278,6 +282,7 @@ class VehicleInput(BaseModel):
     brand: str = Field(min_length=1, max_length=80)
     model: str = Field(min_length=1, max_length=100)
     color: str = Field(min_length=1, max_length=50)
+    vehicle_type: Literal['motocicleta', 'carro', 'quadriciclo', 'onibus'] = 'carro'
     establishment_name: str | None = Field(default=None, max_length=150)
     is_excursion: bool = False
     driver_name: str | None = Field(default=None, max_length=150)
@@ -327,6 +332,7 @@ class GuestPassInput(BaseModel):
     vehicle_brand: str = Field(min_length=1, max_length=80)
     vehicle_model: str = Field(min_length=1, max_length=100)
     vehicle_color: str = Field(min_length=1, max_length=50)
+    vehicle_type: Literal['motocicleta', 'carro', 'quadriciclo', 'onibus'] = 'carro'
     is_excursion: bool = False
     excursion_responsible_name: str | None = Field(default=None, max_length=150)
     excursion_responsible_document: str | None = Field(default=None, max_length=30)
@@ -396,6 +402,7 @@ def guest_pass_data(row, inn: OrlaInn | None = None):
         'vehicle_brand': row.vehicle_brand,
         'vehicle_model': row.vehicle_model,
         'vehicle_color': row.vehicle_color,
+        'vehicle_type': row.vehicle_type,
         'is_excursion': bool(row.is_excursion),
         'excursion_responsible_name': row.excursion_responsible_name,
         'excursion_responsible_document': row.excursion_responsible_document,
@@ -519,7 +526,7 @@ def register(payload: VehicleInput, db: Session = Depends(get_db), user=Depends(
         raise HTTPException(409, 'Limite de veículos atingido. Procure a gestão responsável.')
     if payload.is_excursion and not (payload.driver_name and payload.passengers_count):
         raise HTTPException(422, 'Informe dados do motorista e quantidade de passageiros da excursão.')
-    vehicle = OrlaVehicle(user_id=user.id, plate=normalized, brand=payload.brand.strip(), model=payload.model.strip(),
+    vehicle = OrlaVehicle(user_id=user.id, plate=normalized, brand=payload.brand.strip(), model=payload.model.strip(), vehicle_type=payload.vehicle_type,
                           color=payload.color.strip(), establishment_name=(payload.establishment_name or '').strip() or None,
                           is_excursion=payload.is_excursion, driver_name=(payload.driver_name or '').strip() or None,
                           driver_document=(payload.driver_document or '').strip() or None,
@@ -681,6 +688,7 @@ def create_guest_pass(payload: GuestPassInput, db: Session = Depends(get_db), us
         vehicle_brand=payload.vehicle_brand.strip(),
         vehicle_model=payload.vehicle_model.strip(),
         vehicle_color=payload.vehicle_color.strip(),
+        vehicle_type=payload.vehicle_type,
         is_excursion=payload.is_excursion,
         excursion_responsible_name=(payload.excursion_responsible_name or '').strip() or None,
         excursion_responsible_document=(payload.excursion_responsible_document or '').strip() or None,
@@ -852,6 +860,7 @@ def lookup(payload: LookupInput, db: Session = Depends(get_db), user=Depends(req
             'brand': item.vehicle_brand,
             'model': item.vehicle_model,
             'color': item.vehicle_color,
+            'vehicle_type': item.vehicle_type,
             'owner_name': item.guest_name,
             'guest_name': item.guest_name,
             'establishment_name': inn.name if inn else None,
@@ -899,6 +908,26 @@ async def plate_security(payload: LookupInput, user=Depends(require_inspection_s
         }
     except (httpx.HTTPError, ValueError, TypeError):
         raise HTTPException(502, 'Não foi possível consultar furto/roubo. Tente novamente ou consulte manualmente.')
+
+
+@router.post('/recognize-plate')
+async def recognize_plate(file: UploadFile = File(...), user=Depends(require_inspection_staff)):
+    """OCR interno para a câmera do navegador; a imagem não sai da Prefeitura."""
+    if file.content_type not in {'image/jpeg', 'image/png', 'image/webp'}:
+        raise HTTPException(422, 'Envie uma imagem JPEG, PNG ou WebP.')
+    raw = await file.read(5 * 1024 * 1024 + 1)
+    if not raw or len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(413, 'Envie uma imagem de até 5 MB.')
+    try:
+        image = Image.open(io.BytesIO(raw)).convert('L')
+        image = ImageOps.autocontrast(image.resize((image.width * 2, image.height * 2)))
+        text_value = pytesseract.image_to_string(
+            image, lang='por', config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+        )
+        candidate = plate_from_text(text_value)
+        return {'candidates': [{'plate': candidate}] if candidate else []}
+    except Exception:
+        raise HTTPException(422, 'Não foi possível ler a placa. Centralize-a e tente novamente.')
 
 
 def _restriction_flag(data) -> bool:

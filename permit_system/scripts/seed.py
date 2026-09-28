@@ -415,6 +415,7 @@ def ensure_orla_vehicle_columns():
     columns = {column["name"] for column in inspector.get_columns("orla_vehicles")}
     migrations = {
         "brand": "ALTER TABLE orla_vehicles ADD COLUMN brand VARCHAR(80) NOT NULL DEFAULT 'Nao informado'",
+        "vehicle_type": "ALTER TABLE orla_vehicles ADD COLUMN vehicle_type VARCHAR(30) NOT NULL DEFAULT 'carro'",
         "establishment_name": "ALTER TABLE orla_vehicles ADD COLUMN establishment_name VARCHAR(150) NULL",
         "is_excursion": "ALTER TABLE orla_vehicles ADD COLUMN is_excursion BOOLEAN NOT NULL DEFAULT 0",
         "driver_name": "ALTER TABLE orla_vehicles ADD COLUMN driver_name VARCHAR(150) NULL",
@@ -426,6 +427,13 @@ def ensure_orla_vehicle_columns():
         for column, statement in migrations.items():
             if column not in columns:
                 connection.execute(text(statement))
+
+    inspector = inspect(engine)
+    if "orla_guest_passes" in inspector.get_table_names():
+        guest_columns = {column["name"] for column in inspector.get_columns("orla_guest_passes")}
+        if "vehicle_type" not in guest_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orla_guest_passes ADD COLUMN vehicle_type VARCHAR(30) NOT NULL DEFAULT 'carro'"))
 
 
 def ensure_orla_inn_columns():
