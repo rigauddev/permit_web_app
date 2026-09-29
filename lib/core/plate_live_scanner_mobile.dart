@@ -14,10 +14,12 @@ const _orientations = <DeviceOrientation, int>{
   DeviceOrientation.landscapeRight: 270,
 };
 
-Future<String?> scanPlateWithLiveCameraImpl(BuildContext context) =>
-    Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const _PlateLiveScanner()),
-    );
+Future<String?> scanPlateWithLiveCameraImpl(
+  BuildContext context, {
+  Future<String?> Function(XFile image)? recognize,
+}) => Navigator.of(
+  context,
+).push<String>(MaterialPageRoute(builder: (_) => const _PlateLiveScanner()));
 
 class _PlateLiveScanner extends StatefulWidget {
   const _PlateLiveScanner();

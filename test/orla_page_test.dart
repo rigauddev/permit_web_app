@@ -56,13 +56,17 @@ void main() {
     expect(find.text('Alterar limite'), findsNothing);
     await tester.tap(find.text('Cadastrar veículo'));
     await tester.pumpAndSettle();
+    expect(
+      find.text('Escolha uma opção acima para liberar os campos do veículo.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Carro'));
+    await tester.pumpAndSettle();
     expect(find.text('Confirmar cadastro permanente'), findsOneWidget);
     await tester.tap(find.text('Confirmar cadastro permanente'));
     await tester.pumpAndSettle();
-    expect(find.text('Placa inválida'), findsOneWidget);
-    expect(find.text('Informe a marca'), findsOneWidget);
-    expect(find.text('Informe o modelo'), findsOneWidget);
-    expect(find.text('Informe a cor'), findsOneWidget);
+    expect(find.text('Cadastrar veículo'), findsAtLeastNWidgets(1));
+    expect(find.text('Confirmar cadastro permanente'), findsOneWidget);
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 400));

@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pdf/pdf.dart';
@@ -2169,7 +2168,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                             : 'Informe o hóspede'
                                         : null,
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
                           TextFormField(
                             controller: guestDocument,
                             decoration: InputDecoration(
@@ -2191,7 +2190,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                             : 'Informe CPF/CNPJ do hóspede'
                                         : null,
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
                           TextFormField(
                             controller: guestPhone,
                             keyboardType: TextInputType.phone,
@@ -2219,7 +2218,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                           ? 'Informe o motorista'
                                           : null,
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 16),
                             TextFormField(
                               controller: responsibleDocument,
                               keyboardType: TextInputType.number,
@@ -2227,7 +2226,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                 labelText: 'Documento do motorista',
                               ),
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 16),
                             TextFormField(
                               controller: responsiblePhone,
                               keyboardType: TextInputType.phone,
@@ -2235,7 +2234,7 @@ class _OrlaPageState extends State<OrlaPage> {
                                 labelText: 'Telefone do motorista',
                               ),
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 16),
                             TextFormField(
                               controller: guestCount,
                               keyboardType: TextInputType.number,
@@ -2305,115 +2304,118 @@ class _OrlaPageState extends State<OrlaPage> {
                                     ? 'Veículo da excursão'
                                     : 'Veículo do hóspede',
                           ),
-                          TextFormField(
-                            controller: plate,
-                            maxLength: 8,
-                            textCapitalization: TextCapitalization.characters,
-                            decoration: InputDecoration(
-                              labelText: 'Placa do veículo',
-                            ),
-                            validator:
-                                (v) =>
-                                    RegExp(
-                                          r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$',
-                                        ).hasMatch(
-                                          (v ?? '')
-                                              .replaceAll(RegExp(r'[\s-]'), '')
-                                              .toUpperCase(),
-                                        )
-                                        ? null
-                                        : 'Placa inválida',
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedVehicleType,
-                            decoration: const InputDecoration(
-                              labelText: 'Tipo de veículo',
-                            ),
-                            items:
-                                _vehicleTypes.entries
-                                    .map(
-                                      (item) => DropdownMenuItem(
-                                        value: item.key,
-                                        child: Text(item.value),
-                                      ),
-                                    )
-                                    .toList(),
+                          _VehicleTypePicker(
+                            value: selectedVehicleType,
                             onChanged:
                                 (value) => setDialogState(
                                   () => selectedVehicleType = value,
                                 ),
-                            validator:
-                                (value) =>
-                                    value == null
-                                        ? 'Informe o tipo de veículo'
-                                        : null,
                           ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedBrand,
-                            decoration: InputDecoration(labelText: 'Marca'),
-                            items:
-                                _vehicleModelsByBrand.keys
-                                    .map(
-                                      (brand) => DropdownMenuItem(
-                                        value: brand,
-                                        child: Text(brand),
+                          if (selectedVehicleType == null)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Text(
+                                'Selecione o tipo de veículo para continuar o cadastro.',
+                              ),
+                            )
+                          else ...[
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: plate,
+                              maxLength: 8,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: const InputDecoration(
+                                labelText: 'Placa do veículo',
+                                hintText: 'ABC1D23',
+                              ),
+                              validator:
+                                  (v) =>
+                                      RegExp(
+                                            r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$',
+                                          ).hasMatch(
+                                            (v ?? '')
+                                                .replaceAll(
+                                                  RegExp(r'[\s-]'),
+                                                  '',
+                                                )
+                                                .toUpperCase(),
+                                          )
+                                          ? null
+                                          : 'Placa inválida',
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedBrand,
+                              decoration: const InputDecoration(
+                                labelText: 'Marca',
+                              ),
+                              items:
+                                  _vehicleModelsByBrand.keys
+                                      .map(
+                                        (brand) => DropdownMenuItem(
+                                          value: brand,
+                                          child: Text(brand),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (value) => setDialogState(() {
+                                    selectedBrand = value;
+                                    selectedModel = null;
+                                  }),
+                              validator:
+                                  (value) =>
+                                      value == null ? 'Informe a marca' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedModel,
+                              decoration: const InputDecoration(
+                                labelText: 'Modelo',
+                              ),
+                              items:
+                                  models
+                                      .map(
+                                        (model) => DropdownMenuItem(
+                                          value: model,
+                                          child: Text(model),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  models.isEmpty
+                                      ? null
+                                      : (value) => setDialogState(
+                                        () => selectedModel = value,
                                       ),
-                                    )
-                                    .toList(),
-                            onChanged:
-                                (value) => setDialogState(() {
-                                  selectedBrand = value;
-                                  selectedModel = null;
-                                }),
-                            validator:
-                                (value) =>
-                                    value == null ? 'Informe a marca' : null,
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedModel,
-                            decoration: InputDecoration(labelText: 'Modelo'),
-                            items:
-                                models
-                                    .map(
-                                      (model) => DropdownMenuItem(
-                                        value: model,
-                                        child: Text(model),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged:
-                                models.isEmpty
-                                    ? null
-                                    : (value) => setDialogState(
-                                      () => selectedModel = value,
-                                    ),
-                            validator:
-                                (value) =>
-                                    value == null ? 'Informe o modelo' : null,
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedColor,
-                            decoration: const InputDecoration(labelText: 'Cor'),
-                            items:
-                                _vehicleColors
-                                    .map(
-                                      (color) => DropdownMenuItem(
-                                        value: color,
-                                        child: Text(color),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged:
-                                (value) =>
-                                    setDialogState(() => selectedColor = value),
-                            validator:
-                                (value) =>
-                                    value == null ? 'Informe a cor' : null,
-                          ),
+                              validator:
+                                  (value) =>
+                                      value == null ? 'Informe o modelo' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedColor,
+                              decoration: const InputDecoration(
+                                labelText: 'Cor',
+                              ),
+                              items:
+                                  _vehicleColors
+                                      .map(
+                                        (color) => DropdownMenuItem(
+                                          value: color,
+                                          child: Text(color),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (value) => setDialogState(
+                                    () => selectedColor = value,
+                                  ),
+                              validator:
+                                  (value) =>
+                                      value == null ? 'Informe a cor' : null,
+                            ),
+                          ],
                           const SizedBox(height: 18),
                           const Divider(height: 1),
                           const SizedBox(height: 10),
@@ -2444,31 +2446,36 @@ class _OrlaPageState extends State<OrlaPage> {
                     child: const Text('Cancelar'),
                   ),
                   FilledButton(
-                    onPressed: () {
-                      if (!form.currentState!.validate()) return;
-                      Navigator.pop(ctx, {
-                        'guest_name': guestName.text.trim(),
-                        'guest_document': guestDocument.text.trim(),
-                        'guest_phone': guestPhone.text.trim(),
-                        'whatsapp_phone': guestPhone.text.trim(),
-                        'stay_start': stayStart.text.trim(),
-                        'stay_end': stayEnd.text.trim(),
-                        'vehicle_plate': plate.text.trim(),
-                        'vehicle_brand': selectedBrand,
-                        'vehicle_model': selectedModel,
-                        'vehicle_color': selectedColor,
-                        'vehicle_type': selectedVehicleType,
-                        'is_excursion': isExcursion,
-                        'excursion_responsible_name':
-                            responsibleName.text.trim(),
-                        'excursion_responsible_document':
-                            responsibleDocument.text.trim(),
-                        'excursion_responsible_phone':
-                            responsiblePhone.text.trim(),
-                        'guest_count': int.tryParse(guestCount.text.trim()),
-                        'orla_access_requested': releaseOrlaAccess,
-                      });
-                    },
+                    onPressed:
+                        selectedVehicleType == null
+                            ? null
+                            : () {
+                              if (!form.currentState!.validate()) return;
+                              Navigator.pop(ctx, {
+                                'guest_name': guestName.text.trim(),
+                                'guest_document': guestDocument.text.trim(),
+                                'guest_phone': guestPhone.text.trim(),
+                                'whatsapp_phone': guestPhone.text.trim(),
+                                'stay_start': stayStart.text.trim(),
+                                'stay_end': stayEnd.text.trim(),
+                                'vehicle_plate': plate.text.trim(),
+                                'vehicle_brand': selectedBrand,
+                                'vehicle_model': selectedModel,
+                                'vehicle_color': selectedColor,
+                                'vehicle_type': selectedVehicleType,
+                                'is_excursion': isExcursion,
+                                'excursion_responsible_name':
+                                    responsibleName.text.trim(),
+                                'excursion_responsible_document':
+                                    responsibleDocument.text.trim(),
+                                'excursion_responsible_phone':
+                                    responsiblePhone.text.trim(),
+                                'guest_count': int.tryParse(
+                                  guestCount.text.trim(),
+                                ),
+                                'orla_access_requested': releaseOrlaAccess,
+                              });
+                            },
                     child: Text(
                       isExcursion ? 'Salvar excursão' : 'Salvar hóspede',
                     ),
@@ -2538,174 +2545,218 @@ class _OrlaPageState extends State<OrlaPage> {
                       ? const <String>[]
                       : _vehicleModelsByBrand[selectedBrand] ?? const [];
               return AlertDialog(
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 20,
+                ),
                 title: const Text('Cadastrar veículo'),
                 content: SizedBox(
-                  width: 420,
+                  width: 560,
                   child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(right: 2),
                     child: Form(
                       key: form,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const Text(
-                            'O cadastro é permanente. Confira placa, marca, modelo e cor.',
+                            'O cadastro é permanente. Selecione o tipo de veículo para preencher os demais dados.',
                           ),
-                          TextFormField(
-                            controller: plate,
-                            maxLength: 8,
-                            textCapitalization: TextCapitalization.characters,
-                            decoration: InputDecoration(labelText: 'Placa'),
-                            validator:
-                                (v) =>
-                                    RegExp(
-                                          r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$',
-                                        ).hasMatch(
-                                          (v ?? '')
-                                              .replaceAll(RegExp(r'[\s-]'), '')
-                                              .toUpperCase(),
-                                        )
-                                        ? null
-                                        : 'Placa inválida',
+                          const SizedBox(height: 24),
+                          const _FormSectionTitle(
+                            icon: Icons.category_outlined,
+                            title: '1. Tipo de veículo',
                           ),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedVehicleType,
-                            decoration: const InputDecoration(
-                              labelText: 'Tipo de veículo',
-                            ),
-                            items:
-                                _vehicleTypes.entries
-                                    .map(
-                                      (item) => DropdownMenuItem(
-                                        value: item.key,
-                                        child: Text(item.value),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged:
-                                (value) => setDialogState(
-                                  () => selectedVehicleType = value,
-                                ),
-                            validator:
-                                (value) =>
-                                    value == null
-                                        ? 'Informe o tipo de veículo'
-                                        : null,
-                          ),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedBrand,
-                            decoration: InputDecoration(labelText: 'Marca'),
-                            items:
-                                _vehicleModelsByBrand.keys
-                                    .map(
-                                      (brand) => DropdownMenuItem(
-                                        value: brand,
-                                        child: Text(brand),
-                                      ),
-                                    )
-                                    .toList(),
+                          _VehicleTypePicker(
+                            value: selectedVehicleType,
                             onChanged:
                                 (value) => setDialogState(() {
-                                  selectedBrand = value;
+                                  selectedVehicleType = value;
+                                  selectedBrand = null;
                                   selectedModel = null;
+                                  selectedColor = null;
                                 }),
-                            validator:
-                                (value) =>
-                                    value == null ? 'Informe a marca' : null,
                           ),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedModel,
-                            decoration: InputDecoration(labelText: 'Modelo'),
-                            items:
-                                models
-                                    .map(
-                                      (model) => DropdownMenuItem(
-                                        value: model,
-                                        child: Text(model),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged:
-                                models.isEmpty
-                                    ? null
-                                    : (value) => setDialogState(
-                                      () => selectedModel = value,
-                                    ),
-                            validator:
-                                (value) =>
-                                    value == null ? 'Informe o modelo' : null,
-                          ),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedColor,
-                            decoration: const InputDecoration(labelText: 'Cor'),
-                            items:
-                                _vehicleColors
-                                    .map(
-                                      (color) => DropdownMenuItem(
-                                        value: color,
-                                        child: Text(color),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged:
-                                (value) =>
-                                    setDialogState(() => selectedColor = value),
-                            validator:
-                                (value) =>
-                                    value == null ? 'Informe a cor' : null,
-                          ),
-                          TextFormField(
-                            controller: establishment,
-                            maxLength: 150,
-                            decoration: InputDecoration(
-                              labelText: 'Nome do estabelecimento (opcional)',
+                          if (selectedVehicleType == null)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Text(
+                                'Escolha uma opção acima para liberar os campos do veículo.',
+                              ),
+                            )
+                          else ...[
+                            const SizedBox(height: 24),
+                            const _FormSectionTitle(
+                              icon: Icons.directions_car_outlined,
+                              title: '2. Dados do veículo',
                             ),
-                          ),
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            value: isExcursion,
-                            onChanged:
-                                (value) => setDialogState(
-                                  () => isExcursion = value ?? false,
+                            TextFormField(
+                              controller: plate,
+                              maxLength: 8,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: const InputDecoration(
+                                labelText: 'Placa',
+                                hintText: 'ABC1D23',
+                              ),
+                              validator:
+                                  (value) =>
+                                      RegExp(
+                                            r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$',
+                                          ).hasMatch(
+                                            (value ?? '')
+                                                .replaceAll(
+                                                  RegExp(r'[\s-]'),
+                                                  '',
+                                                )
+                                                .toUpperCase(),
+                                          )
+                                          ? null
+                                          : 'Informe uma placa válida',
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedBrand,
+                              decoration: const InputDecoration(
+                                labelText: 'Marca',
+                              ),
+                              items:
+                                  _vehicleModelsByBrand.keys
+                                      .map(
+                                        (brand) => DropdownMenuItem(
+                                          value: brand,
+                                          child: Text(brand),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (value) => setDialogState(() {
+                                    selectedBrand = value;
+                                    selectedModel = null;
+                                  }),
+                              validator:
+                                  (value) =>
+                                      value == null ? 'Informe a marca' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedModel,
+                              decoration: const InputDecoration(
+                                labelText: 'Modelo',
+                              ),
+                              items:
+                                  models
+                                      .map(
+                                        (model) => DropdownMenuItem(
+                                          value: model,
+                                          child: Text(model),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  models.isEmpty
+                                      ? null
+                                      : (value) => setDialogState(
+                                        () => selectedModel = value,
+                                      ),
+                              validator:
+                                  (value) =>
+                                      value == null ? 'Informe o modelo' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedColor,
+                              decoration: const InputDecoration(
+                                labelText: 'Cor',
+                              ),
+                              items:
+                                  _vehicleColors
+                                      .map(
+                                        (color) => DropdownMenuItem(
+                                          value: color,
+                                          child: Text(color),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (value) => setDialogState(
+                                    () => selectedColor = value,
+                                  ),
+                              validator:
+                                  (value) =>
+                                      value == null ? 'Informe a cor' : null,
+                            ),
+                            const SizedBox(height: 24),
+                            const _FormSectionTitle(
+                              icon: Icons.storefront_outlined,
+                              title: '3. Vínculo e excursão',
+                            ),
+                            TextFormField(
+                              controller: establishment,
+                              maxLength: 150,
+                              decoration: const InputDecoration(
+                                labelText: 'Nome do estabelecimento (opcional)',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: isExcursion,
+                              onChanged:
+                                  (value) => setDialogState(
+                                    () => isExcursion = value ?? false,
+                                  ),
+                              title: const Text('Veículo de excursão'),
+                              subtitle: const Text(
+                                'Informe o motorista e a quantidade de passageiros.',
+                              ),
+                            ),
+                            if (isExcursion) ...[
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: driverName,
+                                decoration: const InputDecoration(
+                                  labelText: 'Nome do motorista',
                                 ),
-                            title: const Text('Veículo de excursão'),
-                          ),
-                          if (isExcursion) ...[
-                            TextFormField(
-                              controller: driverName,
-                              decoration: const InputDecoration(
-                                labelText: 'Nome do motorista',
+                                validator:
+                                    (value) =>
+                                        isExcursion &&
+                                                (value ?? '').trim().length < 2
+                                            ? 'Informe o motorista'
+                                            : null,
                               ),
-                              validator:
-                                  (v) =>
-                                      isExcursion && (v ?? '').trim().length < 2
-                                          ? 'Informe o motorista'
-                                          : null,
-                            ),
-                            TextFormField(
-                              controller: driverDocument,
-                              decoration: const InputDecoration(
-                                labelText: 'Documento do motorista',
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: driverDocument,
+                                decoration: const InputDecoration(
+                                  labelText: 'Documento do motorista',
+                                ),
                               ),
-                            ),
-                            TextFormField(
-                              controller: driverPhone,
-                              decoration: const InputDecoration(
-                                labelText: 'Telefone do motorista',
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: driverPhone,
+                                keyboardType: TextInputType.phone,
+                                decoration: const InputDecoration(
+                                  labelText: 'Telefone do motorista',
+                                ),
                               ),
-                            ),
-                            TextFormField(
-                              controller: passengersCount,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Quantidade de passageiros',
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: passengersCount,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Quantidade de passageiros',
+                                ),
+                                validator:
+                                    (value) =>
+                                        isExcursion &&
+                                                (int.tryParse(value ?? '') ??
+                                                        0) <=
+                                                    0
+                                            ? 'Informe a quantidade'
+                                            : null,
                               ),
-                              validator:
-                                  (v) =>
-                                      isExcursion &&
-                                              (int.tryParse(v ?? '') ?? 0) <= 0
-                                          ? 'Informe a quantidade'
-                                          : null,
-                            ),
+                            ],
                           ],
                         ],
                       ),
@@ -2718,28 +2769,30 @@ class _OrlaPageState extends State<OrlaPage> {
                     child: const Text('Cancelar'),
                   ),
                   FilledButton(
-                    onPressed: () {
-                      if (form.currentState!.validate()) {
-                        Navigator.pop(ctx, {
-                          'plate': plate.text,
-                          'brand': selectedBrand,
-                          'model': selectedModel,
-                          'color': selectedColor,
-                          'vehicle_type': selectedVehicleType,
-                          'establishment_name':
-                              establishment.text.trim().isEmpty
-                                  ? null
-                                  : establishment.text.trim(),
-                          'is_excursion': isExcursion,
-                          'driver_name': driverName.text.trim(),
-                          'driver_document': driverDocument.text.trim(),
-                          'driver_phone': driverPhone.text.trim(),
-                          'passengers_count': int.tryParse(
-                            passengersCount.text.trim(),
-                          ),
-                        });
-                      }
-                    },
+                    onPressed:
+                        selectedVehicleType == null
+                            ? null
+                            : () {
+                              if (!form.currentState!.validate()) return;
+                              Navigator.pop(ctx, {
+                                'plate': plate.text,
+                                'brand': selectedBrand,
+                                'model': selectedModel,
+                                'color': selectedColor,
+                                'vehicle_type': selectedVehicleType,
+                                'establishment_name':
+                                    establishment.text.trim().isEmpty
+                                        ? null
+                                        : establishment.text.trim(),
+                                'is_excursion': isExcursion,
+                                'driver_name': driverName.text.trim(),
+                                'driver_document': driverDocument.text.trim(),
+                                'driver_phone': driverPhone.text.trim(),
+                                'passengers_count': int.tryParse(
+                                  passengersCount.text.trim(),
+                                ),
+                              });
+                            },
                     child: const Text('Confirmar cadastro permanente'),
                   ),
                 ],
@@ -2747,14 +2800,17 @@ class _OrlaPageState extends State<OrlaPage> {
             },
           ),
     );
-    // Dialog route finishes animating before disposing its controllers.
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    plate.dispose();
-    establishment.dispose();
-    driverName.dispose();
-    driverDocument.dispose();
-    driverPhone.dispose();
-    passengersCount.dispose();
+    for (final controller in [
+      plate,
+      establishment,
+      driverName,
+      driverDocument,
+      driverPhone,
+      passengersCount,
+    ]) {
+      controller.dispose();
+    }
     if (data != null && mounted) {
       await _run(() async {
         await _api.request('/vehicles', method: 'POST', body: data);
@@ -2871,52 +2927,21 @@ class _OrlaPageState extends State<OrlaPage> {
   }
 
   Future<void> _scanPlateCamera() async {
-    if (kIsWeb) {
-      final shouldOpenCamera = await showDialog<bool>(
-        context: context,
-        builder:
-            (dialogContext) => AlertDialog(
-              title: const Text('Ler placa pela câmera'),
-              content: const Text(
-                'Centralize a placa no enquadramento, mantenha boa iluminação e evite reflexos. A foto será usada apenas nesta validação e não será salva.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('Cancelar'),
-                ),
-                FilledButton.icon(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Abrir câmera'),
-                ),
-              ],
-            ),
-      );
-      if (shouldOpenCamera != true || !mounted) return;
-      final image = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1920,
-        imageQuality: 92,
-      );
-      if (image == null || !mounted) return;
-      await _run(() async {
-        final result = await _api.recognize(image);
-        final candidates = result['candidates'] as List;
-        if (candidates.isEmpty) {
-          throw PermitApiException(
-            'Não foi possível ler a placa. Centralize-a e tente novamente.',
-          );
-        }
-        final plate = candidates.first['plate'].toString();
-        if (await _checkPlateSecurity(plate)) await _validate(plate, 'plate');
-      });
-      return;
-    }
-    final detected = await scanPlateWithLiveCamera(context);
+    final detected = await scanPlateWithLiveCamera(
+      context,
+      recognize: kIsWeb ? _recognizePlateFromFrame : null,
+    );
     if (detected != null && mounted && await _checkPlateSecurity(detected)) {
       await _run(() => _validate(detected, 'plate'));
     }
+  }
+
+  Future<String?> _recognizePlateFromFrame(XFile image) async {
+    final result = await _api.recognize(image);
+    final candidates = result['candidates'];
+    if (candidates is! List || candidates.isEmpty) return null;
+    final plate = (candidates.first as Map)['plate']?.toString().trim() ?? '';
+    return plate.isEmpty ? null : plate;
   }
 
   Future<bool> _checkPlateSecurity(String plate) async {
@@ -3027,16 +3052,16 @@ class _OrlaPageState extends State<OrlaPage> {
       builder:
           (ctx) => AlertDialog(
             insetPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 24,
+              horizontal: 12,
+              vertical: 16,
             ),
             titleTextStyle: Theme.of(
               ctx,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            icon: Icon(
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            icon: const Icon(
               Icons.verified_user_outlined,
-              color: const Color(0xFF0E5F2F),
-              size: 42,
+              color: Color(0xFF0E5F2F),
+              size: 32,
             ),
             title: Text(
               _validationTitle(data),
@@ -3044,10 +3069,10 @@ class _OrlaPageState extends State<OrlaPage> {
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
             content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
+              constraints: const BoxConstraints(maxWidth: 520, maxHeight: 460),
               child: SingleChildScrollView(child: _validationContent(data)),
             ),
-            actionsAlignment: MainAxisAlignment.spaceBetween,
+            actionsAlignment: MainAxisAlignment.end,
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -3074,16 +3099,16 @@ class _OrlaPageState extends State<OrlaPage> {
       builder:
           (ctx) => AlertDialog(
             insetPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 24,
+              horizontal: 12,
+              vertical: 16,
             ),
             titleTextStyle: Theme.of(
               ctx,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             icon: const Icon(
               Icons.check_circle_outline,
               color: Color(0xFF0E5F2F),
-              size: 46,
+              size: 32,
             ),
             title: const Text(
               'Entrada registrada',
@@ -3091,7 +3116,7 @@ class _OrlaPageState extends State<OrlaPage> {
               style: TextStyle(fontWeight: FontWeight.w900),
             ),
             content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
+              constraints: const BoxConstraints(maxWidth: 520, maxHeight: 460),
               child: SingleChildScrollView(
                 child: _validationContent(
                   Map<String, dynamic>.from(result),
@@ -3326,28 +3351,20 @@ class _OrlaPageState extends State<OrlaPage> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           ...details.map(
             (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: RichText(
-                text: TextSpan(
-                  style: DefaultTextStyle.of(context).style,
-                  children: [
-                    TextSpan(
-                      text: '${item.label}: ',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    TextSpan(text: item.value.toString()),
-                  ],
-                ),
-              ),
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ValidationDetailCard(item: item),
             ),
           ),
           if (!registered)
             const Padding(
-              padding: EdgeInsets.only(top: 6),
-              child: Text('Confira os dados com o veículo presente.'),
+              padding: EdgeInsets.only(top: 2),
+              child: Text(
+                'Confira os dados com o veículo presente.',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
         ],
       ),
@@ -3676,6 +3693,35 @@ String _dateToIso(DateTime value) {
   final month = value.month.toString().padLeft(2, '0');
   final day = value.day.toString().padLeft(2, '0');
   return '$year-$month-$day';
+}
+
+class _VehicleTypePicker extends StatelessWidget {
+  const _VehicleTypePicker({required this.value, required this.onChanged});
+
+  final String? value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 10,
+    runSpacing: 10,
+    children:
+        _vehicleTypes.entries
+            .map(
+              (entry) => ChoiceChip(
+                selected: value == entry.key,
+                onSelected: (_) => onChanged(entry.key),
+                avatar: Icon(switch (entry.key) {
+                  'motocicleta' => Icons.two_wheeler_outlined,
+                  'quadriciclo' => Icons.directions_car_outlined,
+                  'onibus' => Icons.directions_bus_outlined,
+                  _ => Icons.directions_car_outlined,
+                }, size: 18),
+                label: Text(entry.value),
+              ),
+            )
+            .toList(),
+  );
 }
 
 class _FormSectionTitle extends StatelessWidget {
@@ -4413,6 +4459,43 @@ class _ValidationDetail {
 
   final String label;
   final Object? value;
+}
+
+class _ValidationDetailCard extends StatelessWidget {
+  const _ValidationDetailCard({required this.item});
+
+  final _ValidationDetail item;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF6F8F8),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFD8E2DF)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.label.toUpperCase(),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: .5,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          item.value?.toString() ?? '-',
+          softWrap: true,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
 }
 
 class _DeniedAccessDetail extends StatelessWidget {
