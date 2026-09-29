@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 Future<String?> scanPlateWithLiveCameraImpl(
   BuildContext context, {
-  Future<String?> Function(XFile image)? recognize,
+  String vehicleType = 'carro',
 }) async {
   await showDialog<void>(
     context: context,

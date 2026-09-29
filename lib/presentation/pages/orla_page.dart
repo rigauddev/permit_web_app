@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pdf/pdf.dart';
@@ -2872,68 +2873,200 @@ class _OrlaPageState extends State<OrlaPage> {
   Future<void> _plate([String initial = '']) async {
     final controller = TextEditingController(text: initial);
     const cameraAction = '__read_plate_with_camera__';
+    var scanVehicleType = 'carro';
     final value = await showDialog<String>(
       context: context,
       builder:
-          (dialogContext) => AlertDialog(
-            titlePadding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
-            title: Row(
-              children: [
-                const Expanded(child: Text('Consultar placa')),
-                IconButton(
-                  tooltip: 'Fechar',
-                  onPressed: () => Navigator.pop(dialogContext),
-                  icon: const Icon(Icons.close),
+          (dialogContext) => StatefulBuilder(
+            builder:
+                (dialogContext, setDialogState) => AlertDialog(
+                  titlePadding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+                  title: Row(
+                    children: [
+                      const Expanded(child: Text('Consultar placa')),
+                      IconButton(
+                        tooltip: 'Fechar',
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: controller,
+                        autofocus: true,
+                        textCapitalization: TextCapitalization.characters,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp('[a-zA-Z0-9-]'),
+                          ),
+                          LengthLimitingTextInputFormatter(8),
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'Placa do veículo',
+                          hintText: 'ABC1D23',
+                          suffixIcon: IconButton(
+                            tooltip: 'Ler placa pela câmera',
+                            onPressed:
+                                () => Navigator.pop(
+                                  dialogContext,
+                                  '$cameraAction:$scanVehicleType',
+                                ),
+                            icon: const Icon(Icons.camera_alt),
+                          ),
+                        ),
+                        onSubmitted:
+                            (value) =>
+                                Navigator.pop(dialogContext, value.trim()),
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Formato da placa para leitura pela câmera',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            selected: scanVehicleType == 'carro',
+                            onSelected:
+                                (_) => setDialogState(
+                                  () => scanVehicleType = 'carro',
+                                ),
+                            avatar: const Icon(
+                              Icons.directions_car_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('Carro, ônibus ou quadriciclo'),
+                          ),
+                          ChoiceChip(
+                            selected: scanVehicleType == 'motocicleta',
+                            onSelected:
+                                (_) => setDialogState(
+                                  () => scanVehicleType = 'motocicleta',
+                                ),
+                            avatar: const Icon(
+                              Icons.two_wheeler_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('Motocicleta'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        scanVehicleType == 'motocicleta'
+                            ? 'Na leitura, mantenha o celular na horizontal e enquadre a placa inteira da moto.'
+                            : 'Na leitura, mantenha o celular na horizontal e aproxime a placa da moldura.',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    FilledButton.icon(
+                      onPressed:
+                          () => Navigator.pop(
+                            dialogContext,
+                            controller.text.trim(),
+                          ),
+                      icon: const Icon(Icons.search),
+                      label: const Text('Buscar'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9-]')),
-                LengthLimitingTextInputFormatter(8),
-              ],
-              decoration: InputDecoration(
-                labelText: 'Placa do veículo',
-                hintText: 'ABC1D23',
-                suffixIcon: IconButton(
-                  tooltip: 'Ler placa pela câmera',
-                  onPressed: () => Navigator.pop(dialogContext, cameraAction),
-                  icon: const Icon(Icons.camera_alt),
-                ),
-              ),
-              onSubmitted:
-                  (value) => Navigator.pop(dialogContext, value.trim()),
-            ),
-            actions: [
-              FilledButton.icon(
-                onPressed:
-                    () => Navigator.pop(dialogContext, controller.text.trim()),
-                icon: const Icon(Icons.search),
-                label: const Text('Buscar'),
-              ),
-            ],
           ),
     );
     controller.dispose();
     if (!mounted || value == null) return;
-    if (value == cameraAction) {
-      await _scanPlateCamera();
+    if (value.startsWith(cameraAction)) {
+      final parts = value.split(':');
+      await _scanPlateCamera(
+        vehicleType: parts.length > 1 ? parts.last : 'carro',
+      );
       return;
     }
     if (value.isNotEmpty) await _run(() => _validate(value, 'plate'));
   }
 
-  Future<void> _scanPlateCamera() async {
+  Future<void> _scanPlateCamera({required String vehicleType}) async {
+    if (kIsWeb) {
+      await _scanWebPlateCamera(vehicleType: vehicleType);
+      return;
+    }
     final detected = await scanPlateWithLiveCamera(
       context,
-      recognize: kIsWeb ? _recognizePlateFromFrame : null,
+      vehicleType: vehicleType,
     );
     if (detected != null && mounted && await _checkPlateSecurity(detected)) {
       await _run(() => _validate(detected, 'plate'));
     }
+  }
+
+  Future<void> _scanWebPlateCamera({required String vehicleType}) async {
+    final motorcycle = vehicleType == 'motocicleta';
+    final openCamera = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(
+              motorcycle ? 'Fotografar placa de moto' : 'Fotografar placa',
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const RotatedBox(
+                  quarterTurns: 1,
+                  child: Icon(Icons.phone_iphone_outlined, size: 58),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  motorcycle
+                      ? 'Gire o celular para a posição horizontal e enquadre toda a placa da motocicleta.'
+                      : 'Gire o celular para a posição horizontal e deixe a placa centralizada no enquadramento.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'A foto será usada somente para a leitura e não será salva.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Abrir câmera'),
+              ),
+            ],
+          ),
+    );
+    if (openCamera != true || !mounted) return;
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1920,
+      imageQuality: 92,
+    );
+    if (image == null || !mounted) return;
+    await _run(() async {
+      final plate = await _recognizePlateFromFrame(image);
+      if (plate == null) {
+        throw PermitApiException(
+          'Não foi possível ler a placa. Centralize-a e tente novamente.',
+        );
+      }
+      if (await _checkPlateSecurity(plate)) await _validate(plate, 'plate');
+    });
   }
 
   Future<String?> _recognizePlateFromFrame(XFile image) async {

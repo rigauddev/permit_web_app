@@ -16,13 +16,17 @@ const _orientations = <DeviceOrientation, int>{
 
 Future<String?> scanPlateWithLiveCameraImpl(
   BuildContext context, {
-  Future<String?> Function(XFile image)? recognize,
-}) => Navigator.of(
-  context,
-).push<String>(MaterialPageRoute(builder: (_) => const _PlateLiveScanner()));
+  String vehicleType = 'carro',
+}) => Navigator.of(context).push<String>(
+  MaterialPageRoute(
+    builder: (_) => _PlateLiveScanner(vehicleType: vehicleType),
+  ),
+);
 
 class _PlateLiveScanner extends StatefulWidget {
-  const _PlateLiveScanner();
+  const _PlateLiveScanner({required this.vehicleType});
+
+  final String vehicleType;
 
   @override
   State<_PlateLiveScanner> createState() => _PlateLiveScannerState();
@@ -46,6 +50,14 @@ class _PlateLiveScannerState extends State<_PlateLiveScanner>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _message =
+        widget.vehicleType == 'motocicleta'
+            ? 'Mantenha o celular na horizontal e centralize a placa da moto'
+            : 'Mantenha o celular na horizontal e centralize a placa na moldura';
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _startCamera();
   }
 
@@ -208,6 +220,7 @@ class _PlateLiveScannerState extends State<_PlateLiveScanner>
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     _recognizer.close();
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
   }
 
@@ -240,9 +253,11 @@ class _PlateLiveScannerState extends State<_PlateLiveScanner>
                         icon: const Icon(Icons.close),
                       ),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Leitura automática de placa',
+                          widget.vehicleType == 'motocicleta'
+                              ? 'Leitura automática • moto'
+                              : 'Leitura automática • carro',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -261,7 +276,7 @@ class _PlateLiveScannerState extends State<_PlateLiveScanner>
                     duration: const Duration(milliseconds: 180),
                     width: double.infinity,
                     constraints: const BoxConstraints(maxWidth: 390),
-                    height: 130,
+                    height: widget.vehicleType == 'motocicleta' ? 165 : 115,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
@@ -311,8 +326,10 @@ class _PlateLiveScannerState extends State<_PlateLiveScanner>
                     ),
                   ),
                   const Spacer(),
-                  const Text(
-                    'Aproxime até a placa preencher a moldura. A imagem não é salva nem enviada.',
+                  Text(
+                    widget.vehicleType == 'motocicleta'
+                        ? 'Mantenha a placa inteira da moto dentro da moldura. A leitura é automática.'
+                        : 'Aproxime até a placa preencher a moldura. A leitura é automática.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white70),
                   ),
