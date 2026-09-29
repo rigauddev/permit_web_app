@@ -1,0 +1,5 @@
+# Copie para android/key.properties e mantenha os valores fora do Git.
+storePassword=
+keyPassword=
+keyAlias=permit-release
+storeFile=keys/permit-release.jks

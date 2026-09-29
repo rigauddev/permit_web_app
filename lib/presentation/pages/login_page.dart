@@ -20,7 +20,8 @@ class LoginPage extends HookConsumerWidget {
 
   static const _apkDownloadUrl = String.fromEnvironment(
     'APP_APK_DOWNLOAD_URL',
-    defaultValue: '',
+    defaultValue:
+        'https://servicevca.zapto.org/downloads/central-servicos-1.0.2.apk',
   );
   static const _showAdminLogin = bool.fromEnvironment(
     'SHOW_ADMIN_LOGIN',

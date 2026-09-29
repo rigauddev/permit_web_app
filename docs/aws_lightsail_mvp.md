@@ -219,7 +219,7 @@ cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/distributions
 cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/distributions/app-servicevca-arm64-v8a-release.apk
 cp build/app/outputs/flutter-apk/app-x86_64-release.apk build/distributions/app-servicevca-x86_64-release.apk
 mkdir -p build/web/downloads
-cp build/distributions/app-servicevca-arm64-v8a-release.apk build/web/downloads/central-servicos.apk
+cp build/distributions/app-servicevca-arm64-v8a-release.apk build/web/downloads/central-servicos-X.Y.Z.apk
 ```
 
 Distribua primeiro `app-servicevca-arm64-v8a-release.apk`, que atende a maioria dos Androids atuais. Se algum aparelho antigo não instalar, use `app-servicevca-armeabi-v7a-release.apk`.
@@ -228,6 +228,9 @@ Observação de segurança: o build release do MVP ainda está assinado com a ch
 
 
 ## Publicar uma atualização do APK
+
+
+A chave em `android/keys/permit-release.jks` e o arquivo `android/key.properties` não entram no Git. Guarde uma cópia segura deles antes de trocar de computador: perder essa chave impede atualizar os APKs já instalados.
 
 Antes de gerar cada versão, atualize os dois pontos abaixo com o mesmo número de versão:
 
@@ -242,17 +245,17 @@ flutter build apk --release --split-per-abi \
 
 flutter build web --no-wasm-dry-run \
   --dart-define=API_BASE_URL=https://servicevca.zapto.org/api \
-  --dart-define=APP_APK_DOWNLOAD_URL=https://servicevca.zapto.org/downloads/central-servicos.apk
+  --dart-define=APP_APK_DOWNLOAD_URL=https://servicevca.zapto.org/downloads/central-servicos-X.Y.Z.apk
 
 mkdir -p build/web/downloads build/distributions
 cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-  build/distributions/central-servicos-X.Y.Z-arm64-v8a.apk
-cp build/distributions/central-servicos-X.Y.Z-arm64-v8a.apk \
-  build/web/downloads/central-servicos.apk
+  build/distributions/central-servicos-X.Y.Z.apk
+cp build/distributions/central-servicos-X.Y.Z.apk \
+  build/web/downloads/central-servicos-X.Y.Z.apk
 
 rsync -avz --delete \
   -e "ssh -i $HOME/Downloads/LightsailDefaultKey-us-east-1.pem" \
   build/web/ ubuntu@servicevca.zapto.org:/home/ubuntu/permit_web_app/build/web/
 ```
 
-O endereço estável para os usuários é `https://servicevca.zapto.org/downloads/central-servicos.apk`. O cartão na tela de login apresenta a versão publicada e o botão de download.
+O endereço de cada lançamento inclui a versão, por exemplo `https://servicevca.zapto.org/downloads/central-servicos-1.0.2.apk`. O cartão na tela de login apresenta a versão publicada e o botão de download.
