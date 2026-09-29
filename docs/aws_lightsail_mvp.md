@@ -225,3 +225,34 @@ cp build/distributions/app-servicevca-arm64-v8a-release.apk build/web/downloads/
 Distribua primeiro `app-servicevca-arm64-v8a-release.apk`, que atende a maioria dos Androids atuais. Se algum aparelho antigo não instalar, use `app-servicevca-armeabi-v7a-release.apk`.
 
 Observação de segurança: o build release do MVP ainda está assinado com a chave debug do projeto para facilitar homologação interna. Antes de publicar em loja ou produção formal, criar uma keystore própria, guardar a senha fora do Git e ajustar `android/app/build.gradle.kts` para assinar com essa chave.
+
+
+## Publicar uma atualização do APK
+
+Antes de gerar cada versão, atualize os dois pontos abaixo com o mesmo número de versão:
+
+1. `pubspec.yaml`: use `version: X.Y.Z+N`, aumentando `N` a cada APK publicado.
+2. `lib/core/app_release.dart`: informe versão, data e novidades que aparecem no cartão da tela de login.
+
+No computador de desenvolvimento, gere o APK ARM64 para os celulares atuais e o web de produção. Copie o APK **depois** do build web, pois o Flutter recria a pasta `build/web`:
+
+```bash
+flutter build apk --release --split-per-abi \
+  --dart-define=API_BASE_URL=https://servicevca.zapto.org/api
+
+flutter build web --no-wasm-dry-run \
+  --dart-define=API_BASE_URL=https://servicevca.zapto.org/api \
+  --dart-define=APP_APK_DOWNLOAD_URL=https://servicevca.zapto.org/downloads/central-servicos.apk
+
+mkdir -p build/web/downloads build/distributions
+cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+  build/distributions/central-servicos-X.Y.Z-arm64-v8a.apk
+cp build/distributions/central-servicos-X.Y.Z-arm64-v8a.apk \
+  build/web/downloads/central-servicos.apk
+
+rsync -avz --delete \
+  -e "ssh -i $HOME/Downloads/LightsailDefaultKey-us-east-1.pem" \
+  build/web/ ubuntu@servicevca.zapto.org:/home/ubuntu/permit_web_app/build/web/
+```
+
+O endereço estável para os usuários é `https://servicevca.zapto.org/downloads/central-servicos.apk`. O cartão na tela de login apresenta a versão publicada e o botão de download.

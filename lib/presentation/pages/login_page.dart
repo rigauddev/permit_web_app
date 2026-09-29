@@ -7,6 +7,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/app_release.dart';
 import '../../core/auth_service.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/session_store.dart';
@@ -485,77 +486,77 @@ class LoginPage extends HookConsumerWidget {
                 const SizedBox(height: 24),
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxWidth: size.width < 600 ? size.width * 0.92 : 420,
+                    maxWidth: size.width < 600 ? size.width * 0.92 : 920,
                   ),
-                  child: Card(
-                    elevation: 6,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final showReleaseAlongside =
+                          isCitizenAccess && constraints.maxWidth >= 760;
+                      final loginCard = _LoginCard(
+                        title:
+                            hasChallenge ? 'Validação de segurança' : pageTitle,
+                        subtitle: pageSubtitle,
+                        theme: theme,
+                        hasChallenge: hasChallenge,
+                        loginFields:
+                            !hasChallenge
+                                ? _loginFields(
+                                  context: context,
+                                  accessProfile: accessProfile.value,
+                                  isLoading: isLoading.value,
+                                  obscurePassword: obscurePassword.value,
+                                  identifierController: identifierController,
+                                  passwordController: passwordController,
+                                  validateLogin: validateLogin,
+                                  togglePassword:
+                                      () =>
+                                          obscurePassword.value =
+                                              !obscurePassword.value,
+                                )
+                                : _mfaFields(
+                                  context: context,
+                                  theme: theme,
+                                  challenge: challenge.value!,
+                                  generation: mfaGeneration.value,
+                                  isLoading: isLoading.value,
+                                  selectedMethod: selectedMfaMethod.value,
+                                  resendSeconds: mfaResendSeconds.value,
+                                  mfaController: mfaController,
+                                  mfaFocusNode: mfaFocusNode,
+                                  generateMfa: generateMfa,
+                                  changeMfaMethod: changeMfaMethod,
+                                  validateMfa: validateMfa,
+                                  resetLogin: resetLogin,
+                                ),
+                        errorMessage: errorMessage.value,
+                      );
+                      const releaseCard = _ReleaseCard();
+
+                      if (!isCitizenAccess) {
+                        return ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 420),
+                          child: loginCard,
+                        );
+                      }
+                      if (showReleaseAlongside) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: loginCard),
+                            const SizedBox(width: 20),
+                            Expanded(child: releaseCard),
+                          ],
+                        );
+                      }
+                      return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            hasChallenge ? 'Validação de segurança' : pageTitle,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            pageSubtitle,
-                            style: theme.textTheme.bodyMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 20),
-                          if (!hasChallenge)
-                            ..._loginFields(
-                              context: context,
-                              accessProfile: accessProfile.value,
-                              isLoading: isLoading.value,
-                              obscurePassword: obscurePassword.value,
-                              identifierController: identifierController,
-                              passwordController: passwordController,
-                              validateLogin: validateLogin,
-                              togglePassword:
-                                  () =>
-                                      obscurePassword.value =
-                                          !obscurePassword.value,
-                            )
-                          else
-                            ..._mfaFields(
-                              context: context,
-                              theme: theme,
-                              challenge: challenge.value!,
-                              generation: mfaGeneration.value,
-                              isLoading: isLoading.value,
-                              selectedMethod: selectedMfaMethod.value,
-                              resendSeconds: mfaResendSeconds.value,
-                              mfaController: mfaController,
-                              mfaFocusNode: mfaFocusNode,
-                              generateMfa: generateMfa,
-                              changeMfaMethod: changeMfaMethod,
-                              validateMfa: validateMfa,
-                              resetLogin: resetLogin,
-                            ),
-                          if (errorMessage.value != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Text(
-                                errorMessage.value!,
-                                style: TextStyle(
-                                  color: theme.colorScheme.error,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
+                          loginCard,
+                          const SizedBox(height: 16),
+                          releaseCard,
                         ],
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
                 if (isCitizenAccess) ...[
@@ -566,7 +567,7 @@ class LoginPage extends HookConsumerWidget {
                     ),
                     child: OutlinedButton.icon(
                       onPressed: isLoading.value ? null : openPlayStore,
-                      icon: const _PlayStoreLogo(),
+                      icon: const Icon(Icons.download_rounded),
                       label: const Text('Baixar app Android'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
@@ -586,57 +587,135 @@ class LoginPage extends HookConsumerWidget {
   }
 }
 
-class _PlayStoreLogo extends StatelessWidget {
-  const _PlayStoreLogo();
+class _LoginCard extends StatelessWidget {
+  const _LoginCard({
+    required this.title,
+    required this.subtitle,
+    required this.theme,
+    required this.hasChallenge,
+    required this.loginFields,
+    required this.errorMessage,
+  });
+
+  final String title;
+  final String subtitle;
+  final ThemeData theme;
+  final bool hasChallenge;
+  final List<Widget> loginFields;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 22,
-      height: 22,
-      child: CustomPaint(painter: _PlayStoreLogoPainter()),
+    return Card(
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ...loginFields,
+            if (errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  errorMessage!,
+                  style: TextStyle(color: theme.colorScheme.error),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _PlayStoreLogoPainter extends CustomPainter {
+class _ReleaseCard extends StatelessWidget {
+  const _ReleaseCard();
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final path =
-        Path()
-          ..moveTo(size.width * 0.12, size.height * 0.08)
-          ..lineTo(size.width * 0.88, size.height * 0.50)
-          ..lineTo(size.width * 0.12, size.height * 0.92)
-          ..close();
-    canvas.drawPath(path, Paint()..color = const Color(0xFF34A853));
-
-    final top =
-        Path()
-          ..moveTo(size.width * 0.12, size.height * 0.08)
-          ..lineTo(size.width * 0.56, size.height * 0.50)
-          ..lineTo(size.width * 0.12, size.height * 0.50)
-          ..close();
-    canvas.drawPath(top, Paint()..color = const Color(0xFF4285F4));
-
-    final bottom =
-        Path()
-          ..moveTo(size.width * 0.12, size.height * 0.50)
-          ..lineTo(size.width * 0.56, size.height * 0.50)
-          ..lineTo(size.width * 0.12, size.height * 0.92)
-          ..close();
-    canvas.drawPath(bottom, Paint()..color = const Color(0xFFFBBC04));
-
-    final point =
-        Path()
-          ..moveTo(size.width * 0.56, size.height * 0.50)
-          ..lineTo(size.width * 0.88, size.height * 0.50)
-          ..lineTo(size.width * 0.62, size.height * 0.64)
-          ..close();
-    canvas.drawPath(point, Paint()..color = const Color(0xFFEA4335));
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Card(
+      color: colors.primaryContainer.withValues(alpha: 0.48),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colors.primary.withValues(alpha: 0.24)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: colors.primary,
+                  foregroundColor: colors.onPrimary,
+                  child: const Icon(Icons.system_update_alt_rounded),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    AppRelease.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(AppRelease.description, style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 14),
+            ...AppRelease.highlights.map(
+              (highlight) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 18,
+                      color: colors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(highlight)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Versão ${AppRelease.version} · ${AppRelease.releasedAt}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 bool _isValidCitizenIdentifier(String value) {
