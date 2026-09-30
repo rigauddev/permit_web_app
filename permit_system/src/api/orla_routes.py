@@ -68,7 +68,7 @@ def _stay_allows_orla_access(db: Session, owner: UserModel) -> tuple[bool, str |
     if not period_allowed:
         return False, period_message or 'Acesso fora do período de estadia.'
     if owner.tipo_estadia == 'casa_aluguel':
-        if is_inside_orla(owner.estadia_latitude, owner.estadia_longitude):
+        if is_inside_orla(owner.estadia_latitude, owner.estadia_longitude, db):
             return True, None
         return False, 'Casa de aluguel fora da área autorizada da Orla de Guaibim.'
     if owner.tipo_estadia == 'pousada':
@@ -441,7 +441,7 @@ def create_inn(payload: InnInput, db: Session = Depends(get_db)):
     name = payload.name.strip()
     if db.query(OrlaInn).filter(OrlaInn.name == name).first():
         raise HTTPException(409, 'Pousada já cadastrada.')
-    is_beachfront = bool(payload.beachfront or is_inside_orla(payload.latitude, payload.longitude))
+    is_beachfront = bool(payload.beachfront or is_inside_orla(payload.latitude, payload.longitude, db))
     inn = OrlaInn(
         name=name,
         address=(payload.address or '').strip() or None,

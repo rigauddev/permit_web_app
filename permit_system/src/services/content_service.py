@@ -51,6 +51,8 @@ DEFAULT_CONTENT_SETTINGS = {
     "show_home_carousel": "true",
     "show_tourism_map": "true",
     "show_establishment_notices": "true",
+    # latitude,longitude;latitude,longitude — área oficial para casas de aluguel.
+    "orla_guaibim_polygon": "-13.2795,-38.9715;-13.2795,-38.9570;-13.2945,-38.9570;-13.2945,-38.9715",
     "email_templates": json.dumps({
         "welcome": {
             "subject": "Boas-vindas ao Sistema de Serviços de Valença",
@@ -217,6 +219,8 @@ class ContentService:
             can_edit_event_map=can_edit,
             can_manage_editors=role == "admin",
             can_manage_home_visibility=role == "admin",
+            orla_guaibim_polygon=values.get("orla_guaibim_polygon"),
+            can_manage_orla_area=role == "admin",
         )
 
     def update_settings(self, payload: ContentSettingsRequest, current_user: UserModel) -> ContentSettingsResponse:
@@ -231,6 +235,11 @@ class ContentService:
             "event_map_description": payload.event_map_description.strip(),
             "event_map_editor_secretarias": json.dumps(sorted(set(editor_secretarias))),
         }
+        if current_user.role.slug == "admin" and payload.orla_guaibim_polygon is not None:
+            from src.services.orla_area import _parse_polygon
+            if len(_parse_polygon(payload.orla_guaibim_polygon)) < 3:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe ao menos três pontos válidos para delimitar a área da Orla.")
+            values["orla_guaibim_polygon"] = payload.orla_guaibim_polygon.strip()
         for key, value in values.items():
             row = self.db.query(ContentSettingModel).filter(ContentSettingModel.key == key).first()
             if row:

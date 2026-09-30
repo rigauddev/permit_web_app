@@ -277,14 +277,14 @@ class AuthService:
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                         detail="Busque e selecione o endereço do estabelecimento para validar a geolocalização da Orla.",
                     )
-                if not is_inside_orla(payload.endereco_latitude, payload.endereco_longitude):
+                if not is_inside_orla(payload.endereco_latitude, payload.endereco_longitude, self.db):
                     raise HTTPException(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                         detail="O endereço informado não está dentro da área demarcada da Orla. A gestão pode validar manualmente quando necessário.",
                     )
             inn = self.db.query(OrlaInn).filter(OrlaInn.name == inn_name).first()
             if not inn:
-                beachfront = bool(is_inside_orla(payload.endereco_latitude, payload.endereco_longitude))
+                beachfront = bool(is_inside_orla(payload.endereco_latitude, payload.endereco_longitude, self.db))
                 inn = OrlaInn(
                     name=inn_name,
                     address=payload.endereco,
@@ -306,6 +306,15 @@ class AuthService:
                 inn.latitude = payload.endereco_latitude
                 inn.longitude = payload.endereco_longitude
             managed_inn_id = inn.id
+
+        # Casa de aluguel não é encaminhada a pousada: o endereço geocodificado
+        # é confrontado com a área oficial da Orla e, se estiver nela, o acesso
+        # fica liberado automaticamente para o período informado.
+        rental_inside_orla = (
+            payload.tipo_usuario == "turista"
+            and payload.tipo_estadia == "casa_aluguel"
+            and is_inside_orla(payload.estadia_latitude, payload.estadia_longitude, self.db)
+        )
 
         user = UserModel(
             tipo_pessoa=payload.tipo_pessoa,
@@ -332,8 +341,12 @@ class AuthService:
             estadia_inicio=payload.estadia_inicio if payload.tipo_usuario == "turista" else None,
             estadia_fim=payload.estadia_fim if payload.tipo_usuario == "turista" else None,
             pousada_id=payload.pousada_id if payload.tipo_usuario == "turista" and payload.tipo_estadia == "pousada" else None,
-            orla_access_requested=bool(payload.orla_access_requested),
-            orla_access_status="solicitado" if payload.orla_access_requested else "nao_solicitado",
+            orla_access_requested=bool(payload.orla_access_requested or rental_inside_orla),
+            orla_access_status=(
+                "aprovado" if rental_inside_orla
+                else "solicitado" if payload.orla_access_requested
+                else "nao_solicitado"
+            ),
             foto_usuario_nome=payload.foto_usuario_nome,
             foto_usuario_url=payload.foto_usuario_url,
             documento_identificacao_nome=payload.documento_identificacao_nome,
@@ -641,8 +654,14 @@ class AuthService:
         end_date = self._parse_date(payload.estadia_fim, "Data final da estadia inválida.")
         if end_date < start_date:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A data final da estadia deve ser igual ou posterior à data inicial.")
-        if payload.tipo_estadia == "casa_aluguel" and not payload.estadia_endereco:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe o endereço da casa de aluguel.")
+        if payload.tipo_estadia == "casa_aluguel":
+            if not payload.estadia_endereco:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe o endereço da casa de aluguel.")
+            if not payload.estadia_latitude or not payload.estadia_longitude:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Busque e selecione o endereço completo da casa de aluguel para validar se ele está na área da Orla.",
+                )
         if payload.tipo_estadia == "pousada":
             if payload.pousada_id:
                 inn = self.db.get(OrlaInn, payload.pousada_id)

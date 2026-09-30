@@ -219,6 +219,14 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
       _showError('Selecione o período da estadia no calendário.');
       return;
     }
+    if (_citizenType == 'turista' &&
+        _stayType == 'casa_aluguel' &&
+        (_stayLatitude == null || _stayLongitude == null)) {
+      _showError(
+        'Busque e selecione o endereço completo da casa de aluguel para validar o acesso à Orla.',
+      );
+      return;
+    }
     if (!isCompany && isResident && _userPhoto == null) {
       _showError('Inclua uma foto do usuário para concluir o cadastro.');
       return;
@@ -416,9 +424,17 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
           _stayType == 'pousada') {
         await _showRegistrationSuccessWithShare();
       } else {
+        final rentalAutoApproved =
+            _citizenType == 'turista' && _stayType == 'casa_aluguel';
         await _showMessage(
-          title: 'Cadastro realizado',
-          message: 'Sua conta foi criada. Entre com seu CPF/CNPJ e senha.',
+          title:
+              rentalAutoApproved
+                  ? 'Acesso à Orla liberado'
+                  : 'Cadastro realizado',
+          message:
+              rentalAutoApproved
+                  ? 'A casa de aluguel está na área cadastrada da Orla. O acesso do veículo fica válido somente no período informado da estadia.'
+                  : 'Sua conta foi criada. Entre com seu CPF/CNPJ e senha.',
           icon: Icons.check_circle_outline,
           isError: false,
         );

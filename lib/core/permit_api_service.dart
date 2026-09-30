@@ -516,6 +516,7 @@ class PermitApiService {
     required String eventMapTitle,
     required String eventMapDescription,
     required List<String> editorSecretarias,
+    String? orlaGuaibimPolygon,
   }) async {
     final response = await _client.put(
       Uri.parse('$_baseUrl/home-content/settings'),
@@ -527,6 +528,8 @@ class PermitApiService {
         'event_map_title': eventMapTitle,
         'event_map_description': eventMapDescription,
         'event_map_editor_secretarias': editorSecretarias,
+        if (orlaGuaibimPolygon != null)
+          'orla_guaibim_polygon': orlaGuaibimPolygon,
       }),
     );
     return _decodeResponse(response) as Map<String, dynamic>;

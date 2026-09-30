@@ -26,6 +26,7 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
   final _pointX = TextEditingController(text: '0.50');
   final _pointY = TextEditingController(text: '0.50');
   final _pointOrder = TextEditingController(text: '0');
+  final _orlaPolygon = TextEditingController();
 
   static const _secretarias = {
     'semop': 'SEMOP',
@@ -73,6 +74,7 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
       _pointX,
       _pointY,
       _pointOrder,
+      _orlaPolygon,
     ]) {
       controller.dispose();
     }
@@ -132,6 +134,7 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
         eventMapTitle: _eventTitle.text.trim(),
         eventMapDescription: _eventDescription.text.trim(),
         editorSecretarias: _editors.toList(),
+        orlaGuaibimPolygon: _isAdmin ? _orlaPolygon.text.trim() : null,
       );
       if (mounted) setState(() => _settings = settings);
       _message('Configuração do mapa de eventos salva.');
@@ -286,6 +289,10 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
                           const SizedBox(height: 16),
                         ],
                         _eventMapCard(),
+                        if (_isAdmin) ...[
+                          const SizedBox(height: 16),
+                          _orlaAreaCard(),
+                        ],
                         const SizedBox(height: 16),
                         _tourismImageGuide(),
                         if (_isAdmin) ...[
@@ -373,6 +380,48 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
               ),
             ),
           ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _orlaAreaCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Área autorizada da Orla de Guaibim',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Casas de aluguel dentro desta área recebem acesso automaticamente durante a estadia. Informe os vértices no formato latitude,longitude; latitude,longitude.',
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _orlaPolygon,
+            minLines: 3,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: 'Polígono da área da Orla',
+              hintText:
+                  '-13.2795,-38.9715; -13.2795,-38.9570; -13.2945,-38.9570',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _saving ? null : _saveSettings,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Salvar área da Orla'),
+            ),
+          ),
         ],
       ),
     ),

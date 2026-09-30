@@ -41,6 +41,7 @@ class ContentSettingsRequest(BaseModel):
     event_map_title: str = Field(..., min_length=3, max_length=120)
     event_map_description: str = Field(..., min_length=5, max_length=500)
     event_map_editor_secretarias: list[str] = Field(default_factory=list)
+    orla_guaibim_polygon: str | None = Field(default=None, max_length=4000)
 
 
 class HomeVisibilityRequest(BaseModel):
@@ -56,6 +57,7 @@ class ContentSettingsResponse(ContentSettingsRequest):
     can_edit_event_map: bool = False
     can_manage_editors: bool = False
     can_manage_home_visibility: bool = False
+    can_manage_orla_area: bool = False
 
 
 class EmailTemplateInput(BaseModel):
