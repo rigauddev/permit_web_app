@@ -486,77 +486,45 @@ class LoginPage extends HookConsumerWidget {
                 const SizedBox(height: 24),
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxWidth: size.width < 600 ? size.width * 0.92 : 920,
+                    maxWidth: size.width < 600 ? size.width * 0.92 : 420,
                   ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final showReleaseAlongside =
-                          isCitizenAccess && constraints.maxWidth >= 760;
-                      final loginCard = _LoginCard(
-                        title:
-                            hasChallenge ? 'Validação de segurança' : pageTitle,
-                        subtitle: pageSubtitle,
-                        theme: theme,
-                        hasChallenge: hasChallenge,
-                        loginFields:
-                            !hasChallenge
-                                ? _loginFields(
-                                  context: context,
-                                  accessProfile: accessProfile.value,
-                                  isLoading: isLoading.value,
-                                  obscurePassword: obscurePassword.value,
-                                  identifierController: identifierController,
-                                  passwordController: passwordController,
-                                  validateLogin: validateLogin,
-                                  togglePassword:
-                                      () =>
-                                          obscurePassword.value =
-                                              !obscurePassword.value,
-                                )
-                                : _mfaFields(
-                                  context: context,
-                                  theme: theme,
-                                  challenge: challenge.value!,
-                                  generation: mfaGeneration.value,
-                                  isLoading: isLoading.value,
-                                  selectedMethod: selectedMfaMethod.value,
-                                  resendSeconds: mfaResendSeconds.value,
-                                  mfaController: mfaController,
-                                  mfaFocusNode: mfaFocusNode,
-                                  generateMfa: generateMfa,
-                                  changeMfaMethod: changeMfaMethod,
-                                  validateMfa: validateMfa,
-                                  resetLogin: resetLogin,
-                                ),
-                        errorMessage: errorMessage.value,
-                      );
-                      const releaseCard = _ReleaseCard();
-
-                      if (!isCitizenAccess) {
-                        return ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 420),
-                          child: loginCard,
-                        );
-                      }
-                      if (showReleaseAlongside) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: loginCard),
-                            const SizedBox(width: 20),
-                            Expanded(child: releaseCard),
-                          ],
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          loginCard,
-                          const SizedBox(height: 16),
-                          releaseCard,
-                        ],
-                      );
-                    },
+                  child: _LoginCard(
+                    title: hasChallenge ? 'Validação de segurança' : pageTitle,
+                    subtitle: pageSubtitle,
+                    theme: theme,
+                    hasChallenge: hasChallenge,
+                    showSystemVersion: isCitizenAccess,
+                    loginFields:
+                        !hasChallenge
+                            ? _loginFields(
+                              context: context,
+                              accessProfile: accessProfile.value,
+                              isLoading: isLoading.value,
+                              obscurePassword: obscurePassword.value,
+                              identifierController: identifierController,
+                              passwordController: passwordController,
+                              validateLogin: validateLogin,
+                              togglePassword:
+                                  () =>
+                                      obscurePassword.value =
+                                          !obscurePassword.value,
+                            )
+                            : _mfaFields(
+                              context: context,
+                              theme: theme,
+                              challenge: challenge.value!,
+                              generation: mfaGeneration.value,
+                              isLoading: isLoading.value,
+                              selectedMethod: selectedMfaMethod.value,
+                              resendSeconds: mfaResendSeconds.value,
+                              mfaController: mfaController,
+                              mfaFocusNode: mfaFocusNode,
+                              generateMfa: generateMfa,
+                              changeMfaMethod: changeMfaMethod,
+                              validateMfa: validateMfa,
+                              resetLogin: resetLogin,
+                            ),
+                    errorMessage: errorMessage.value,
                   ),
                 ),
                 if (isCitizenAccess) ...[
@@ -593,6 +561,7 @@ class _LoginCard extends StatelessWidget {
     required this.subtitle,
     required this.theme,
     required this.hasChallenge,
+    required this.showSystemVersion,
     required this.loginFields,
     required this.errorMessage,
   });
@@ -601,6 +570,7 @@ class _LoginCard extends StatelessWidget {
   final String subtitle;
   final ThemeData theme;
   final bool hasChallenge;
+  final bool showSystemVersion;
   final List<Widget> loginFields;
   final String? errorMessage;
 
@@ -639,78 +609,18 @@ class _LoginCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ReleaseCard extends StatelessWidget {
-  const _ReleaseCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Card(
-      color: colors.primaryContainer.withValues(alpha: 0.48),
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colors.primary.withValues(alpha: 0.24)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: colors.primary,
-                  foregroundColor: colors.onPrimary,
-                  child: const Icon(Icons.system_update_alt_rounded),
+            if (showSystemVersion) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              Text(
+                'Central de Serviços · versão ${AppRelease.version}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    AppRelease.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Text(AppRelease.description, style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 14),
-            ...AppRelease.highlights.map(
-              (highlight) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 18,
-                      color: colors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(highlight)),
-                  ],
-                ),
+                textAlign: TextAlign.center,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Versão ${AppRelease.version} · ${AppRelease.releasedAt}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            ],
           ],
         ),
       ),
