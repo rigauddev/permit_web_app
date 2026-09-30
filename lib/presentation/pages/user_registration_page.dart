@@ -838,7 +838,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                                 onSelectionChanged:
                                     (value) => setState(() {
                                       _citizenType = value.first;
-                                      if (_isTouristCompany) {
+                                      if (_citizenType == 'turista') {
                                         _businessCategory = null;
                                       }
                                     }),
@@ -861,7 +861,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                                 onSelectionChanged:
                                     (value) => setState(() {
                                       _personType = value.first;
-                                      if (_isTouristCompany) {
+                                      if (_citizenType == 'turista') {
                                         _businessCategory = null;
                                       }
                                     }),
@@ -884,7 +884,7 @@ Autorizo o tratamento dos dados informados para fins de cadastro, identificaçã
                                 ),
                                 const SizedBox(height: 12),
                               ],
-                              if (!_isTouristCompany)
+                              if (_personType == 'PJ' && !_isTouristCompany)
                                 DropdownButtonFormField<String?>(
                                   initialValue: _businessCategory,
                                   decoration: const InputDecoration(

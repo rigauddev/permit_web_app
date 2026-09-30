@@ -17,6 +17,7 @@ const _orientations = <DeviceOrientation, int>{
 Future<String?> scanPlateWithLiveCameraImpl(
   BuildContext context, {
   String vehicleType = 'carro',
+  Future<String?> Function(XFile image)? recognize,
 }) => Navigator.of(context).push<String>(
   MaterialPageRoute(
     builder: (_) => _PlateLiveScanner(vehicleType: vehicleType),

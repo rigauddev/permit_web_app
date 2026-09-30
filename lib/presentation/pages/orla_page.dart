@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pdf/pdf.dart';
@@ -3022,79 +3021,14 @@ class _OrlaPageState extends State<OrlaPage> {
   }
 
   Future<void> _scanPlateCamera({required String vehicleType}) async {
-    if (kIsWeb) {
-      await _scanWebPlateCamera(vehicleType: vehicleType);
-      return;
-    }
     final detected = await scanPlateWithLiveCamera(
       context,
       vehicleType: vehicleType,
+      recognize: kIsWeb ? _recognizePlateFromFrame : null,
     );
     if (detected != null && mounted && await _checkPlateSecurity(detected)) {
       await _run(() => _validate(detected, 'plate'));
     }
-  }
-
-  Future<void> _scanWebPlateCamera({required String vehicleType}) async {
-    final motorcycle = vehicleType == 'motocicleta';
-    final openCamera = await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(
-              motorcycle ? 'Fotografar placa de moto' : 'Fotografar placa',
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const RotatedBox(
-                  quarterTurns: 1,
-                  child: Icon(Icons.phone_iphone_outlined, size: 58),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  motorcycle
-                      ? 'Gire o celular para a posição horizontal e enquadre toda a placa da motocicleta.'
-                      : 'Gire o celular para a posição horizontal e deixe a placa centralizada no enquadramento.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'A foto será usada somente para a leitura e não será salva.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Abrir câmera'),
-              ),
-            ],
-          ),
-    );
-    if (openCamera != true || !mounted) return;
-    final image = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1920,
-      imageQuality: 92,
-    );
-    if (image == null || !mounted) return;
-    await _run(() async {
-      final plate = await _recognizePlateFromFrame(image);
-      if (plate == null) {
-        throw PermitApiException(
-          'Não foi possível ler a placa. Centralize-a e tente novamente.',
-        );
-      }
-      if (await _checkPlateSecurity(plate)) await _validate(plate, 'plate');
-    });
   }
 
   Future<String?> _recognizePlateFromFrame(XFile image) async {
