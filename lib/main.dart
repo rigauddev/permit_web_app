@@ -341,6 +341,11 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       );
       await _sessionStore.updateUserJson(jsonEncode(currentUser.toJson()));
       ref.read(userProvider.notifier).setUser(currentUser);
+    } on AuthException catch (error) {
+      if (error.statusCode == 401) {
+        await _sessionStore.clear();
+      }
+      // Mantém a sessão local apenas durante indisponibilidade temporária da API.
     } catch (_) {
       // Mantém a sessão local durante indisponibilidade temporária da API.
     }

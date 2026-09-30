@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+
+import 'session_store.dart';
 
 class PermitApiService {
   PermitApiService({http.Client? client, String? baseUrl})
@@ -1439,7 +1442,12 @@ class PermitApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  PermitApiException(this.message, {this.statusCode});
+  PermitApiException(this.message, {this.statusCode}) {
+    if (statusCode == 401) {
+      // O bootstrap observa a limpeza e redireciona para o login.
+      unawaited(SessionStore().clear());
+    }
+  }
 
   @override
   String toString() => message;
