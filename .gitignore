@@ -56,6 +56,3 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-# Chave de assinatura Android (nunca versionar)
-/android/key.properties
-/android/keys/
