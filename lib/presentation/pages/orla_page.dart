@@ -2874,6 +2874,7 @@ class _OrlaPageState extends State<OrlaPage> {
     final controller = TextEditingController(text: initial);
     const cameraAction = '__read_plate_with_camera__';
     var scanVehicleType = 'carro';
+    String? plateValidationError;
     final value = await showDialog<String>(
       context: context,
       builder:
@@ -2918,10 +2919,30 @@ class _OrlaPageState extends State<OrlaPage> {
                             icon: const Icon(Icons.camera_alt),
                           ),
                         ),
-                        onSubmitted:
-                            (value) =>
-                                Navigator.pop(dialogContext, value.trim()),
+                        onSubmitted: (value) {
+                          final plate = value.trim();
+                          if (plate.isEmpty) {
+                            setDialogState(
+                              () =>
+                                  plateValidationError =
+                                      'Informe a placa ou use a câmera.',
+                            );
+                            return;
+                          }
+                          Navigator.pop(dialogContext, plate);
+                        },
                       ),
+                      if (plateValidationError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            plateValidationError!,
+                            style: TextStyle(
+                              color: Theme.of(dialogContext).colorScheme.error,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 18),
                       const Text(
                         'Formato da placa para leitura pela câmera',
@@ -2969,11 +2990,18 @@ class _OrlaPageState extends State<OrlaPage> {
                   ),
                   actions: [
                     FilledButton.icon(
-                      onPressed:
-                          () => Navigator.pop(
-                            dialogContext,
-                            controller.text.trim(),
-                          ),
+                      onPressed: () {
+                        final plate = controller.text.trim();
+                        if (plate.isEmpty) {
+                          setDialogState(
+                            () =>
+                                plateValidationError =
+                                    'Informe a placa ou use a câmera.',
+                          );
+                          return;
+                        }
+                        Navigator.pop(dialogContext, plate);
+                      },
                       icon: const Icon(Icons.search),
                       label: const Text('Buscar'),
                     ),
