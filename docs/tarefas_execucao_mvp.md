@@ -48,6 +48,10 @@
 - [x] Transformar expectativa de público em seletor configurável por faixa.
 - [x] Organizar catálogo de serviços por categoria Prefeitura/Secretarias, mantendo apenas Alvará de Evento ativo no MVP.
 - [x] Permitir marcar serviços como favoritos e exibir lista de favoritos no mobile.
+- [x] Criar categorias/tipos de evento a partir da planilha de solicitação.
+- [x] Exibir seleção de tipo de evento no card do Alvará de Evento antes da nova solicitação.
+- [x] Manter o card `O que preciso para solicitar um alvará para evento?` aberto por padrão com seleção de tipo de evento e documentos aplicáveis.
+- [x] Mostrar documentos necessários por tipo de evento com referência de download quando houver modelo.
 
 ## Marco 3 - Perguntas condicionais
 
@@ -59,6 +63,8 @@
 - [x] Perguntar se exigirá planta baixa.
 - [x] Perguntar se terá trio elétrico.
 - [x] Perguntar se usará ou bloqueará vias.
+- [x] Capturar rua inicial/final e múltiplos trechos quando houver bloqueio ou desvio de trânsito.
+- [x] Gerar prévia/link de percurso para a pergunta de bloqueio/desvio de via.
 - [x] Perguntar se terá alimentação.
 - [x] Perguntar se precisará de ambulância no local.
 - [x] Perguntar se precisará da Guarda Civil Municipal.
@@ -68,6 +74,7 @@
 - [x] Exibir descrição/orientação de preenchimento definida pelo gestor em cada pergunta.
 - [x] Permitir selecionar a ordem de exibição das perguntas na gestão de serviços.
 - [x] Mostrar no resumo da solicitação perguntas respondidas com arquivo pendente de envio.
+- [x] Associar perguntas a categorias/tipos de evento para filtrar o questionário do cidadão.
 
 ## Marco 4 - Regras por secretaria
 
@@ -96,6 +103,8 @@
 - [x] Criar dashboard inicial para usuários internos com serviços pertinentes ao perfil/secretaria.
 - [x] Criar central interna de solicitações por tipo de serviço e secretaria responsável.
 - [x] Tornar as exigências da solicitação interativas para admin, gestor e operador autorizados.
+- [x] Exibir respostas, textos estruturados e documentos anexados pelo cidadão na central interna de solicitações.
+- [x] Bloquear ações das exigências quando a solicitação estiver cancelada, mantendo somente visualização.
 - [x] Bloquear rotas internas no frontend quando o perfil logado não possuir permissão.
 - [x] Reorganizar menu lateral por Atendimento e Configuração, reduzindo itens duplicados.
 - [x] Mover criação de perguntas para a área de Gestão de Serviços no menu.
@@ -119,13 +128,13 @@
 - [x] Criar camada inicial de API de autenticação no Flutter.
 - [x] Substituir mock de login por chamadas HTTP com MFA.
 - [x] Identificar tipo de usuário pelo `role` retornado no login/JWT.
-- [x] Exibir escolha de acesso Cidadão ou Prefeitura antes do login.
+- [x] Exibir login cidadão como padrão e mover acesso interno para o botão `Portal do Servidor`.
 - [x] Validar tipo de acesso escolhido já na etapa e-mail/senha, antes do MFA.
 - [x] Padronizar falhas de autenticação como `Credenciais inválidas`.
 - [x] Limpar campos de login/senha/MFA ao trocar o tipo de acesso.
 - [x] Deslogar automaticamente o usuário quando a sessão/token expirar.
 - [x] Restaurar sessão salva ao recarregar o app e evitar loop de login.
-- [x] Emitir sessão web com validade de 30 minutos e sessão app com validade de 5 dias.
+- [x] Emitir sessão web com validade mínima de 3 horas e sessão app com validade de 5 dias.
 - [x] Manter resposta de MFA com dados mínimos e carregar perfil completo via `/auth/me` quando necessário.
 - [x] Exibir código MFA de teste em desenvolvimento e registrar no console para validação manual.
 - [x] Bloquear reenvio de MFA por 60 segundos com contador regressivo.
@@ -147,6 +156,7 @@
 - [x] Permitir criar novo tipo de usuário na gestão de permissões.
 - [x] Permitir editar perfil próprio com campos sensíveis bloqueados.
 - [x] Permitir que gestor/admin atualize usuários conforme escopo.
+- [x] Permitir que gestor/admin associe perguntas às categorias de evento na gestão de serviços.
 - [ ] Migrar guards do frontend/backend para validação granular por permissão além do perfil base.
 
 ## Marco 7 - Documento final e DAM
@@ -190,6 +200,8 @@
 - [x] Reduzir calendário para mês atual e abrir lista de vistorias ao clicar em data marcada.
 - [x] Exibir detalhes da solicitação ao clicar em uma vistoria.
 - [x] Criar fluxo de vistoria quando exigência depender de inspeção técnica.
+- [x] Permitir agendar vistoria com data e horário pela central interna e notificar o cidadão por e-mail.
+- [x] Incluir status de vistoria agendada, confirmada e concluída, aprovando a exigência quando a vistoria for concluída.
 - [x] Permitir anexar imagens da vistoria.
 - [x] Permitir configurar na pergunta se a vistoria exige registro de imagem.
 - [x] Bloquear aprovação da vistoria quando a pergunta exigir imagem e nenhuma foto for registrada.
@@ -203,6 +215,7 @@
 - [ ] Integrar geração automática de DAM com sistema da Receita.
 - [ ] V2: integrar verificação automática de pagamento do DAM com o sistema da Receita.
 - [x] Criar tela operacional de mapa de eventos autorizados com pins visuais, filtro por período, tabela de eventos e abertura do endereço no OpenStreetMap.
+- [x] Exibir calendário comemorativo da cidade e atalho do mapa de eventos na home interna de gestão/operação.
 - [x] Criar endpoint interno próprio para mapa de eventos autorizados sem filtro por secretaria.
 - [x] Exibir mapa gratuito embutido com tiles do OpenStreetMap e botão `Ver todos` em tela cheia.
 - [x] Manter botão externo `Ver no Google Maps` nos detalhes do evento.

@@ -1,11 +1,20 @@
 import sys
 from datetime import date, datetime, timedelta, timezone
+import os
 from pathlib import Path
+import re
+from zipfile import ZipFile
+from xml.etree import ElementTree as ET
 
 from sqlalchemy import inspect, text
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT_DIR))
+
+HISTORICAL_EVENTS_XLSX_PATH = os.getenv(
+    "HISTORICAL_EVENTS_XLSX_PATH",
+    str(ROOT_DIR / "private" / "Planilha_de_solicitacao_de_eventos.xlsx"),
+)
 
 from src.core.security import create_event_credential_token, hash_password, hash_token
 from src.infra.database.models import (
@@ -13,6 +22,7 @@ from src.infra.database.models import (
     Base,
     EventCredentialModel,
     EventPublicRangeModel,
+    EventTypeModel,
     HomeContentCardModel,
     PermissionModel,
     PermitRequestModel,
@@ -20,8 +30,10 @@ from src.infra.database.models import (
     RoleModel,
     RolePermissionModel,
     SecretariaModel,
+    ServiceConfigModel,
     UserModel,
 )
+from src.infra.database.models.orla_model import OrlaAccess, OrlaAccount, OrlaInn, OrlaVehicle
 from src.infra.database.mysql_db import SessionLocal, create_tables, engine
 
 
@@ -40,6 +52,7 @@ PERMISSIONS = [
     ("requests.own.view", "Visualizar solicitações próprias", "Solicitações", "Consulta apenas solicitações criadas pelo próprio usuário."),
     ("requests.secretaria.view", "Visualizar central da secretaria", "Atendimento", "Consulta solicitações vinculadas à secretaria do usuário."),
     ("requests.secretaria.analyze", "Analisar solicitações da secretaria", "Atendimento", "Aprova, recusa, comenta ou pede correção em exigências da secretaria."),
+    ("reports.view", "Visualizar relatórios", "Relatórios", "Consulta indicadores e gráficos de eventos por período, ano, tipo e secretaria."),
     ("inspections.view", "Visualizar vistorias", "Vistorias", "Consulta vistorias agendadas da secretaria."),
     ("inspections.manage", "Gerenciar vistorias", "Vistorias", "Agenda, executa e registra checklist/laudo de vistoria."),
     ("events.map.view", "Visualizar mapa de eventos", "Atendimento", "Consulta eventos autorizados por período e endereço."),
@@ -70,6 +83,7 @@ ROLE_PERMISSIONS = {
         "dashboard.view",
         "requests.secretaria.view",
         "requests.secretaria.analyze",
+        "reports.view",
         "inspections.view",
         "inspections.manage",
         "events.map.view",
@@ -79,6 +93,7 @@ ROLE_PERMISSIONS = {
         "dashboard.view",
         "requests.secretaria.view",
         "requests.secretaria.analyze",
+        "reports.view",
         "inspections.view",
         "inspections.manage",
         "events.map.view",
@@ -93,14 +108,68 @@ ROLE_PERMISSIONS = {
 }
 
 SECRETARIAS = [
+    ("semop", "SEMOP", None, "SEMOP — Acesso à Orla de Guaibim"),
     ("desenvolvimento_economico", "Secretaria de Desenvolvimento Econômico", "sde@valenca.ba.gov.br", "Coordenação da Central de Eventos"),
     ("meio_ambiente", "Secretaria de Meio Ambiente", "meioambiente@valenca.ba.gov.br", "Responsabilidade ambiental"),
     ("infraestrutura", "Secretaria de Infraestrutura", "infraestrutura@valenca.ba.gov.br", "Análise técnica de estruturas"),
     ("dmtran", "DMTRAN", "dmtran@valenca.ba.gov.br", "Mobilidade, trânsito e vias públicas"),
     ("vigilancia_sanitaria", "Vigilância Sanitária", "visa@valenca.ba.gov.br", "Saúde, alimentação e apoio sanitário"),
+    ("secretaria_saude", "Secretaria de Saúde", "saude@valenca.ba.gov.br", "Saúde e bem-estar"),
     ("guarda_civil", "Guarda Civil Municipal", "gcm@valenca.ba.gov.br", "Ordem pública e apoio operacional"),
     ("receita_municipal", "Receita Municipal", "receita@valenca.ba.gov.br", "DAM e arrecadação municipal"),
 ]
+
+BASE_EVENT_DOCUMENTS = [
+    {
+        "label": "Ofício ou ficha de solicitação de autorização",
+        "url": "assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf",
+    },
+    {"label": "Foto ou cópia do RG e CPF", "url": ""},
+    {"label": "Comprovante de residência", "url": ""},
+    {"label": "Alvará de funcionamento do local, quando houver", "url": ""},
+]
+
+EVENT_TYPES = [
+    ("cultural", "Cultural", "Festival cultural, teatro, dança, exposição, capoeira e manifestações populares"),
+    ("musical_entretenimento", "Musical / Entretenimento", "Shows, festivais musicais, apresentações e festas"),
+    ("esportivo", "Esportivo", "Corrida, ciclismo, futebol, campeonato, torneio e artes marciais"),
+    ("religioso", "Religioso", "Festa de padroeiro, procissão, congresso religioso e marcha"),
+    ("gastronomico", "Gastronômico", "Festival gastronômico, acarajé, feira culinária e rota gastronômica"),
+    ("festa_popular_tradicional", "Festa Popular / Tradicional", "Carnaval, São João, São Pedro, Réveillon e festas tradicionais"),
+    ("comercial_empresarial", "Comercial / Empresarial", "Feira de negócios, exposição comercial, lançamento e encontro empresarial"),
+    ("educacional_capacitacao", "Educacional / Capacitação", "Curso, palestra, seminário, workshop e congresso"),
+    ("institucional_governamental", "Institucional / Governamental", "Audiência pública, conferência, inauguração e ação da Prefeitura"),
+    ("social_comunitario", "Social / Comunitário", "Ação social, evento beneficente, associação comunitária e campanha"),
+    ("turistico", "Turístico", "Evento de promoção turística, receptivo, roteiro e encontro turístico"),
+    ("rural_agropecuario", "Rural / Agropecuário", "Feira agrícola, exposição, agricultura familiar e encontro de produtores"),
+    ("ambiental", "Ambiental", "Mutirão ambiental, educação ambiental e sustentabilidade"),
+    ("automotivo_motociclistico", "Automotivo / Motociclístico", "Moto Fest, encontro de carros e exposição automotiva"),
+    ("infantil_familiar", "Infantil / Familiar", "Dia das Crianças, recreação e atividades para famílias"),
+    ("saude_bem_estar", "Saúde / Bem-estar", "Feira de saúde, campanha preventiva e atividade de qualidade de vida"),
+    ("outros", "Outros", "Eventos que não se enquadrem nas categorias anteriores"),
+]
+
+ALL_EVENT_TYPE_KEYS = [item[0] for item in EVENT_TYPES]
+
+EVENT_TYPE_DESCRIPTIONS = {
+    "cultural": "Eventos voltados à produção artística e às manifestações culturais locais, incluindo apresentações, rodas, exposições e atividades de valorização da cultura popular.",
+    "musical_entretenimento": "Eventos com atração musical, sonorização, festas, apresentações ou concentração de público para entretenimento, normalmente exigindo atenção a som, horário e segurança.",
+    "esportivo": "Eventos de prática ou competição esportiva em espaços públicos ou privados, como corridas, torneios, campeonatos e artes marciais, com possível impacto em trânsito e apoio operacional.",
+    "religioso": "Celebrações, procissões, congressos e encontros promovidos por instituições religiosas, podendo exigir uso de via pública, apoio da Guarda ou organização de percurso.",
+    "gastronomico": "Eventos com preparo, venda ou distribuição de alimentos e bebidas, exigindo atenção especial a higiene, manipulação e avaliação da Vigilância Sanitária quando aplicável.",
+    "festa_popular_tradicional": "Festas de calendário, tradição local ou grande mobilização popular, como Carnaval, São João, São Pedro e Réveillon, geralmente com maior articulação entre secretarias.",
+    "comercial_empresarial": "Ações de divulgação, exposição, lançamento, feira ou encontro empresarial, inclusive eventos volantes ou promocionais em área pública.",
+    "educacional_capacitacao": "Cursos, palestras, seminários, congressos e workshops que reúnem público para formação, capacitação ou divulgação de conhecimento.",
+    "institucional_governamental": "Eventos oficiais ou de interesse público promovidos por órgãos públicos, conselhos, escolas ou parceiros institucionais.",
+    "social_comunitario": "Ações sociais, eventos beneficentes, campanhas e atividades organizadas por associações, grupos comunitários ou entidades sem fins lucrativos.",
+    "turistico": "Eventos que promovem Valença, distritos, praias, roteiros, receptivos e atividades de fluxo turístico ou valorização de atrativos locais.",
+    "rural_agropecuario": "Feiras, encontros e exposições relacionados à agricultura familiar, produção rural, agropecuária e comunidades do campo.",
+    "ambiental": "Mutirões, campanhas educativas e eventos ligados a sustentabilidade, educação ambiental, preservação e uso responsável dos espaços públicos.",
+    "automotivo_motociclistico": "Encontros, exposições, passeios, motofests e atividades com veículos, motos ou som automotivo, com possível necessidade de mapa, vistoria e organização de trânsito.",
+    "infantil_familiar": "Eventos direcionados a crianças e famílias, como recreação, Dia das Crianças e atividades de convivência em praças, escolas ou espaços comunitários.",
+    "saude_bem_estar": "Feiras, campanhas preventivas, ações de cuidado, qualidade de vida e bem-estar, podendo demandar apoio de saúde ou estrutura de atendimento.",
+    "outros": "Use apenas quando o evento realmente não se encaixar nas categorias anteriores; a descrição deve explicar o motivo para facilitar a análise da Central de Eventos.",
+}
 
 LEGACY_TEST_USERS = {
     "meio_ambiente": [
@@ -217,6 +286,67 @@ def ensure_secretaria_columns():
                 connection.execute(text(statement))
 
 
+def ensure_user_columns():
+    inspector = inspect(engine)
+    if "usuarios" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("usuarios")}
+    migrations = {
+        "foto_usuario_url": "ALTER TABLE usuarios ADD COLUMN foto_usuario_url VARCHAR(500) NULL",
+        "foto_usuario_nome": "ALTER TABLE usuarios ADD COLUMN foto_usuario_nome VARCHAR(255) NULL",
+        "credential_number": "ALTER TABLE usuarios ADD COLUMN credential_number VARCHAR(40) NULL",
+        "documento_identificacao_url": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_url VARCHAR(500) NULL",
+        "documento_identificacao_nome": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_nome VARCHAR(255) NULL",
+        "documento_identificacao_tipo": "ALTER TABLE usuarios ADD COLUMN documento_identificacao_tipo VARCHAR(50) NULL",
+        "comprovante_residencia_url": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_url VARCHAR(500) NULL",
+        "comprovante_residencia_nome": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_nome VARCHAR(255) NULL",
+        "comprovante_residencia_tipo": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_tipo VARCHAR(50) NULL",
+        "comprovante_residencia_status": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_status VARCHAR(50) NOT NULL DEFAULT 'pendente_validacao'",
+        "comprovante_residencia_observacao": "ALTER TABLE usuarios ADD COLUMN comprovante_residencia_observacao TEXT NULL",
+        "alvara_funcionamento_url": "ALTER TABLE usuarios ADD COLUMN alvara_funcionamento_url VARCHAR(500) NULL",
+        "alvara_funcionamento_nome": "ALTER TABLE usuarios ADD COLUMN alvara_funcionamento_nome VARCHAR(255) NULL",
+        "must_change_password": "ALTER TABLE usuarios ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0",
+        "cep": "ALTER TABLE usuarios ADD COLUMN cep VARCHAR(9) NULL",
+        "endereco_latitude": "ALTER TABLE usuarios ADD COLUMN endereco_latitude VARCHAR(40) NULL",
+        "endereco_longitude": "ALTER TABLE usuarios ADD COLUMN endereco_longitude VARCHAR(40) NULL",
+        "tipo_usuario": "ALTER TABLE usuarios ADD COLUMN tipo_usuario VARCHAR(20) NOT NULL DEFAULT 'morador'",
+        "business_category": "ALTER TABLE usuarios ADD COLUMN business_category VARCHAR(40) NULL",
+        "managed_inn_id": "ALTER TABLE usuarios ADD COLUMN managed_inn_id INTEGER NULL",
+        "tipo_estadia": "ALTER TABLE usuarios ADD COLUMN tipo_estadia VARCHAR(30) NULL",
+        "estadia_endereco": "ALTER TABLE usuarios ADD COLUMN estadia_endereco VARCHAR(255) NULL",
+        "estadia_cep": "ALTER TABLE usuarios ADD COLUMN estadia_cep VARCHAR(9) NULL",
+        "estadia_latitude": "ALTER TABLE usuarios ADD COLUMN estadia_latitude VARCHAR(40) NULL",
+        "estadia_longitude": "ALTER TABLE usuarios ADD COLUMN estadia_longitude VARCHAR(40) NULL",
+        "estadia_inicio": "ALTER TABLE usuarios ADD COLUMN estadia_inicio VARCHAR(10) NULL",
+        "estadia_fim": "ALTER TABLE usuarios ADD COLUMN estadia_fim VARCHAR(10) NULL",
+        "pousada_id": "ALTER TABLE usuarios ADD COLUMN pousada_id INTEGER NULL",
+        "orla_access_requested": "ALTER TABLE usuarios ADD COLUMN orla_access_requested BOOLEAN NOT NULL DEFAULT 0",
+        "orla_access_status": "ALTER TABLE usuarios ADD COLUMN orla_access_status VARCHAR(30) NOT NULL DEFAULT 'nao_solicitado'",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+        for index in inspector.get_indexes("usuarios"):
+            if index.get("unique") and index.get("column_names") == ["email"]:
+                try:
+                    connection.execute(text(f"ALTER TABLE usuarios DROP INDEX {index['name']}"))
+                except Exception:
+                    pass
+        try:
+            connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN cpf_cnpj VARCHAR(18) NULL"))
+            connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN email VARCHAR(255) NULL"))
+            connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN mfa_email_enabled BOOLEAN NOT NULL DEFAULT 0"))
+            connection.execute(text("CREATE UNIQUE INDEX ux_usuarios_credential_number ON usuarios (credential_number)"))
+        except Exception:
+            pass
+        connection.execute(text("UPDATE usuarios SET mfa_email_enabled = 0 WHERE mfa_email_enabled IS NULL"))
+        connection.execute(text("UPDATE usuarios SET must_change_password = 0 WHERE must_change_password IS NULL"))
+        connection.execute(text("UPDATE usuarios SET tipo_usuario = 'morador' WHERE tipo_usuario IS NULL"))
+        connection.execute(text("UPDATE usuarios SET orla_access_requested = 0 WHERE orla_access_requested IS NULL"))
+        connection.execute(text("UPDATE usuarios SET orla_access_status = 'nao_solicitado' WHERE orla_access_status IS NULL"))
+
+
 def ensure_question_definition_columns():
     inspector = inspect(engine)
     if "question_definitions" not in inspector.get_table_names():
@@ -230,6 +360,8 @@ def ensure_question_definition_columns():
         "prazo_resposta_dias_uteis": "ALTER TABLE question_definitions ADD COLUMN prazo_resposta_dias_uteis INTEGER NOT NULL DEFAULT 2",
         "display_order": "ALTER TABLE question_definitions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
         "vistoria_exige_foto": "ALTER TABLE question_definitions ADD COLUMN vistoria_exige_foto BOOLEAN NOT NULL DEFAULT 0",
+        "event_type_keys": "ALTER TABLE question_definitions ADD COLUMN event_type_keys JSON NULL",
+        "opcoes_resposta": "ALTER TABLE question_definitions ADD COLUMN opcoes_resposta JSON NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -244,6 +376,10 @@ def ensure_event_credential_columns():
     columns = {column["name"] for column in inspector.get_columns("credenciais_evento")}
     migrations = {
         "verified_at": "ALTER TABLE credenciais_evento ADD COLUMN verified_at DATETIME NULL",
+        "verified_by": "ALTER TABLE credenciais_evento ADD COLUMN verified_by INTEGER NULL",
+        "verified_secretaria": "ALTER TABLE credenciais_evento ADD COLUMN verified_secretaria VARCHAR(120) NULL",
+        "verification_status": "ALTER TABLE credenciais_evento ADD COLUMN verification_status VARCHAR(50) NULL",
+        "verification_notes": "ALTER TABLE credenciais_evento ADD COLUMN verification_notes TEXT NULL",
         "verification_count": "ALTER TABLE credenciais_evento ADD COLUMN verification_count INTEGER NOT NULL DEFAULT 0",
     }
     with engine.begin() as connection:
@@ -262,8 +398,52 @@ def ensure_requirement_inspection_columns():
         "inspection_checklist": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_checklist JSON NULL",
         "inspection_requires_photo": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_requires_photo BOOLEAN NOT NULL DEFAULT 0",
         "inspection_scheduled_for": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_for DATE NULL",
+        "inspection_scheduled_time": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_scheduled_time VARCHAR(5) NULL",
         "inspection_status": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_status VARCHAR(50) NOT NULL DEFAULT 'nao_agendada'",
         "inspection_result": "ALTER TABLE exigencias_alvara ADD COLUMN inspection_result JSON NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+
+def ensure_orla_vehicle_columns():
+    inspector = inspect(engine)
+    if "orla_vehicles" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("orla_vehicles")}
+    migrations = {
+        "brand": "ALTER TABLE orla_vehicles ADD COLUMN brand VARCHAR(80) NOT NULL DEFAULT 'Nao informado'",
+        "vehicle_type": "ALTER TABLE orla_vehicles ADD COLUMN vehicle_type VARCHAR(30) NOT NULL DEFAULT 'carro'",
+        "establishment_name": "ALTER TABLE orla_vehicles ADD COLUMN establishment_name VARCHAR(150) NULL",
+        "is_excursion": "ALTER TABLE orla_vehicles ADD COLUMN is_excursion BOOLEAN NOT NULL DEFAULT 0",
+        "driver_name": "ALTER TABLE orla_vehicles ADD COLUMN driver_name VARCHAR(150) NULL",
+        "driver_document": "ALTER TABLE orla_vehicles ADD COLUMN driver_document VARCHAR(30) NULL",
+        "driver_phone": "ALTER TABLE orla_vehicles ADD COLUMN driver_phone VARCHAR(30) NULL",
+        "passengers_count": "ALTER TABLE orla_vehicles ADD COLUMN passengers_count INTEGER NULL",
+    }
+    with engine.begin() as connection:
+        for column, statement in migrations.items():
+            if column not in columns:
+                connection.execute(text(statement))
+
+    inspector = inspect(engine)
+    if "orla_guest_passes" in inspector.get_table_names():
+        guest_columns = {column["name"] for column in inspector.get_columns("orla_guest_passes")}
+        if "vehicle_type" not in guest_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orla_guest_passes ADD COLUMN vehicle_type VARCHAR(30) NOT NULL DEFAULT 'carro'"))
+
+
+def ensure_orla_inn_columns():
+    inspector = inspect(engine)
+    if "orla_inns" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("orla_inns")}
+    migrations = {
+        "capacity": "ALTER TABLE orla_inns ADD COLUMN capacity INTEGER NULL",
+        "guest_capacity": "ALTER TABLE orla_inns ADD COLUMN guest_capacity INTEGER NULL",
     }
     with engine.begin() as connection:
         for column, statement in migrations.items():
@@ -353,12 +533,12 @@ QUESTION_DEFINITIONS = [
     },
     {
         "key": "bloqueia_via",
-        "pergunta": "O evento usará ou bloqueará vias/ruas municipais?",
-        "descricao": "Baixe o modelo de solicitação de bloqueio de via, preencha local, data, horário, mapa/croqui do bloqueio ou desvio, assine e anexe o documento preenchido na solicitação.",
+        "pergunta": "Vai fechar rua ou desviar o trânsito?",
+        "descricao": "Informe os trechos do percurso no formulário, gere a prévia do mapa, baixe o modelo de solicitação de bloqueio de via, preencha local, data, horário, mapa/croqui do bloqueio ou desvio, assine e anexe o documento preenchido na solicitação.",
         "secretaria": "DMTRAN",
         "tipo": "Alvará de Eventos",
         "secretaria_dam": "Desenvolvimento Econômico",
-        "tipos_resposta": ["Sim/Não", "Texto", "Anexar Documento", "Assinatura impressa", "Assinatura gov.br"],
+        "tipos_resposta": ["Sim/Não", "Texto", "Rota do Evento", "Anexar Documento", "Assinatura impressa", "Assinatura gov.br"],
         "campos_obrigatorios": {"Texto": False, "Anexar Documento": False},
         "modelo_documento_nome": "Solicitação de bloqueio de via",
         "modelo_documento_url": "assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf",
@@ -407,6 +587,125 @@ QUESTION_DEFINITIONS = [
     },
 ]
 
+QUESTION_EVENT_TYPE_LINKS = {
+    "tem_som": [
+        "cultural",
+        "musical_entretenimento",
+        "religioso",
+        "gastronomico",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "automotivo_motociclistico",
+        "infantil_familiar",
+    ],
+    "local_fixo_sem_alvara": ALL_EVENT_TYPE_KEYS,
+    "precisa_avcb": [
+        "musical_entretenimento",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "automotivo_motociclistico",
+        "saude_bem_estar",
+    ],
+    "tem_palco": [
+        "cultural",
+        "musical_entretenimento",
+        "religioso",
+        "festa_popular_tradicional",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+    ],
+    "tem_gerador": [
+        "cultural",
+        "musical_entretenimento",
+        "religioso",
+        "festa_popular_tradicional",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "automotivo_motociclistico",
+    ],
+    "precisa_planta_baixa": [
+        "musical_entretenimento",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "turistico",
+    ],
+    "tem_trio_eletrico": [
+        "cultural",
+        "festa_popular_tradicional",
+        "religioso",
+        "social_comunitario",
+        "automotivo_motociclistico",
+    ],
+    "bloqueia_via": [
+        "cultural",
+        "esportivo",
+        "religioso",
+        "festa_popular_tradicional",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "automotivo_motociclistico",
+    ],
+    "tem_alimentacao": [
+        "cultural",
+        "musical_entretenimento",
+        "esportivo",
+        "religioso",
+        "gastronomico",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "rural_agropecuario",
+        "infantil_familiar",
+        "saude_bem_estar",
+        "outros",
+    ],
+    "precisa_ambulancia": [
+        "musical_entretenimento",
+        "esportivo",
+        "festa_popular_tradicional",
+        "automotivo_motociclistico",
+        "saude_bem_estar",
+        "institucional_governamental",
+        "social_comunitario",
+    ],
+    "precisa_guarda": [
+        "cultural",
+        "musical_entretenimento",
+        "esportivo",
+        "religioso",
+        "gastronomico",
+        "festa_popular_tradicional",
+        "comercial_empresarial",
+        "institucional_governamental",
+        "social_comunitario",
+        "turistico",
+        "rural_agropecuario",
+        "automotivo_motociclistico",
+        "infantil_familiar",
+        "saude_bem_estar",
+    ],
+    "precisa_brigadista": [
+        "musical_entretenimento",
+        "esportivo",
+        "festa_popular_tradicional",
+        "automotivo_motociclistico",
+        "institucional_governamental",
+        "social_comunitario",
+        "outros",
+    ],
+}
+
 
 def seed_users(db, roles, secretarias):
     password = hash_password("123456")
@@ -420,12 +719,20 @@ def seed_users(db, roles, secretarias):
         {
             "email": "cidadao@teste.local",
             "nome": "Maria Solicitante",
-            "cpf_cnpj": "11111111111",
+            "cpf_cnpj": "52998224725",
             "role_id": roles["cidadao"].id,
         },
     ]
     cpf_seed = 20000000000
-    for index, (secretaria_slug, secretaria_nome, _, _) in enumerate(SECRETARIAS, start=1):
+    # Stable IDs preserve existing demo CPFs when secretarias are added/reordered.
+    secretaria_seed_ids = {
+        "desenvolvimento_economico": 1, "meio_ambiente": 2,
+        "infraestrutura": 3, "dmtran": 4, "vigilancia_sanitaria": 5,
+        "secretaria_saude": 6, "guarda_civil": 7, "receita_municipal": 8,
+        "semop": 9,
+    }
+    for secretaria_slug, secretaria_nome, _, _ in SECRETARIAS:
+        index = secretaria_seed_ids[secretaria_slug]
         secretaria_id = secretarias[secretaria_slug].id
         label = secretaria_nome.replace("Secretaria de ", "")
         users.extend(
@@ -475,11 +782,207 @@ def seed_users(db, roles, secretarias):
                 "endereco": "Valença - BA",
                 "role_id": data["role_id"],
                 "secretaria_id": data.get("secretaria_id"),
-                "mfa_email_enabled": True,
+                "mfa_email_enabled": False,
+                "foto_usuario_nome": "foto_maria_solicitante.jpg" if data["email"] == "cidadao@teste.local" else None,
+                "foto_usuario_url": "/uploads/cidadao/foto_maria_solicitante.jpg" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_nome": "conta_luz_maria_solicitante.pdf" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_url": "/uploads/cidadao/conta_luz_maria_solicitante.pdf" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_tipo": "luz" if data["email"] == "cidadao@teste.local" else None,
+                "comprovante_residencia_status": "pre_validado" if data["email"] == "cidadao@teste.local" else "pendente_validacao",
                 "mfa_totp_enabled": False,
             },
         )
+        user = created[data["email"]]
+        user.nome = data["nome"]
+        user.cpf_cnpj = data["cpf_cnpj"]
+        user.role_id = data["role_id"]
+        user.secretaria_id = data.get("secretaria_id")
+        user.mfa_email_enabled = False
+        if user.role.slug != "cidadao" and not user.credential_number:
+            prefix = "ADM" if user.role.slug == "admin" else (user.secretaria.slug if user.secretaria else "SRV").upper()[:6]
+            user.credential_number = f"{prefix}-{user.id or abs(hash(user.email)) % 900000 + 100000}"
+        if data["email"] == "cidadao@teste.local":
+            user.foto_usuario_nome = "foto_maria_solicitante.jpg"
+            user.foto_usuario_url = "/uploads/cidadao/foto_maria_solicitante.jpg"
+            user.documento_identificacao_nome = "cnh_maria_solicitante.pdf"
+            user.documento_identificacao_url = "/uploads/cidadao/cnh_maria_solicitante.pdf"
+            user.documento_identificacao_tipo = "cnh"
+            user.comprovante_residencia_nome = "conta_luz_maria_solicitante.pdf"
+            user.comprovante_residencia_url = "/uploads/cidadao/conta_luz_maria_solicitante.pdf"
+            user.comprovante_residencia_tipo = "luz"
+            user.comprovante_residencia_status = "pre_validado"
     return created
+
+
+def seed_orla_service(db, roles, users):
+    """Cria um cenário repetível da Orla para homologação interna."""
+    admin = users["admin@prefeitura.local"]
+    service_configs = {
+        "acesso_orla": (
+            "Acesso à Orla",
+            "Cadastro e validação de veículos na Orla de Guaibim.",
+            True,
+        ),
+        "alvara_evento": (
+            "Alvará de Evento",
+            "Serviço indisponível nesta homologação da Orla.",
+            False,
+        ),
+        "alvara_funcionamento": (
+            "Alvará de Funcionamento",
+            "Serviço indisponível nesta homologação da Orla.",
+            False,
+        ),
+        "iptu": (
+            "IPTU",
+            "Serviço indisponível nesta homologação da Orla.",
+            False,
+        ),
+    }
+    for key, (title, description, is_active) in service_configs.items():
+        config = get_or_create(
+            db,
+            ServiceConfigModel,
+            key=key,
+            defaults={
+                "title": title,
+                "description": description,
+                "is_active": is_active,
+                "updated_by": admin.id,
+            },
+        )
+        config.title = title
+        config.description = description
+        config.is_active = is_active
+        config.updated_by = admin.id
+
+    inn = get_or_create(
+        db,
+        OrlaInn,
+        name="Pousada Mar de Guaibim",
+        defaults={
+            "address": "Avenida Beira-Mar, 523, Guaibim, Valença - BA",
+            "cep": "45400-000",
+            "latitude": "-13.285700",
+            "longitude": "-38.962700",
+            "capacity": 12,
+            "guest_capacity": 24,
+            "beachfront": True,
+            "approval_status": "approved",
+        },
+    )
+    inn.address = "Avenida Beira-Mar, 523, Guaibim, Valença - BA"
+    inn.cep = "45400-000"
+    inn.latitude = "-13.285700"
+    inn.longitude = "-38.962700"
+    inn.capacity = 12
+    inn.guest_capacity = 24
+    inn.beachfront = True
+    inn.approval_status = "approved"
+    db.flush()
+
+    today = date.today()
+    tourist = get_or_create(
+        db,
+        UserModel,
+        email="turista@orla.teste.local",
+        defaults={
+            "tipo_pessoa": "PF",
+            "nome": "João Turista",
+            "cpf_cnpj": "11144477735",
+            "senha_hash": hash_password("123456"),
+            "telefone": "(75) 99999-1001",
+            "role_id": roles["cidadao"].id,
+        },
+    )
+    tourist.nome = "João Turista"
+    tourist.cpf_cnpj = "11144477735"
+    tourist.role_id = roles["cidadao"].id
+    tourist.tipo_usuario = "turista"
+    tourist.tipo_estadia = "pousada"
+    tourist.pousada_id = inn.id
+    tourist.estadia_inicio = (today - timedelta(days=2)).isoformat()
+    tourist.estadia_fim = (today + timedelta(days=7)).isoformat()
+    tourist.orla_access_requested = True
+    tourist.orla_access_status = "aprovado"
+    tourist.is_active = True
+
+    inn_user = get_or_create(
+        db,
+        UserModel,
+        email="pousada@orla.teste.local",
+        defaults={
+            "tipo_pessoa": "PJ",
+            "nome": "Pousada Mar de Guaibim",
+            "razao_social": "Pousada Mar de Guaibim LTDA",
+            "cpf_cnpj": "11222333000181",
+            "senha_hash": hash_password("123456"),
+            "telefone": "(75) 99999-1002",
+            "role_id": roles["cidadao"].id,
+        },
+    )
+    inn_user.nome = "Pousada Mar de Guaibim"
+    inn_user.razao_social = "Pousada Mar de Guaibim LTDA"
+    inn_user.cpf_cnpj = "11222333000181"
+    inn_user.role_id = roles["cidadao"].id
+    inn_user.tipo_pessoa = "PJ"
+    inn_user.tipo_usuario = "morador"
+    inn_user.business_category = "pousada_hotel"
+    inn_user.managed_inn_id = inn.id
+    inn_user.is_active = True
+    db.flush()
+
+    for user, limit in ((tourist, 1), (inn_user, 2)):
+        account = get_or_create(
+            db,
+            OrlaAccount,
+            user_id=user.id,
+            defaults={"vehicle_limit": limit},
+        )
+        account.vehicle_limit = limit
+
+    vehicle = get_or_create(
+        db,
+        OrlaVehicle,
+        plate="GUA1B26",
+        defaults={
+            "user_id": tourist.id,
+            "brand": "Volkswagen",
+            "model": "T-Cross",
+            "color": "Prata",
+            "establishment_name": inn.name,
+            "qr_token": "seed-orla-gua1b26",
+        },
+    )
+    vehicle.user_id = tourist.id
+    vehicle.brand = "Volkswagen"
+    vehicle.model = "T-Cross"
+    vehicle.color = "Prata"
+    vehicle.establishment_name = inn.name
+    vehicle.is_excursion = False
+    vehicle.qr_token = "seed-orla-gua1b26"
+
+    operator = users["operador_dmtran@prefeitura.local"]
+    manager = users["gestor_dmtran@prefeitura.local"]
+    operator.credential_number = "DMTRAN-ORLA-OPERADOR"
+    manager.credential_number = "DMTRAN-ORLA-GESTOR"
+    existing_access = (
+        db.query(OrlaAccess)
+        .filter_by(vehicle_id=vehicle.id, operator_id=operator.id, action="entrada")
+        .first()
+    )
+    if not existing_access:
+        db.add(
+            OrlaAccess(
+                vehicle_id=vehicle.id,
+                operator_id=operator.id,
+                action="entrada",
+                method="qrcode",
+            )
+        )
+
+    users["turista@orla.teste.local"] = tourist
+    users["pousada@orla.teste.local"] = inn_user
 
 
 def seed_question_definitions(db):
@@ -488,6 +991,7 @@ def seed_question_definitions(db):
     for index, data in enumerate(QUESTION_DEFINITIONS, start=1):
         data.setdefault("display_order", index)
         data.setdefault("vistoria_exige_foto", data.get("requer_vistoria", False))
+        data["event_type_keys"] = QUESTION_EVENT_TYPE_LINKS.get(data["key"], ALL_EVENT_TYPE_KEYS)
         existing = db.query(QuestionDefinitionModel).filter_by(key=data["key"]).first()
         if existing:
             fields_to_update = [
@@ -496,6 +1000,7 @@ def seed_question_definitions(db):
                 "prazo_resposta_dias_uteis",
                 "display_order",
                 "vistoria_exige_foto",
+                "event_type_keys",
             ]
             if data["key"] == "bloqueia_via":
                 fields_to_update.extend(
@@ -518,6 +1023,47 @@ def seed_question_definitions(db):
         db.add(QuestionDefinitionModel(**data))
 
 
+def seed_event_types(db):
+    for index, (key, name, examples) in enumerate(EVENT_TYPES, start=1):
+        existing = db.query(EventTypeModel).filter_by(key=key).first()
+        required_documents = list(BASE_EVENT_DOCUMENTS)
+        description = EVENT_TYPE_DESCRIPTIONS.get(
+            key,
+            f"Categoria criada a partir da planilha de solicitação de eventos: {examples}.",
+        )
+        if key in {"religioso", "festa_popular_tradicional", "social_comunitario"}:
+            required_documents.append(
+                {"label": "Ofício de apoio operacional, quando houver uso de via pública", "url": ""}
+            )
+        if key in {"gastronomico", "festa_popular_tradicional", "rural_agropecuario"}:
+            required_documents.append(
+                {"label": "Documentação sanitária dos manipuladores de alimentos, quando houver alimentação", "url": ""}
+            )
+        if key == "automotivo_motociclistico":
+            required_documents.append(
+                {"label": "Mapa/circuito e documentos dos veículos, quando houver deslocamento ou exposição", "url": ""}
+            )
+        if existing:
+            existing.name = name
+            existing.examples = examples
+            existing.description = description
+            existing.required_documents = required_documents
+            existing.display_order = index
+            existing.is_active = True
+            continue
+        db.add(
+            EventTypeModel(
+                key=key,
+                name=name,
+                description=description,
+                examples=examples,
+                required_documents=required_documents,
+                display_order=index,
+                is_active=True,
+            )
+        )
+
+
 def inspection_fields(tipo_exigencia, scheduled_for=None):
     value = tipo_exigencia.lower()
     checklist = []
@@ -536,13 +1082,431 @@ def inspection_fields(tipo_exigencia, scheduled_for=None):
         "inspection_checklist": checklist,
         "inspection_requires_photo": bool(checklist),
         "inspection_scheduled_for": scheduled_for if checklist else None,
-        "inspection_status": "agendada" if checklist and scheduled_for else "nao_agendada",
+        "inspection_scheduled_time": "09:00" if checklist and scheduled_for else None,
+        "inspection_status": "vistoria_agendada" if checklist and scheduled_for else "nao_agendada",
     }
+
+
+def seed_historical_event_requests(db, roles, secretarias, users):
+    rows = load_historical_event_rows()
+    if not rows:
+        print("Planilha histórica não encontrada; seed histórico ignorado.")
+        return
+
+    event_type_names = {key: name for key, name, _ in EVENT_TYPES}
+    imported = 0
+    for index, row in enumerate(rows, start=1):
+        document = row["cpf_cnpj"]
+        user = db.query(UserModel).filter_by(cpf_cnpj=document).first()
+        if not user:
+            user = UserModel(
+                tipo_pessoa="PJ" if len(document) == 14 else "PF",
+                nome=limit_text(row["nome"], 255),
+                cpf_cnpj=document,
+                email=None,
+                senha_hash=hash_password(document),
+                telefone=row["telefone"] or None,
+                endereco=limit_text(row["endereco"], 255) or None,
+                role_id=roles["cidadao"].id,
+                mfa_email_enabled=False,
+                mfa_totp_enabled=False,
+                must_change_password=False,
+                foto_usuario_nome=f"foto_{document}.jpg",
+                foto_usuario_url=f"/uploads/cidadaos/{document}/foto_usuario.jpg",
+                comprovante_residencia_nome=f"comprovante_residencia_{document}.pdf",
+                comprovante_residencia_url=f"/uploads/cidadaos/{document}/comprovante_residencia.pdf",
+                comprovante_residencia_tipo="luz",
+                comprovante_residencia_status="pendente_validacao",
+            )
+            db.add(user)
+            db.flush()
+        else:
+            user.nome = limit_text(row["nome"], 255) or user.nome
+            user.telefone = row["telefone"] or user.telefone
+            user.endereco = limit_text(row["endereco"], 255) or user.endereco
+            if user.role.slug == "cidadao":
+                if not user.foto_usuario_url:
+                    user.foto_usuario_url = f"/uploads/cidadaos/{document}/foto_usuario.jpg"
+                    user.foto_usuario_nome = f"foto_{document}.jpg"
+                if not user.comprovante_residencia_url:
+                    user.comprovante_residencia_url = f"/uploads/cidadaos/{document}/comprovante_residencia.pdf"
+                    user.comprovante_residencia_nome = f"comprovante_residencia_{document}.pdf"
+                    user.comprovante_residencia_tipo = "luz"
+                    user.comprovante_residencia_status = "pendente_validacao"
+
+        users[f"historico:{document}"] = user
+        event_type = infer_event_type(row)
+        protocolo = f"AL-H{row['ano']}-{index:04d}"
+        request = db.query(PermitRequestModel).filter_by(protocolo=protocolo).first()
+        event_date = date.fromisoformat(row["data_evento"])
+        status_value = "autorizada" if event_date <= date.today() else "em_analise"
+        dam_status = "pago" if status_value == "autorizada" else "nao_gerado"
+        answers = historical_answers(row, event_type)
+        responsible_data = {
+            "nome": row["nome"],
+            "cpf_cnpj": document,
+            "telefone": row["telefone"],
+            "email": "",
+            "endereco": row["endereco"],
+            "referencia": row["referencia"],
+        }
+        event_data = {
+            "nome_evento": row["descricao"],
+            "data_evento": row["data_evento"],
+            "endereco_evento": row["local"],
+            "bairro_evento": extract_neighborhood(row["local"]),
+            "tipo_evento": event_type,
+            "tipo_evento_nome": event_type_names.get(event_type, event_type),
+            "tipo_espaco_evento": "publico",
+            "publico_estimado": normalize_public(row["publico"]),
+            "publico_estimado_original": row["publico"],
+            "horario_inicio": row["horario_inicio"],
+            "horario_termino": row["horario_termino"],
+            "horario_original": row["horario"],
+            "valor_ingresso": row["valor_ingresso"],
+            "data_solicitacao": row["data_solicitacao"],
+            "dia_semana": row["dia_semana"],
+            "termo_aceite": "true",
+            "anexos_informados": [
+                "oficio_solicitacao.pdf",
+                "rg_cpf.pdf",
+                "comprovante_residencia.pdf",
+            ],
+        }
+        if request:
+            request.solicitante_id = user.id
+            request.status = status_value
+            request.dam_status = dam_status
+            request.is_beneficente = "beneficente" in row["descricao"].lower()
+            request.dados_responsavel = responsible_data
+            request.dados_evento = event_data
+            request.respostas = answers
+        else:
+            request = PermitRequestModel(
+                protocolo=protocolo,
+                solicitante_id=user.id,
+                tipo="alvara_evento",
+                status=status_value,
+                dam_status=dam_status,
+                is_beneficente="beneficente" in row["descricao"].lower(),
+                dados_responsavel=responsible_data,
+                dados_evento=event_data,
+                respostas=answers,
+                created_at=date.fromisoformat(row["data_solicitacao"]) if row["data_solicitacao"] else None,
+            )
+            db.add(request)
+            db.flush()
+
+        seed_historical_requirements(db, request, secretarias, row, answers, approved=status_value == "autorizada")
+        seed_historical_attachments(db, request)
+        imported += 1
+    print(f"Solicitações históricas importadas da planilha: {imported}")
+
+
+def load_historical_event_rows():
+    path = Path(HISTORICAL_EVENTS_XLSX_PATH)
+    if not path.exists():
+        return []
+    ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    rows = []
+    with ZipFile(path) as archive:
+        shared = read_shared_strings(archive, ns)
+        workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+        rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        relmap = {rel.attrib["Id"]: rel.attrib["Target"] for rel in rels}
+        for sheet in workbook.findall("a:sheets/a:sheet", ns):
+            title = sheet.attrib.get("name", "")
+            if title not in {"2025", "2026"}:
+                continue
+            rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+            target = relmap[rel_id]
+            sheet_path = "xl/" + target.lstrip("/") if not target.startswith("xl/") else target
+            sheet_root = ET.fromstring(archive.read(sheet_path))
+            for excel_row in sheet_root.findall("a:sheetData/a:row", ns):
+                if excel_row.attrib.get("r") == "1":
+                    continue
+                values = read_excel_row(excel_row, shared, ns)
+                row = normalize_historical_row(title, values)
+                if row:
+                    rows.append(row)
+    return rows
+
+
+def read_shared_strings(archive, ns):
+    if "xl/sharedStrings.xml" not in archive.namelist():
+        return []
+    root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+    return ["".join((text.text or "") for text in item.findall(".//a:t", ns)) for item in root.findall("a:si", ns)]
+
+
+def read_excel_row(excel_row, shared, ns):
+    values = []
+    for cell in excel_row.findall("a:c", ns):
+        index = excel_column_index(cell.attrib.get("r", "A1"))
+        while len(values) <= index:
+            values.append("")
+        cell_type = cell.attrib.get("t")
+        value_node = cell.find("a:v", ns)
+        inline_node = cell.find("a:is", ns)
+        value = ""
+        if cell_type == "s" and value_node is not None and value_node.text:
+            value = shared[int(value_node.text)]
+        elif cell_type == "inlineStr" and inline_node is not None:
+            value = "".join((text.text or "") for text in inline_node.findall(".//a:t", ns))
+        elif value_node is not None and value_node.text is not None:
+            value = value_node.text
+        values[index] = str(value).strip()
+    return values
+
+
+def normalize_historical_row(year, values):
+    values = values + [""] * 22
+    document = only_digits(values[5])
+    event_date = normalize_excel_date(values[10])
+    if len(document) not in {11, 14} or len(set(document)) <= 1:
+        return None
+    if not values[1].strip() or not values[2].strip() or not is_iso_date(event_date):
+        return None
+    start_time, end_time = split_time_range(values[12])
+    return {
+        "ano": year,
+        "nome": clean_text(values[1]),
+        "descricao": clean_text(values[2]),
+        "oficio": clean_text(values[3]),
+        "foto_rg_cpf": clean_text(values[4]),
+        "cpf_cnpj": document,
+        "endereco": clean_text(values[6]),
+        "referencia": clean_text(values[7]),
+        "telefone": normalize_phone(values[8]),
+        "data_solicitacao": normalize_excel_date(values[9]) if is_iso_date(normalize_excel_date(values[9])) else "",
+        "data_evento": event_date,
+        "dia_semana": clean_text(values[11]),
+        "horario": clean_text(values[12]),
+        "horario_inicio": start_time,
+        "horario_termino": end_time,
+        "local": clean_text(values[13]) or "Valença - BA",
+        "publico": clean_text(values[14]),
+        "valor_ingresso": clean_text(values[15]),
+        "meio_ambiente": clean_text(values[16]),
+        "bloqueio_via": clean_text(values[17]),
+        "guarda": clean_text(values[18]),
+        "bombeiros": clean_text(values[19]),
+        "ambulancia": clean_text(values[20]),
+    }
+
+
+def seed_historical_requirements(db, request, secretarias, row, answers, approved):
+    status_value = "aprovada" if approved else "aguardando_analise"
+    requirements = []
+    if answers.get("tem_som"):
+        requirements.append(("meio_ambiente", "Termo de Responsabilidade Ambiental"))
+    if answers.get("bloqueia_via"):
+        requirements.append(("dmtran", "Autorização para uso ou bloqueio de via pública"))
+    if answers.get("precisa_guarda"):
+        requirements.append(("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal"))
+    if answers.get("precisa_avcb"):
+        requirements.append(("infraestrutura", "Auto de Vistoria do Corpo de Bombeiros (AVCB)"))
+    if answers.get("precisa_ambulancia"):
+        requirements.append(("secretaria_saude", "Ofício solicitando ambulância no local do evento"))
+    if not requirements:
+        requirements.append(("desenvolvimento_economico", "Conferência documental da Central de Eventos"))
+    for secretaria_slug, tipo_exigencia in requirements:
+        requirement = (
+            db.query(PermitRequirementModel)
+            .filter_by(
+                permit_request_id=request.id,
+                secretaria_id=secretarias[secretaria_slug].id,
+                tipo_exigencia=tipo_exigencia,
+            )
+            .first()
+        )
+        fields = inspection_fields(tipo_exigencia, add_business_days(date.today(), -1) if approved else None)
+        if approved and fields["requires_inspection"]:
+            fields["inspection_status"] = "vistoria_concluida"
+        if requirement:
+            requirement.status = status_value
+            for key, value in fields.items():
+                setattr(requirement, key, value)
+        else:
+            db.add(
+                PermitRequirementModel(
+                    permit_request_id=request.id,
+                    secretaria_id=secretarias[secretaria_slug].id,
+                    tipo_exigencia=tipo_exigencia,
+                    status=status_value,
+                    **fields,
+                )
+            )
+
+
+def seed_historical_attachments(db, request):
+    attachments = [
+        ("oficio_solicitacao", "oficio_solicitacao.pdf"),
+        ("rg_cpf", "rg_cpf.pdf"),
+        ("comprovante_residencia", "comprovante_residencia.pdf"),
+    ]
+    if request.status == "autorizada":
+        attachments.extend(
+            [
+                ("dam", "dam.pdf"),
+                ("comprovante_pagamento_dam", "comprovante_pagamento_dam.pdf"),
+                ("alvara_evento", "alvara_evento.pdf"),
+            ]
+        )
+    for document_type, file_name in attachments:
+        existing = (
+            db.query(AttachmentModel)
+            .filter_by(permit_request_id=request.id, tipo_documento=document_type)
+            .first()
+        )
+        if existing:
+            continue
+        db.add(
+            AttachmentModel(
+                permit_request_id=request.id,
+                tipo_documento=document_type,
+                nome_arquivo=f"{request.protocolo.lower()}_{file_name}",
+                arquivo_url=f"/uploads/{request.protocolo}/{file_name}",
+                mime_type="application/pdf",
+                tamanho_bytes=90000,
+            )
+        )
+
+
+def historical_answers(row, event_type):
+    return {
+        "tem_som": text_is_yes(row["meio_ambiente"]) or event_type in {"musical_entretenimento", "festa_popular_tradicional"},
+        "bloqueia_via": text_is_yes(row["bloqueio_via"]) or "bloco" in row["descricao"].lower(),
+        "precisa_guarda": text_is_yes(row["guarda"]),
+        "precisa_avcb": text_is_yes(row["bombeiros"]),
+        "precisa_ambulancia": text_is_yes(row["ambulancia"]),
+        "tem_alimentacao": event_type == "gastronomico",
+        "precisa_brigadista": normalize_public(row["publico"]) >= 500,
+    }
+
+
+def infer_event_type(row):
+    text_value = f"{row['descricao']} {row['local']}".lower()
+    if any(term in text_value for term in ["corrida", "torneio", "futebol", "bavi", "jiu-jitsu"]):
+        return "esportivo"
+    if any(term in text_value for term in ["igreja", "evangel", "congresso", "procissão", "lavagem"]):
+        return "religioso"
+    if any(term in text_value for term in ["moto", "veiculo", "veículo", "automotivo", "fiat"]):
+        return "automotivo_motociclistico"
+    if any(term in text_value for term in ["festival de tortas", "gastron", "acarajé", "feira gastron"]):
+        return "gastronomico"
+    if any(term in text_value for term in ["bloco", "carnaval", "são joão", "são pedro", "lavagem"]):
+        return "festa_popular_tradicional"
+    if any(term in text_value for term in ["show", "seresta", "karaok", "baile", "som ao vivo"]):
+        return "musical_entretenimento"
+    if any(term in text_value for term in ["bingo", "beneficente", "ação social"]):
+        return "social_comunitario"
+    if any(term in text_value for term in ["ballet", "artística", "cultural"]):
+        return "cultural"
+    return "outros"
+
+
+def split_time_range(value):
+    matches = re.findall(r"\d{1,2}[:h]\d{0,2}", value or "", flags=re.IGNORECASE)
+    normalized = [normalize_time(match) for match in matches]
+    normalized = [item for item in normalized if item]
+    if len(normalized) >= 2:
+        return normalized[0], normalized[1]
+    if len(normalized) == 1:
+        return normalized[0], "22:00"
+    return "08:00", "22:00"
+
+
+def normalize_time(value):
+    match = re.match(r"^(\d{1,2})(?:[:h](\d{0,2}))?$", value.strip(), flags=re.IGNORECASE)
+    if not match:
+        return ""
+    hour = int(match.group(1))
+    minute_text = match.group(2) or "00"
+    minute = int(minute_text or "00")
+    if hour > 23 or minute > 59:
+        return ""
+    return f"{hour:02d}:{minute:02d}"
+
+
+def normalize_public(value):
+    match = re.search(r"\d+", value or "")
+    return int(match.group(0)) if match else 0
+
+
+def extract_neighborhood(value):
+    text_value = clean_text(value)
+    if " - " in text_value:
+        return text_value.split(" - ")[-1].strip()
+    if "," in text_value:
+        return text_value.split(",")[-1].strip()
+    return text_value
+
+
+def text_is_yes(value):
+    return clean_text(value).lower() in {"sim", "s", "ok", "fez aqui"}
+
+
+def clean_text(value):
+    return re.sub(r"\s+", " ", str(value or "").replace("\n", " ")).strip()
+
+
+def limit_text(value, max_length):
+    return clean_text(value)[:max_length]
+
+
+def normalize_phone(value):
+    text_value = clean_text(value)
+    if len(text_value) <= 20:
+        return text_value
+    digits = only_digits(text_value)
+    if digits:
+        return digits[:20]
+    return text_value[:20]
+
+
+def only_digits(value):
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def normalize_excel_date(value):
+    text_value = clean_text(value)
+    if not text_value:
+        return ""
+    try:
+        number = float(text_value)
+    except ValueError:
+        return text_value
+    if number < 20000:
+        return text_value
+    return (datetime(1899, 12, 30) + timedelta(days=int(number))).date().isoformat()
+
+
+def is_iso_date(value):
+    try:
+        date.fromisoformat(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def excel_column_index(reference):
+    letters = "".join(char for char in reference if char.isalpha())
+    index = 0
+    for char in letters:
+        index = index * 26 + ord(char.upper()) - 64
+    return index - 1
 
 
 def seed_permit_request(db, users, secretarias):
     existing = db.query(PermitRequestModel).filter_by(protocolo="AL-EV0001").first()
     if existing:
+        event_data = dict(existing.dados_evento or {})
+        event_data.setdefault("tipo_evento", "festa_popular_tradicional")
+        event_data.setdefault("tipo_evento_nome", "Festa Popular / Tradicional")
+        event_data.setdefault("latitude_evento", "-13.370400")
+        event_data.setdefault("longitude_evento", "-39.073300")
+        existing.dados_evento = event_data
         return existing
 
     request = PermitRequestModel(
@@ -554,7 +1518,7 @@ def seed_permit_request(db, users, secretarias):
         is_beneficente=False,
         dados_responsavel={
             "nome": "Maria Solicitante",
-            "cpf_cnpj": "11111111111",
+            "cpf_cnpj": "52998224725",
             "telefone": "(75) 99999-0000",
             "email": "cidadao@teste.local",
             "endereco": "Valença - BA",
@@ -563,6 +1527,10 @@ def seed_permit_request(db, users, secretarias):
             "nome_evento": "Festa Teste MVP",
             "data_evento": add_business_days(date.today(), 20).isoformat(),
             "endereco_evento": "Praça Central",
+            "latitude_evento": "-13.370400",
+            "longitude_evento": "-39.073300",
+            "tipo_evento": "festa_popular_tradicional",
+            "tipo_evento_nome": "Festa Popular / Tradicional",
             "publico_estimado": 300,
             "horario_inicio": "18:00",
             "horario_termino": "23:00",
@@ -621,152 +1589,367 @@ def seed_permit_request(db, users, secretarias):
 
 
 def seed_test_scenarios(db, users, secretarias):
+    current_year = date.today().year
+    event_type_names = {key: name for key, name, _ in EVENT_TYPES}
+
     scenarios = [
-        (
-            "AL-EV0002",
-            "Festival com Som e Alimentação",
-            "em_analise",
-            "nao_gerado",
-            False,
-            [("meio_ambiente", "Termo de Responsabilidade Ambiental", "aguardando_analise")],
-        ),
-        (
-            "AL-EV0003",
-            "Evento Pronto para DAM",
-            "aguardando_geracao_dam",
-            "pendente_prefeitura",
-            False,
-            [("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada")],
-        ),
-        (
-            "AL-EV0004",
-            "Evento Aguardando Pagamento",
-            "aguardando_pagamento_dam",
-            "gerado",
-            False,
-            [("infraestrutura", "Vistoria de palco/estrutura", "aprovada")],
-        ),
-        (
-            "AL-EV0005",
-            "Evento Aguardando Alvará",
-            "aguardando_geracao_alvara",
-            "pago",
-            False,
-            [("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aprovada")],
-        ),
-        (
-            "AL-EV0006",
-            "Evento Beneficente Autorizado",
-            "autorizada",
-            "isento",
-            True,
-            [("receita_municipal", "Conferência de declaração de evento beneficente", "aprovada")],
-        ),
-        (
-            "AL-EV0007",
-            "Festival Autorizado com DAM Pago",
-            "autorizada",
-            "pago",
-            False,
-            [("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada")],
-        ),
+        {
+            "protocolo": "AL-EV0002",
+            "nome_evento": "Festival com Som e Alimentação",
+            "event_type": "gastronomico",
+            "data_evento": date(current_year, 1, 18),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 500,
+            "endereco": "Praça da República, Centro, Valença - BA",
+            "latitude": "-13.370900",
+            "longitude": "-39.073100",
+            "requirements": [
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aguardando_analise"),
+                ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0003",
+            "nome_evento": "Bloquinho de Verão",
+            "event_type": "festa_popular_tradicional",
+            "data_evento": date(current_year, 2, 9),
+            "status": "aguardando_geracao_dam",
+            "dam_status": "pendente_prefeitura",
+            "is_beneficente": False,
+            "publico_estimado": 1200,
+            "endereco": "Avenida ACM, Centro, Valença - BA",
+            "latitude": "-13.368800",
+            "longitude": "-39.071900",
+            "requirements": [
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0004",
+            "nome_evento": "Show na Orla",
+            "event_type": "musical_entretenimento",
+            "data_evento": date(current_year, 3, 22),
+            "status": "aguardando_pagamento_dam",
+            "dam_status": "gerado",
+            "is_beneficente": False,
+            "publico_estimado": 800,
+            "endereco": "Orla de Valença, Valença - BA",
+            "latitude": "-13.373200",
+            "longitude": "-39.075600",
+            "requirements": [
+                ("infraestrutura", "Vistoria de palco/estrutura", "aprovada"),
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0005",
+            "nome_evento": "Feira Gastronômica do Centro",
+            "event_type": "gastronomico",
+            "data_evento": date(current_year, 4, 14),
+            "status": "aguardando_geracao_alvara",
+            "dam_status": "pago",
+            "is_beneficente": False,
+            "publico_estimado": 650,
+            "endereco": "Rua Duque de Caxias, Centro, Valença - BA",
+            "latitude": "-13.369700",
+            "longitude": "-39.072600",
+            "requirements": [
+                ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0006",
+            "nome_evento": "Ação Social Beneficente",
+            "event_type": "social_comunitario",
+            "data_evento": date(current_year, 5, 25),
+            "status": "autorizada",
+            "dam_status": "isento",
+            "is_beneficente": True,
+            "publico_estimado": 300,
+            "endereco": "Ginásio Municipal de Valença - BA",
+            "latitude": "-13.366500",
+            "longitude": "-39.074800",
+            "requirements": [
+                ("receita_municipal", "Conferência de declaração de evento beneficente", "aprovada"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0007",
+            "nome_evento": "Festival Cultural Autorizado",
+            "event_type": "cultural",
+            "data_evento": date(current_year, 6, 21),
+            "status": "autorizada",
+            "dam_status": "pago",
+            "is_beneficente": False,
+            "publico_estimado": 900,
+            "endereco": "Casa da Cultura, Centro, Valença - BA",
+            "latitude": "-13.371600",
+            "longitude": "-39.073800",
+            "requirements": [
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada"),
+                ("infraestrutura", "Vistoria de palco/estrutura", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0008",
+            "nome_evento": "Corrida Cidade de Valença",
+            "event_type": "esportivo",
+            "data_evento": date(current_year, 7, 13),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 450,
+            "endereco": "Largada na Praça da República, Valença - BA",
+            "latitude": "-13.370100",
+            "longitude": "-39.071500",
+            "requirements": [
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aguardando_analise"),
+                ("secretaria_saude", "Ofício solicitando ambulância no local do evento", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0009",
+            "nome_evento": "Encontro de Motociclistas",
+            "event_type": "automotivo_motociclistico",
+            "data_evento": date(current_year, 8, 10),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 700,
+            "endereco": "Estacionamento da Orla, Valença - BA",
+            "latitude": "-13.374100",
+            "longitude": "-39.076000",
+            "requirements": [
+                ("dmtran", "Vistoria do veículo, CNH do motorista e mapa do circuito", "aguardando_analise"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0010",
+            "nome_evento": "Seminário de Empreendedorismo",
+            "event_type": "educacional_capacitacao",
+            "data_evento": date(current_year, 8, 28),
+            "status": "autorizada",
+            "dam_status": "pago",
+            "is_beneficente": False,
+            "publico_estimado": 180,
+            "endereco": "Auditório Municipal, Centro, Valença - BA",
+            "latitude": "-13.368900",
+            "longitude": "-39.074300",
+            "requirements": [
+                ("desenvolvimento_economico", "Regularização do alvará de funcionamento do local fixo", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0011",
+            "nome_evento": "Festa de São Pedro",
+            "event_type": "festa_popular_tradicional",
+            "data_evento": date(current_year, 9, 7),
+            "status": "aguardando_pagamento_dam",
+            "dam_status": "gerado",
+            "is_beneficente": False,
+            "publico_estimado": 1500,
+            "endereco": "Praça da Matriz, Valença - BA",
+            "latitude": "-13.369300",
+            "longitude": "-39.070900",
+            "requirements": [
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aprovada"),
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada"),
+                ("infraestrutura", "Vistoria de palco/estrutura", "aprovada"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0012",
+            "nome_evento": "Feira da Agricultura Familiar",
+            "event_type": "rural_agropecuario",
+            "data_evento": date(current_year, 10, 19),
+            "status": "em_analise",
+            "dam_status": "nao_gerado",
+            "is_beneficente": False,
+            "publico_estimado": 600,
+            "endereco": "Mercado Municipal, Valença - BA",
+            "latitude": "-13.367700",
+            "longitude": "-39.072200",
+            "requirements": [
+                ("vigilancia_sanitaria", "Vistoria de equipamentos e instalações de alimentação", "aguardando_analise"),
+                ("meio_ambiente", "Termo de Responsabilidade Ambiental", "aguardando_analise"),
+            ],
+        },
+        {
+            "protocolo": "AL-EV0013",
+            "nome_evento": "Procissão de Nossa Senhora",
+            "event_type": "religioso",
+            "data_evento": date(current_year, 12, 8),
+            "status": "aguardando_geracao_dam",
+            "dam_status": "pendente_prefeitura",
+            "is_beneficente": False,
+            "publico_estimado": 1000,
+            "endereco": "Igreja Matriz, Centro, Valença - BA",
+            "latitude": "-13.370700",
+            "longitude": "-39.071200",
+            "requirements": [
+                ("dmtran", "Autorização para uso ou bloqueio de via pública", "aprovada"),
+                ("guarda_civil", "Ofício solicitando presença da Guarda Civil Municipal", "aprovada"),
+            ],
+        },
     ]
 
-    for index, (protocolo, nome_evento, status_value, dam_status, is_beneficente, requirements) in enumerate(scenarios):
-        if db.query(PermitRequestModel).filter_by(protocolo=protocolo).first():
-            continue
-        request = PermitRequestModel(
-            protocolo=protocolo,
-            solicitante_id=users["cidadao@teste.local"].id,
-            tipo="alvara_evento",
-            status=status_value,
-            dam_status=dam_status,
-            is_beneficente=is_beneficente,
-            instituicao_beneficiada="Instituição Social de Valença" if is_beneficente else None,
-            dados_responsavel={
-                "nome": "Maria Solicitante",
-                "cpf_cnpj": "11111111111",
-                "telefone": "(75) 99999-0000",
-                "email": "cidadao@teste.local",
-                "endereco": "Valença - BA",
-            },
-            dados_evento={
-                "nome_evento": nome_evento,
-                "data_evento": add_business_days(date.today(), 25).isoformat(),
-                "endereco_evento": "Rua Duque de Caxias, Centro, Valença - BA",
-                "latitude_evento": f"{-13.370400 + (index * 0.0012):.6f}",
-                "longitude_evento": f"{-39.073300 + (index * 0.0010):.6f}",
-                "publico_estimado": 500,
-                "horario_inicio": "17:00",
-                "horario_termino": "23:30",
-                "termo_aceite": "true",
-                "anexos_informados": ["rg_cpf.pdf", "comprovante_residencia.pdf", "alvara_funcionamento.pdf"],
-            },
-            respostas={"tem_som": True, "tem_alimentacao": True},
-        )
-        db.add(request)
-        db.flush()
-        for secretaria_slug, tipo_exigencia, requirement_status in requirements:
+    for scenario in scenarios:
+        protocolo = scenario["protocolo"]
+        event_type = scenario["event_type"]
+        status_value = scenario["status"]
+        dam_status = scenario["dam_status"]
+        is_beneficente = scenario["is_beneficente"]
+        request = db.query(PermitRequestModel).filter_by(protocolo=protocolo).first()
+        event_data = {
+            "nome_evento": scenario["nome_evento"],
+            "data_evento": scenario["data_evento"].isoformat(),
+            "endereco_evento": scenario["endereco"],
+            "latitude_evento": scenario["latitude"],
+            "longitude_evento": scenario["longitude"],
+            "tipo_evento": event_type,
+            "tipo_evento_nome": event_type_names.get(event_type, event_type),
+            "publico_estimado": scenario["publico_estimado"],
+            "horario_inicio": "17:00",
+            "horario_termino": "23:30",
+            "termo_aceite": "true",
+            "anexos_informados": ["rg_cpf.pdf", "comprovante_residencia.pdf", "alvara_funcionamento.pdf"],
+        }
+        responsible_data = {
+            "nome": "Maria Solicitante",
+            "cpf_cnpj": "52998224725",
+            "telefone": "(75) 99999-0000",
+            "email": "cidadao@teste.local",
+            "endereco": "Valença - BA",
+        }
+        if request:
+            request.status = status_value
+            request.dam_status = dam_status
+            request.is_beneficente = is_beneficente
+            request.instituicao_beneficiada = "Instituição Social de Valença" if is_beneficente else None
+            request.dados_responsavel = responsible_data
+            request.dados_evento = event_data
+            request.respostas = {"tem_som": True, "tem_alimentacao": event_type in {"gastronomico", "rural_agropecuario"}}
+        else:
+            request = PermitRequestModel(
+                protocolo=protocolo,
+                solicitante_id=users["cidadao@teste.local"].id,
+                tipo="alvara_evento",
+                status=status_value,
+                dam_status=dam_status,
+                is_beneficente=is_beneficente,
+                instituicao_beneficiada="Instituição Social de Valença" if is_beneficente else None,
+                dados_responsavel=responsible_data,
+                dados_evento=event_data,
+                respostas={"tem_som": True, "tem_alimentacao": event_type in {"gastronomico", "rural_agropecuario"}},
+            )
+            db.add(request)
+            db.flush()
+        for secretaria_slug, tipo_exigencia, requirement_status in scenario["requirements"]:
+            if secretaria_slug not in secretarias:
+                continue
             fields = inspection_fields(
                 tipo_exigencia,
                 date.today() if requirement_status != "aprovada" else add_business_days(date.today(), -1),
             )
             if requirement_status == "aprovada" and fields["requires_inspection"]:
                 fields["inspection_status"] = "aprovada"
-            db.add(
-                PermitRequirementModel(
+            requirement = (
+                db.query(PermitRequirementModel)
+                .filter_by(
                     permit_request_id=request.id,
                     secretaria_id=secretarias[secretaria_slug].id,
                     tipo_exigencia=tipo_exigencia,
-                    status=requirement_status,
-                    **fields,
                 )
+                .first()
             )
+            if requirement:
+                requirement.status = requirement_status
+                for key, value in fields.items():
+                    setattr(requirement, key, value)
+            else:
+                db.add(
+                    PermitRequirementModel(
+                        permit_request_id=request.id,
+                        secretaria_id=secretarias[secretaria_slug].id,
+                        tipo_exigencia=tipo_exigencia,
+                        status=requirement_status,
+                        **fields,
+                    )
+                )
         if dam_status in {"gerado", "pago"}:
-            db.add(
-                AttachmentModel(
-                    permit_request_id=request.id,
-                    tipo_documento="dam",
-                    nome_arquivo=f"dam_{protocolo}.pdf",
-                    arquivo_url=f"/uploads/{protocolo}/dam.pdf",
-                    mime_type="application/pdf",
-                    tamanho_bytes=120000,
-                )
+            existing_dam = (
+                db.query(AttachmentModel)
+                .filter_by(permit_request_id=request.id, tipo_documento="dam")
+                .first()
             )
+            if not existing_dam:
+                db.add(
+                    AttachmentModel(
+                        permit_request_id=request.id,
+                        tipo_documento="dam",
+                        nome_arquivo=f"dam_{protocolo}.pdf",
+                        arquivo_url=f"/uploads/{protocolo}/dam.pdf",
+                        mime_type="application/pdf",
+                        tamanho_bytes=120000,
+                    )
+                )
         if dam_status == "pago":
-            db.add(
-                AttachmentModel(
-                    permit_request_id=request.id,
-                    tipo_documento="comprovante_pagamento_dam",
-                    nome_arquivo=f"comprovante_{protocolo}.pdf",
-                    arquivo_url=f"/uploads/{protocolo}/comprovante.pdf",
-                    mime_type="application/pdf",
-                    tamanho_bytes=90000,
-                )
+            existing_proof = (
+                db.query(AttachmentModel)
+                .filter_by(permit_request_id=request.id, tipo_documento="comprovante_pagamento_dam")
+                .first()
             )
+            if not existing_proof:
+                db.add(
+                    AttachmentModel(
+                        permit_request_id=request.id,
+                        tipo_documento="comprovante_pagamento_dam",
+                        nome_arquivo=f"comprovante_{protocolo}.pdf",
+                        arquivo_url=f"/uploads/{protocolo}/comprovante.pdf",
+                        mime_type="application/pdf",
+                        tamanho_bytes=90000,
+                    )
+                )
         if status_value == "autorizada":
             token = create_event_credential_token(protocolo, request.id)
-            db.add(
-                AttachmentModel(
-                    permit_request_id=request.id,
-                    tipo_documento="alvara_evento",
-                    nome_arquivo=f"alvara_{protocolo}.pdf",
-                    arquivo_url=f"/uploads/{protocolo}/alvara.pdf",
-                    mime_type="application/pdf",
-                    tamanho_bytes=140000,
-                )
+            existing_permit = (
+                db.query(AttachmentModel)
+                .filter_by(permit_request_id=request.id, tipo_documento="alvara_evento")
+                .first()
             )
-            db.add(
-                EventCredentialModel(
-                    permit_request_id=request.id,
-                    codigo_publico=protocolo,
-                    token_hash=hash_token(token),
-                    status="ativa",
-                    valid_from=datetime.now(timezone.utc),
-                    valid_until=datetime.now(timezone.utc) + timedelta(days=30),
-                    issued_by=users["admin@prefeitura.local"].id,
+            if not existing_permit:
+                db.add(
+                    AttachmentModel(
+                        permit_request_id=request.id,
+                        tipo_documento="alvara_evento",
+                        nome_arquivo=f"alvara_{protocolo}.pdf",
+                        arquivo_url=f"/uploads/{protocolo}/alvara.pdf",
+                        mime_type="application/pdf",
+                        tamanho_bytes=140000,
+                    )
                 )
-            )
+            existing_credential = db.query(EventCredentialModel).filter_by(codigo_publico=protocolo).first()
+            if existing_credential:
+                existing_credential.token_hash = hash_token(token)
+                existing_credential.status = "ativa"
+                existing_credential.valid_until = datetime.now(timezone.utc) + timedelta(days=30)
+            else:
+                db.add(
+                    EventCredentialModel(
+                        permit_request_id=request.id,
+                        codigo_publico=protocolo,
+                        token_hash=hash_token(token),
+                        status="ativa",
+                        valid_from=datetime.now(timezone.utc),
+                        valid_until=datetime.now(timezone.utc) + timedelta(days=30),
+                        issued_by=users["admin@prefeitura.local"].id,
+                    )
+                )
 
 
 def seed_home_content(db, users):
@@ -875,26 +2058,33 @@ def main():
     if reset:
         Base.metadata.drop_all(bind=engine)
     create_tables()
+    ensure_user_columns()
     ensure_secretaria_columns()
     ensure_question_definition_columns()
     ensure_event_credential_columns()
     ensure_requirement_inspection_columns()
+    ensure_orla_inn_columns()
+    ensure_orla_vehicle_columns()
     db = SessionLocal()
     try:
         roles = seed_roles(db)
         seed_permissions(db, roles)
         secretarias = seed_secretarias(db)
         users = seed_users(db, roles, secretarias)
+        seed_orla_service(db, roles, users)
+        seed_event_types(db)
         seed_question_definitions(db)
         seed_public_ranges(db)
         seed_permit_request(db, users, secretarias)
         seed_test_scenarios(db, users, secretarias)
+        seed_historical_event_requests(db, roles, secretarias, users)
         seed_home_content(db, users)
         db.commit()
         print("Seed executado com sucesso.")
         if reset:
             print("Banco zerado e recriado com dados de teste.")
         print("Usuários de teste: admin@prefeitura.local, cidadao@teste.local")
+        print("Orla: turista@orla.teste.local, pousada@orla.teste.local, gestor_dmtran@prefeitura.local, operador_dmtran@prefeitura.local")
         print("Cada secretaria possui gestor_<secretaria>@prefeitura.local e operador_<secretaria>@prefeitura.local")
         print("Senha padrão: 123456")
     finally:

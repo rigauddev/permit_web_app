@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+
+import 'session_store.dart';
 
 class PermitApiService {
   PermitApiService({http.Client? client, String? baseUrl})
@@ -9,7 +13,10 @@ class PermitApiService {
           baseUrl ??
           const String.fromEnvironment(
             'API_BASE_URL',
-            defaultValue: 'http://127.0.0.1:8000',
+            defaultValue: String.fromEnvironment(
+              'API_URL',
+              defaultValue: 'http://127.0.0.1:8000',
+            ),
           );
 
   final http.Client _client;
@@ -20,9 +27,79 @@ class PermitApiService {
     if (uri != null && uri.hasScheme) return value;
     final base = Uri.parse(_baseUrl);
     if (value.startsWith('/')) {
-      return base.replace(path: value, query: null, fragment: null).toString();
+      final basePath =
+          base.path.endsWith('/')
+              ? base.path.substring(0, base.path.length - 1)
+              : base.path;
+      return base
+          .replace(path: '$basePath$value', query: null, fragment: null)
+          .toString();
     }
     return base.resolve(value).toString();
+  }
+
+  Future<Map<String, dynamic>> uploadFile({
+    String? accessToken,
+    required String kind,
+    required PlatformFile file,
+  }) async {
+    final bytes = file.bytes;
+    if (bytes == null) {
+      throw PermitApiException('Não foi possível ler o arquivo selecionado.');
+    }
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$_baseUrl/uploads'))
+          ..fields['kind'] = kind
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: file.name),
+          );
+    if (accessToken != null && accessToken.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    final response = await http.Response.fromStream(await request.send());
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>?> lookupCep(String cep) async {
+    final digits = cep.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 8) return null;
+    final response = await _client.get(
+      Uri.parse('https://viacep.com.br/ws/$digits/json/'),
+      headers: const {'Accept': 'application/json'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw PermitApiException('Não foi possível consultar o CEP.');
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! Map<String, dynamic> || decoded['erro'] == true) {
+      return null;
+    }
+    return decoded;
+  }
+
+  Future<List<Map<String, dynamic>>> searchEventAddresses(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 3) return const [];
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      'q': '$trimmed, Valença, Bahia, Brasil',
+      'format': 'jsonv2',
+      'addressdetails': '1',
+      'limit': '8',
+      'countrycodes': 'br',
+    });
+    final response = await _client.get(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'User-Agent': 'CentralDeServicosValenca/1.0',
+      },
+    );
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw PermitApiException('Não foi possível buscar o endereço.');
+    }
+    if (decoded is! List) return const [];
+    return decoded.whereType<Map<String, dynamic>>().toList();
   }
 
   static const List<Map<String, dynamic>> eventPermitQuestions = [
@@ -97,7 +174,7 @@ class PermitApiService {
     {
       'id': 8,
       'key': 'bloqueia_via',
-      'pergunta': 'O evento usará ou bloqueará vias/ruas municipais?',
+      'pergunta': 'Vai fechar rua ou desviar o trânsito?',
       'secretaria': 'DMTRAN',
       'tipos_resposta': ['Sim/Não', 'Texto'],
       'exigencias': [
@@ -137,6 +214,43 @@ class PermitApiService {
       'secretaria': 'Responsável pelo evento',
       'tipos_resposta': ['Sim/Não', 'Texto'],
       'exigencias': ['Contratação de brigadista pelo responsável'],
+    },
+  ];
+
+  static const List<Map<String, dynamic>> eventTypesFallback = [
+    {
+      'key': 'cultural',
+      'name': 'Cultural',
+      'examples':
+          'Festival cultural, teatro, dança, exposição e manifestações populares',
+      'required_documents': [
+        {'label': 'Ofício ou ficha de solicitação de autorização', 'url': ''},
+        {'label': 'Foto ou cópia do RG e CPF', 'url': ''},
+        {'label': 'Comprovante de residência', 'url': ''},
+        {'label': 'Alvará de funcionamento do local, quando houver', 'url': ''},
+      ],
+    },
+    {
+      'key': 'musical_entretenimento',
+      'name': 'Musical / Entretenimento',
+      'examples': 'Shows, festivais musicais, apresentações e festas',
+      'required_documents': [
+        {'label': 'Ofício ou ficha de solicitação de autorização', 'url': ''},
+        {'label': 'Foto ou cópia do RG e CPF', 'url': ''},
+        {'label': 'Comprovante de residência', 'url': ''},
+        {'label': 'Alvará de funcionamento do local, quando houver', 'url': ''},
+      ],
+    },
+    {
+      'key': 'esportivo',
+      'name': 'Esportivo',
+      'examples': 'Corrida, ciclismo, futebol, campeonato e torneio',
+      'required_documents': [
+        {'label': 'Ofício ou ficha de solicitação de autorização', 'url': ''},
+        {'label': 'Foto ou cópia do RG e CPF', 'url': ''},
+        {'label': 'Comprovante de residência', 'url': ''},
+        {'label': 'Alvará de funcionamento do local, quando houver', 'url': ''},
+      ],
     },
   ];
 
@@ -228,6 +342,7 @@ class PermitApiService {
     required String accessToken,
     required int requirementId,
     required String scheduledFor,
+    String? scheduledTime,
   }) async {
     final response = await _client.patch(
       Uri.parse(
@@ -237,7 +352,26 @@ class PermitApiService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $accessToken',
       },
-      body: jsonEncode({'scheduled_for': scheduledFor}),
+      body: jsonEncode({
+        'scheduled_for': scheduledFor,
+        'scheduled_time': scheduledTime,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> confirmInspection({
+    required String accessToken,
+    required int requirementId,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse(
+        '$_baseUrl/permit-requests/requirements/$requirementId/inspection-confirm',
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
     );
     return _decodeResponse(response) as Map<String, dynamic>;
   }
@@ -270,9 +404,13 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> listHomeContent(String accessToken) async {
+  Future<List<Map<String, dynamic>>> listHomeContent(
+    String accessToken, {
+    bool mine = false,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/home-content${mine ? '?mine=true' : ''}');
     final response = await _client.get(
-      Uri.parse('$_baseUrl/home-content'),
+      uri,
       headers: {'Authorization': 'Bearer $accessToken'},
     );
     final decoded = _decodeResponse(response) as List<dynamic>;
@@ -330,6 +468,193 @@ class PermitApiService {
         'display_order': displayOrder,
         'is_active': isActive,
       }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteHomeContent({
+    required String accessToken,
+    required int cardId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/home-content/$cardId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
+  Future<Map<String, dynamic>> approveHomeContent({
+    required String accessToken,
+    required int cardId,
+    required bool approved,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/home-content/$cardId/approval'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'approved': approved}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getContentSettings({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/settings'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateContentSettings({
+    required String accessToken,
+    required String eventMapTitle,
+    required String eventMapDescription,
+    required List<String> editorSecretarias,
+    String? orlaGuaibimPolygon,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/settings'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'event_map_title': eventMapTitle,
+        'event_map_description': eventMapDescription,
+        'event_map_editor_secretarias': editorSecretarias,
+        if (orlaGuaibimPolygon != null)
+          'orla_guaibim_polygon': orlaGuaibimPolygon,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateHomeVisibility({
+    required String accessToken,
+    required bool showHomeCarousel,
+    required bool showTourismMap,
+    required bool showEstablishmentNotices,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/settings/home-visibility'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'show_home_carousel': showHomeCarousel,
+        'show_tourism_map': showTourismMap,
+        'show_establishment_notices': showEstablishmentNotices,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getEmailTemplates({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/email-templates'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateEmailTemplates({
+    required String accessToken,
+    required Map<String, dynamic> templates,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/email-templates'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(templates),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> listTourismPoints({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/tourism-points'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> saveTourismPoint({
+    required String accessToken,
+    required Map<String, dynamic> payload,
+    int? pointId,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/home-content/tourism-points${pointId == null ? '' : '/$pointId'}',
+    );
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $accessToken',
+    };
+    final response =
+        pointId == null
+            ? await _client.post(
+              uri,
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            : await _client.put(
+              uri,
+              headers: headers,
+              body: jsonEncode(payload),
+            );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteTourismPoint({
+    required String accessToken,
+    required int pointId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/home-content/tourism-points/$pointId'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> listServiceConfigs({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/home-content/services'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> updateServiceConfig({
+    required String accessToken,
+    required String serviceKey,
+    required bool isActive,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/home-content/services/$serviceKey'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'is_active': isActive}),
     );
     return _decodeResponse(response) as Map<String, dynamic>;
   }
@@ -598,6 +923,30 @@ class PermitApiService {
     return _decodeResponse(response) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> inspectEventCredential({
+    required String accessToken,
+    required String publicCode,
+    required String token,
+    required String status,
+    String? notes,
+    bool notifyOwner = true,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/event-credentials/$publicCode/inspect'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'token': token,
+        'status': status,
+        'notes': notes,
+        'notify_owner': notifyOwner,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getAuthorizationTemplate({
     required String accessToken,
   }) async {
@@ -633,6 +982,48 @@ class PermitApiService {
     );
     final decoded = _decodeResponse(response) as List<dynamic>;
     return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> listEventTypes({
+    required String accessToken,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/permit-requests/event-types'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    final decoded = _decodeResponse(response) as List<dynamic>;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createEventType({
+    required String accessToken,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/event-types'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateEventType({
+    required String accessToken,
+    required int eventTypeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$_baseUrl/permit-requests/event-types/$eventTypeId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(payload),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> createQuestionDefinition({
@@ -686,6 +1077,7 @@ class PermitApiService {
     required Map<String, bool> answers,
     required Map<String, dynamic> answerDetails,
     required List<String> attachmentNames,
+    List<Map<String, dynamic>> documentAttachments = const [],
   }) async {
     final isBeneficente = eventData['is_beneficente'] == 'true';
     final response = await _client.post(
@@ -698,7 +1090,17 @@ class PermitApiService {
         'is_beneficente': isBeneficente,
         'instituicao_beneficiada': eventData['instituicao_beneficiada'],
         'dados_responsavel': responsibleData,
-        'dados_evento': {...eventData, 'anexos_informados': attachmentNames},
+        'dados_evento': {
+          ...eventData,
+          'anexos_informados': [
+            ...documentAttachments.map(
+              (item) =>
+                  '${item['tipo_documento'] ?? 'documento'}:${item['nome_arquivo'] ?? ''}',
+            ),
+            ...attachmentNames,
+          ],
+          'anexos_iniciais': documentAttachments,
+        },
         'respostas': {
           for (final entry in answers.entries)
             entry.key:
@@ -726,6 +1128,54 @@ class PermitApiService {
         'Authorization': 'Bearer $accessToken',
       },
       body: jsonEncode({'motivo': motivo}),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> createAdditionalRequirement({
+    required String accessToken,
+    required int requestId,
+    required String pergunta,
+    String? observacoes,
+    bool requiresInspection = false,
+    List<String> checklistVistoria = const [],
+    bool inspectionRequiresPhoto = false,
+    int prazoRespostaDiasUteis = 2,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/requirements'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'pergunta': pergunta,
+        'observacoes': observacoes,
+        'requires_inspection': requiresInspection,
+        'checklist_vistoria': checklistVistoria,
+        'inspection_requires_photo': inspectionRequiresPhoto,
+        'prazo_resposta_dias_uteis': prazoRespostaDiasUteis,
+      }),
+    );
+    return _decodeResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> reclassifyRequestEventType({
+    required String accessToken,
+    required int requestId,
+    required String eventTypeKey,
+    required String eventTypeName,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/permit-requests/$requestId/event-type'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'event_type_key': eventTypeKey,
+        'event_type_name': eventTypeName,
+      }),
     );
     return _decodeResponse(response) as Map<String, dynamic>;
   }
@@ -914,6 +1364,9 @@ class PermitApiService {
       'horario_termino': evento['horario_termino'] ?? '',
       'status': item['status'] ?? 'enviada',
       'dam_status': item['dam_status'] ?? '',
+      'respostas': item['respostas'] ?? const <String, dynamic>{},
+      'dados_responsavel': responsavel,
+      'dados_evento': evento,
       'attachments': attachments.cast<Map<String, dynamic>>(),
       'comments': comments.cast<Map<String, dynamic>>(),
       'credentials': item['credentials'] ?? const <dynamic>[],
@@ -944,6 +1397,7 @@ class PermitApiService {
               'inspection_requires_photo':
                   data['inspection_requires_photo'] ?? false,
               'inspection_scheduled_for': data['inspection_scheduled_for'],
+              'inspection_scheduled_time': data['inspection_scheduled_time'],
               'inspection_status': data['inspection_status'] ?? 'nao_agendada',
               'inspection_result': data['inspection_result'],
             };
@@ -963,6 +1417,8 @@ class PermitApiService {
         return 'DMTRAN';
       case 'vigilancia_sanitaria':
         return 'Vigilância Sanitária';
+      case 'secretaria_saude':
+        return 'Secretaria de Saúde';
       case 'guarda_civil':
         return 'Guarda Civil Municipal';
       case 'receita_municipal':
@@ -989,7 +1445,12 @@ class PermitApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  PermitApiException(this.message, {this.statusCode});
+  PermitApiException(this.message, {this.statusCode}) {
+    if (statusCode == 401) {
+      // O bootstrap observa a limpeza e redireciona para o login.
+      unawaited(SessionStore().clear());
+    }
+  }
 
   @override
   String toString() => message;

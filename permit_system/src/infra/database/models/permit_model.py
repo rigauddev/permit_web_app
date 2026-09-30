@@ -41,6 +41,7 @@ class QuestionDefinitionModel(Base):
     secretaria_dam = Column(String(150), nullable=True)
     tipos_resposta = Column(JSON, nullable=False)
     campos_obrigatorios = Column(JSON, nullable=False)
+    opcoes_resposta = Column(JSON, nullable=True)
     modelo_documento_nome = Column(String(255), nullable=True)
     modelo_documento_url = Column(String(500), nullable=True)
     requer_vistoria = Column(Boolean, default=False, nullable=False)
@@ -48,6 +49,22 @@ class QuestionDefinitionModel(Base):
     prazo_resposta_dias_uteis = Column(Integer, default=2, nullable=False)
     display_order = Column(Integer, default=0, nullable=False)
     vistoria_exige_foto = Column(Boolean, default=False, nullable=False)
+    event_type_keys = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class EventTypeModel(Base):
+    __tablename__ = "tipos_evento"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(80), unique=True, nullable=False, index=True)
+    name = Column(String(150), nullable=False)
+    description = Column(Text, nullable=True)
+    examples = Column(Text, nullable=True)
+    required_documents = Column(JSON, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    display_order = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -79,6 +96,7 @@ class PermitRequirementModel(Base):
     inspection_checklist = Column(JSON, nullable=True)
     inspection_requires_photo = Column(Boolean, default=False, nullable=False)
     inspection_scheduled_for = Column(Date, nullable=True)
+    inspection_scheduled_time = Column(String(5), nullable=True)
     inspection_status = Column(String(50), default="nao_agendada", nullable=False)
     inspection_result = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -135,6 +153,10 @@ class EventCredentialModel(Base):
     issued_at = Column(DateTime(timezone=True), server_default=func.now())
     issued_by = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
+    verified_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    verified_secretaria = Column(String(120), nullable=True)
+    verification_status = Column(String(50), nullable=True)
+    verification_notes = Column(Text, nullable=True)
     verification_count = Column(Integer, default=0, nullable=False)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     revoked_by = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
@@ -142,6 +164,7 @@ class EventCredentialModel(Base):
 
     permit_request = relationship("PermitRequestModel", back_populates="credentials")
     issuer = relationship("UserModel", foreign_keys=[issued_by])
+    verifier = relationship("UserModel", foreign_keys=[verified_by])
     revoker = relationship("UserModel", foreign_keys=[revoked_by])
 
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
@@ -16,7 +15,6 @@ class SecretariasPage extends StatefulWidget {
 }
 
 class _SecretariasPageState extends State<SecretariasPage> {
-  final _storage = const FlutterSecureStorage();
   final _formKey = GlobalKey<FormState>();
   final _slugController = TextEditingController();
   final _nomeController = TextEditingController();
@@ -216,7 +214,7 @@ class _SecretariasPageState extends State<SecretariasPage> {
   }
 
   Future<String?> _token() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return null;

@@ -5,6 +5,7 @@ from src.api.dependencies import get_current_user, require_roles
 from src.infra.database.models import UserModel
 from src.infra.database.mysql_db import get_db
 from src.schemas.permit_schema import (
+    AdditionalRequirementRequest,
     AttachmentResponse,
     AttachmentCreateRequest,
     AuthorizationTemplateRequest,
@@ -12,15 +13,19 @@ from src.schemas.permit_schema import (
     CommentCreateRequest,
     CommentResponse,
     DamAttachmentRequest,
+    EventCredentialInspectionRequest,
     EventCredentialResponse,
     EventCredentialRevokeRequest,
     EventCredentialValidationResponse,
     EventPublicRangeRequest,
     EventPublicRangeResponse,
+    EventTypeRequest,
+    EventTypeResponse,
     InspectionCompleteRequest,
     InspectionScheduleRequest,
     PermitCancelRequest,
     PermitCreateRequest,
+    PermitReclassifyRequest,
     PermitResponse,
     QuestionCreateRequest,
     RequirementAttachmentRequest,
@@ -75,6 +80,33 @@ def list_question_definitions(
     _: UserModel = Depends(get_current_user),
 ):
     return PermitService(db).list_question_definitions()
+
+
+@router.get("/event-types", response_model=list[EventTypeResponse])
+def list_event_types(
+    db: Session = Depends(get_db),
+    _: UserModel = Depends(get_current_user),
+):
+    return PermitService(db).list_event_types()
+
+
+@router.post("/event-types", response_model=EventTypeResponse)
+def create_event_type(
+    payload: EventTypeRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).create_event_type(payload, current_user)
+
+
+@router.put("/event-types/{event_type_id}", response_model=EventTypeResponse)
+def update_event_type(
+    event_type_id: int,
+    payload: EventTypeRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+):
+    return PermitService(db).update_event_type(event_type_id, payload, current_user)
 
 
 @router.get("/public-ranges", response_model=list[EventPublicRangeResponse])
@@ -208,6 +240,26 @@ def attach_requirement_document_to_permit_request(
     return PermitService(db).attach_requirement_document(request_id, payload, current_user)
 
 
+@router.post("/{request_id}/requirements", response_model=RequirementResponse)
+def create_additional_requirement(
+    request_id: int,
+    payload: AdditionalRequirementRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).create_additional_requirement(request_id, payload, current_user)
+
+
+@router.patch("/{request_id}/event-type", response_model=PermitResponse)
+def reclassify_permit_request(
+    request_id: int,
+    payload: PermitReclassifyRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).reclassify_request_event_type(request_id, payload, current_user)
+
+
 @router.post("/{request_id}/final-permit-attachment", response_model=EventCredentialResponse)
 def attach_final_permit_to_request(
     request_id: int,
@@ -266,6 +318,15 @@ def complete_requirement_inspection(
     return PermitService(db).complete_inspection(requirement_id, payload, current_user)
 
 
+@router.patch("/requirements/{requirement_id}/inspection-confirm", response_model=RequirementResponse)
+def confirm_requirement_inspection(
+    requirement_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).confirm_inspection(requirement_id, current_user)
+
+
 @credential_router.get("/{codigo_publico}/validate", response_model=EventCredentialValidationResponse)
 def validate_event_credential(
     codigo_publico: str,
@@ -273,6 +334,16 @@ def validate_event_credential(
     db: Session = Depends(get_db),
 ):
     return PermitService(db).validate_event_credential(codigo_publico, t)
+
+
+@credential_router.post("/{codigo_publico}/inspect", response_model=EventCredentialValidationResponse)
+def inspect_event_credential(
+    codigo_publico: str,
+    payload: EventCredentialInspectionRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria", "operador_secretaria")),
+):
+    return PermitService(db).inspect_event_credential(codigo_publico, payload, current_user)
 
 
 @credential_router.post("/{credential_id}/revoke", response_model=EventCredentialResponse)

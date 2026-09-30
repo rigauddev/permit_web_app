@@ -22,6 +22,12 @@ class CustomAppBar extends ConsumerWidget implements PreferredSizeWidget {
       title: Text(title),
       automaticallyImplyLeading: !hideDrawerButton,
       actions: [
+        if (Navigator.canPop(context))
+          IconButton(
+            tooltip: 'Voltar',
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back),
+          ),
         if (user != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),

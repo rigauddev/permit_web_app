@@ -47,7 +47,7 @@ class RecoveryPassword extends HookConsumerWidget {
                 children: [
                   Image.asset(
                     'assets/images/logo_prefeitura_1.png',
-                    width: size.width < 600 ? size.width * 0.6 : 250,
+                    width: size.width < 600 ? size.width * 0.68 : 340,
                   ),
                   const SizedBox(height: 20),
                   ConstrainedBox(

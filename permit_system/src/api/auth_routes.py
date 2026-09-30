@@ -5,6 +5,7 @@ from src.api.dependencies import get_current_user, require_roles
 from src.infra.database.models import UserModel
 from src.infra.database.mysql_db import get_db
 from src.schemas.auth_schema import (
+    ChangePasswordRequest,
     EmailVerificationConfirmRequest,
     EmailVerificationConfirmResponse,
     EmailVerificationStartRequest,
@@ -25,7 +26,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=LoginStartResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    return AuthService(db).start_login(str(payload.email), payload.senha, payload.access_type)
+    identifier = payload.identifier or payload.email or ""
+    return AuthService(db).start_login(identifier, payload.senha, payload.access_type, payload.client_type)
 
 
 @router.post("/mfa/generate", response_model=MfaGenerateResponse)
@@ -54,7 +56,7 @@ def register(payload: UserCreateRequest, db: Session = Depends(get_db)):
         payload,
         force_role="cidadao",
         force_secretaria=None,
-        require_email_verification=True,
+        require_email_verification=False,
     )
 
 
@@ -62,17 +64,9 @@ def register(payload: UserCreateRequest, db: Session = Depends(get_db)):
 def create_company_user(
     payload: UserCreateRequest,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+    current_user: UserModel = Depends(require_roles("admin")),
 ):
-    secretaria = payload.secretaria
-    if current_user.role.slug == "gestor_secretaria":
-        if payload.role == "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Gestor de secretaria não pode criar administrador",
-            )
-        secretaria = current_user.secretaria.slug if current_user.secretaria else None
-    return AuthService(db).create_user(payload, force_secretaria=secretaria)
+    return AuthService(db).create_user(payload, force_secretaria=payload.secretaria)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -89,15 +83,21 @@ def update_me(
     return AuthService(db).update_current_user(current_user, payload)
 
 
+@router.post("/change-password", response_model=TokenResponse)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    return AuthService(db).change_password(current_user, payload)
+
+
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+    current_user: UserModel = Depends(require_roles("admin")),
 ):
-    query = db.query(UserModel)
-    if current_user.role.slug == "gestor_secretaria":
-        query = query.filter(UserModel.secretaria_id == current_user.secretaria_id)
-    users = query.order_by(UserModel.nome).all()
+    users = db.query(UserModel).order_by(UserModel.nome).all()
     return [AuthService.to_response(user) for user in users]
 
 
@@ -106,6 +106,6 @@ def update_user(
     user_id: int,
     payload: UserAdminUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(require_roles("admin", "gestor_secretaria")),
+    current_user: UserModel = Depends(require_roles("admin")),
 ):
     return AuthService(db).update_user_by_admin(user_id, payload, current_user)

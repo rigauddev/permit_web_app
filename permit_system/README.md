@@ -87,3 +87,21 @@ Usuários de teste criados pelo seed:
 - `gestor@prefeitura.local`
 
 Senha padrão: `123456`.
+
+### Cenário de homologação do Acesso à Orla
+
+O mesmo comando cria e atualiza um cenário ativo para a Orla de Guaibim:
+
+- `admin@prefeitura.local` — administrador do sistema;
+- `turista@orla.teste.local` — turista com a placa `GUA1B26` autorizada;
+- `pousada@orla.teste.local` — Pousada Mar de Guaibim, aprovada na área da Orla;
+- `operador_dmtran@prefeitura.local` — operador de fiscalização do DMTRAN, credencial `DMTRAN-ORLA-OPERADOR`;
+- `gestor_dmtran@prefeitura.local` — gestão do DMTRAN, credencial `DMTRAN-ORLA-GESTOR`.
+
+A senha desses usuários é `123456`. O seed deixa ativo somente o serviço **Acesso à Orla** nesta homologação e pode ser executado mais de uma vez sem duplicar o cenário.
+
+Para carregar apenas os dados necessários para a homologação da Orla, sem importar solicitações históricas de Alvarás, execute:
+
+```bash
+python scripts/seed_orla.py
+```

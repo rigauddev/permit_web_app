@@ -111,3 +111,11 @@ data/: modelos compartilhados
 features/: organização por funcionalidades
 
 presentation/: widgets reutilizáveis
+
+
+
+# rodare app com testes
+
+docker compose down -v
+docker compose up --build -d
+docker compose exec api python scripts/seed.py

@@ -1,8 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/permit_api_service.dart';
+import '../../../core/session_store.dart';
 import '../../permit_request/models/permit_request_state.dart';
 
 final permitRequestControllerProvider =
@@ -13,13 +13,58 @@ final permitRequestControllerProvider =
 class PermitRequestController extends StateNotifier<PermitRequestState> {
   PermitRequestController() : super(PermitRequestState.initial());
 
-  void initializeQuestions(List<Map<String, dynamic>> newQuestions) {
+  void initializeQuestions(
+    List<Map<String, dynamic>> newQuestions, {
+    List<Map<String, dynamic>> eventTypes = const [],
+  }) {
     state = state.copyWith(
+      allQuestions: newQuestions,
       questions: newQuestions,
-      totalSteps: 4 + newQuestions.length,
+      eventTypes: eventTypes,
+      totalSteps: 5 + newQuestions.length,
       currentStep: 0,
       submittedProtocol: null,
     );
+  }
+
+  void selectEventType(Map<String, dynamic> eventType) {
+    final key = eventType['key']?.toString() ?? '';
+    final name = eventType['name']?.toString() ?? '';
+    final filteredQuestions = _questionsForEventType(key);
+    final allowedKeys =
+        filteredQuestions
+            .map((question) => question['key']?.toString() ?? '')
+            .where((questionKey) => questionKey.isNotEmpty)
+            .toSet();
+    final updatedEventData =
+        Map<String, String>.from(state.eventData)
+          ..['tipo_evento'] = key
+          ..['tipo_evento_nome'] = name;
+    state = state.copyWith(
+      eventData: updatedEventData,
+      questions: filteredQuestions,
+      answers: {
+        for (final entry in state.answers.entries)
+          if (allowedKeys.contains(entry.key)) entry.key: entry.value,
+      },
+      answerDetails: {
+        for (final entry in state.answerDetails.entries)
+          if (allowedKeys.contains(entry.key)) entry.key: entry.value,
+      },
+      totalSteps: 5 + filteredQuestions.length,
+      currentStep:
+          state.currentStep > 2
+              ? 2
+              : state.currentStep.clamp(0, 4 + filteredQuestions.length),
+    );
+  }
+
+  List<Map<String, dynamic>> _questionsForEventType(String eventTypeKey) {
+    if (eventTypeKey.isEmpty) return state.allQuestions;
+    return state.allQuestions.where((question) {
+      final keys = List<String>.from(question['event_type_keys'] ?? const []);
+      return keys.isEmpty || keys.contains(eventTypeKey);
+    }).toList();
   }
 
   Map<String, dynamic> toDraftJson() {
@@ -46,8 +91,21 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       answers: _boolMap(draft['answers']),
       answerDetails: _dynamicMap(draft['answerDetails']),
       attachments: const [],
+      documentAttachments: const {},
       submittedProtocol: null,
     );
+    final eventTypeKey = state.eventData['tipo_evento'];
+    if (eventTypeKey != null && eventTypeKey.isNotEmpty) {
+      final eventType = state.eventTypes.firstWhere(
+        (item) => item['key']?.toString() == eventTypeKey,
+        orElse:
+            () => {
+              'key': eventTypeKey,
+              'name': state.eventData['tipo_evento_nome'] ?? eventTypeKey,
+            },
+      );
+      selectEventType(eventType);
+    }
   }
 
   void updateAnswer(String questionKey, dynamic answer) {
@@ -91,6 +149,11 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     String? deadlineBusinessDays,
     String? eventLatitude,
     String? eventLongitude,
+    String? eventTypeKey,
+    String? eventTypeName,
+    String? eventSpaceType,
+    bool? localWithoutPermit,
+    String? applicantNotes,
   }) {
     final updated = Map<String, String>.from(state.eventData);
     if (eventName != null) updated['nome_evento'] = eventName;
@@ -113,6 +176,15 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     }
     if (eventLatitude != null) updated['latitude_evento'] = eventLatitude;
     if (eventLongitude != null) updated['longitude_evento'] = eventLongitude;
+    if (eventTypeKey != null) updated['tipo_evento'] = eventTypeKey;
+    if (eventTypeName != null) updated['tipo_evento_nome'] = eventTypeName;
+    if (eventSpaceType != null) updated['tipo_espaco_evento'] = eventSpaceType;
+    if (localWithoutPermit != null) {
+      updated['local_sem_alvara'] = localWithoutPermit.toString();
+    }
+    if (applicantNotes != null) {
+      updated['observacoes_solicitante'] = applicantNotes;
+    }
     if (termoAceite != null) {
       updated['termo_aceite'] = termoAceite.toString();
     }
@@ -135,6 +207,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
               )
               .toList(),
     );
+  }
+
+  void setDocumentAttachment(String key, PlatformFile file) {
+    state = state.copyWith(
+      documentAttachments: {...state.documentAttachments, key: file},
+    );
+  }
+
+  void removeDocumentAttachment(String key) {
+    final updated = Map<String, PlatformFile>.from(state.documentAttachments)
+      ..remove(key);
+    state = state.copyWith(documentAttachments: updated);
   }
 
   void nextStep() {
@@ -182,24 +266,31 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
 
   String? validateCurrentStep() {
     if (state.currentStep == 0) {
-      for (final field in [
-        'nome',
-        'cpf_cnpj',
-        'telefone',
-        'email',
-        'endereco',
-      ]) {
+      for (final field in ['nome', 'cpf_cnpj', 'telefone', 'endereco']) {
         if ((state.responsibleData[field] ?? '').trim().isEmpty) {
           return 'Preencha todos os dados do responsável.';
         }
       }
     }
 
-    if (state.currentStep == 1 && state.attachments.length < 3) {
-      return 'Anexe RG/CPF, comprovante de residência e alvará do local.';
+    if (state.currentStep == 1) {
+      final docs = state.documentAttachments;
+      final hasSingleId = docs.containsKey('documento_identificacao');
+      final hasPhotoId =
+          docs.containsKey('documento_identificacao_frente') &&
+          docs.containsKey('documento_identificacao_verso');
+      if (!hasSingleId && !hasPhotoId) {
+        return 'Anexe RG/CNH em arquivo único ou tire foto da frente e do verso.';
+      }
+      if (!docs.containsKey('comprovante_residencia')) {
+        return 'Anexe ou tire foto do comprovante de residência.';
+      }
     }
 
     if (state.currentStep == 2) {
+      if ((state.eventData['tipo_evento'] ?? '').trim().isEmpty) {
+        return 'Selecione o tipo de evento.';
+      }
       for (final field in [
         'nome_evento',
         'data_evento',
@@ -207,10 +298,26 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         'publico_estimado',
         'horario_inicio',
         'horario_termino',
+        'tipo_espaco_evento',
+        'latitude_evento',
+        'longitude_evento',
       ]) {
         if ((state.eventData[field] ?? '').trim().isEmpty) {
           return 'Preencha todos os dados obrigatórios do evento.';
         }
+      }
+      if (double.tryParse(state.eventData['latitude_evento'] ?? '') == null ||
+          double.tryParse(state.eventData['longitude_evento'] ?? '') == null) {
+        return 'Busque e selecione o endereço do evento para salvar latitude e longitude.';
+      }
+      final docs = state.documentAttachments;
+      final usesAddressProof = state.eventData['local_sem_alvara'] == 'true';
+      if (usesAddressProof) {
+        if (!docs.containsKey('comprovante_endereco_local')) {
+          return 'Anexe o comprovante de endereço do local do evento.';
+        }
+      } else if (!docs.containsKey('alvara_funcionamento_local')) {
+        return 'Anexe o alvará de funcionamento do local ou marque que usará comprovante de endereço.';
       }
       final eventDate = DateTime.tryParse(state.eventData['data_evento'] ?? '');
       if (eventDate == null) {
@@ -229,7 +336,8 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
     }
 
-    if (state.currentStep >= 3 && state.currentStep < state.totalSteps - 1) {
+    final observationsStep = state.totalSteps - 2;
+    if (state.currentStep >= 3 && state.currentStep < observationsStep) {
       final question = state.questions[state.currentStep - 3];
       final key = question['key'] as String;
       if (!state.answers.containsKey(key)) {
@@ -271,13 +379,21 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
 
   Future<String?> submitRequest(BuildContext context) async {
     if (state.isSubmitting) return null;
-    state = state.copyWith(isSubmitting: true);
+    state = state.copyWith(
+      isSubmitting: true,
+      uploadProgressMessage: 'Preparando envio da solicitação...',
+    );
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'access_token');
+      final token = await const SessionStore().read().then(
+        (s) => s?.accessToken,
+      );
       if (token == null || token.isEmpty) {
         throw PermitApiException('Sessão expirada. Faça login novamente.');
       }
+      final documentUploads = await _uploadInitialDocuments(token);
+      state = state.copyWith(
+        uploadProgressMessage: 'Registrando solicitação na prefeitura...',
+      );
       final response = await PermitApiService().createRequest(
         accessToken: token,
         responsibleData: state.responsibleData,
@@ -285,9 +401,14 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         answers: state.answers,
         answerDetails: state.answerDetails,
         attachmentNames: state.attachments.map((file) => file.name).toList(),
+        documentAttachments: documentUploads,
       );
       final protocolo = response['protocolo'] as String? ?? '';
-      state = state.copyWith(isSubmitting: false, submittedProtocol: protocolo);
+      state = state.copyWith(
+        isSubmitting: false,
+        clearUploadProgressMessage: true,
+        submittedProtocol: protocolo,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Solicitação enviada. Protocolo: $protocolo')),
@@ -295,7 +416,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       return protocolo;
     } catch (error) {
-      state = state.copyWith(isSubmitting: false);
+      state = state.copyWith(
+        isSubmitting: false,
+        clearUploadProgressMessage: true,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
@@ -303,6 +427,31 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
       }
       return null;
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _uploadInitialDocuments(
+    String token,
+  ) async {
+    final api = PermitApiService();
+    final uploads = <Map<String, dynamic>>[];
+    for (final entry in state.documentAttachments.entries) {
+      state = state.copyWith(
+        uploadProgressMessage: 'Enviando arquivo: ${entry.value.name}',
+      );
+      final upload = await api.uploadFile(
+        accessToken: token,
+        kind: 'solicitacoes/documentos',
+        file: entry.value,
+      );
+      uploads.add({
+        'tipo_documento': entry.key,
+        'nome_arquivo': upload['file_name']?.toString() ?? entry.value.name,
+        'arquivo_url': upload['file_url']?.toString() ?? '',
+        'mime_type': upload['mime_type']?.toString(),
+        'tamanho_bytes': upload['size_bytes'],
+      });
+    }
+    return uploads;
   }
 
   String? _validateRequiredQuestionFields(
@@ -320,11 +469,18 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
     for (final entry in requiredFields.entries) {
       if (entry.value != true) continue;
       final fieldValue = answer[_fieldKey(entry.key)];
-      if (fieldValue == null || fieldValue.toString().trim().isEmpty) {
+      if (_isEmptyRequiredValue(fieldValue)) {
         return 'Preencha o campo obrigatório: ${entry.key}.';
       }
     }
     return null;
+  }
+
+  bool _isEmptyRequiredValue(Object? value) {
+    if (value == null) return true;
+    if (value is Iterable) return value.isEmpty;
+    if (value is Map) return value.isEmpty;
+    return value.toString().trim().isEmpty;
   }
 
   String _fieldKey(String label) {
@@ -335,6 +491,10 @@ class PermitRequestController extends StateNotifier<PermitRequestState> {
         return 'data';
       case 'Anexar Documento':
         return 'arquivo';
+      case 'Rota do Evento':
+        return 'percurso_ruas';
+      case 'Opções selecionáveis':
+        return 'opcoes_selecionadas';
       case 'Assinatura impressa':
       case 'Assinatura gov.br':
         return 'assinatura';

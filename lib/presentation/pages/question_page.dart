@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
@@ -21,6 +20,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
 
   final List<Map<String, dynamic>> _perguntas = [];
   final List<Map<String, dynamic>> _publicRanges = [];
+  final List<Map<String, dynamic>> _eventTypes = [];
 
   String? _key;
   String? _pergunta;
@@ -34,18 +34,35 @@ class _PerguntasPageState extends State<PerguntasPage> {
   int _displayOrder = 0;
   bool _requerVistoria = false;
   bool _vistoriaExigeFoto = false;
+  bool _questionRequired = false;
   final List<String> _checklistVistoria = [];
   final TextEditingController _checklistController = TextEditingController();
   final TextEditingController _rangeLabelController = TextEditingController();
   final TextEditingController _rangeMinController = TextEditingController();
   final TextEditingController _rangeMaxController = TextEditingController();
   final TextEditingController _rangeDaysController = TextEditingController();
+  final TextEditingController _eventTypeNameController =
+      TextEditingController();
+  final TextEditingController _eventTypeKeyController = TextEditingController();
+  final TextEditingController _eventTypeDescriptionController =
+      TextEditingController();
+  final TextEditingController _eventTypeExamplesController =
+      TextEditingController();
+  final TextEditingController _customResponseFieldController =
+      TextEditingController();
+  final TextEditingController _selectableOptionController =
+      TextEditingController();
   final Map<String, bool> _selectedResponseFields = {};
   final Map<String, bool> _requiredResponseFields = {};
+  final List<String> _customResponseFields = [];
+  final List<String> _selectableOptions = [];
+  final Set<String> _selectedEventTypeKeys = {};
   int _formVersion = 0;
   int? _rangeEditId;
+  int? _eventTypeEditId;
   bool _isSaving = false;
   bool _isSavingRange = false;
+  bool _isSavingEventType = false;
 
   int? _indiceEdicao;
 
@@ -68,6 +85,8 @@ class _PerguntasPageState extends State<PerguntasPage> {
     'Texto',
     'Anexar Documento',
     'Calendário',
+    'Rota do Evento',
+    'Opções selecionáveis',
     'Botão de Baixar',
     'Assinatura impressa',
     'Assinatura gov.br',
@@ -78,6 +97,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
     super.initState();
     _fetchQuestionDefinitions();
     _fetchPublicRanges();
+    _fetchEventTypes();
   }
 
   @override
@@ -87,6 +107,12 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _rangeMinController.dispose();
     _rangeMaxController.dispose();
     _rangeDaysController.dispose();
+    _eventTypeNameController.dispose();
+    _eventTypeKeyController.dispose();
+    _eventTypeDescriptionController.dispose();
+    _eventTypeExamplesController.dispose();
+    _customResponseFieldController.dispose();
+    _selectableOptionController.dispose();
     super.dispose();
   }
 
@@ -111,7 +137,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
         padding: const EdgeInsets.all(16),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
+            constraints: const BoxConstraints(maxWidth: 1180),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -120,112 +146,133 @@ class _PerguntasPageState extends State<PerguntasPage> {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
-                Form(
-                  key: _formKey,
-                  child: Wrap(
-                    runSpacing: 16,
-                    spacing: 16,
-                    children: [
-                      _buildTextField(
-                        label: 'Chave de identificação',
-                        onChanged: (v) => _key = v,
-                        initialValue: _key,
-                        hintText: 'Exemplo: tem_som',
-                      ),
-                      _buildTextField(
-                        label: 'Pergunta',
-                        onChanged: (v) {
-                          _pergunta = v;
-                          if (_key == null || _key!.isEmpty) {
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 860),
+                  child: Form(
+                    key: _formKey,
+                    child: Wrap(
+                      runSpacing: 16,
+                      spacing: 16,
+                      children: [
+                        _buildTextField(
+                          label: 'Pergunta',
+                          onChanged: (v) {
+                            _pergunta = v;
                             _key = _generateKeyFromPergunta(v);
-                          }
-                        },
-                        initialValue: _pergunta,
-                      ),
-                      _buildTextField(
-                        label: 'Descrição e orientação ao cidadão',
-                        onChanged: (v) => _descricao = v,
-                        maxLines: 3,
-                        initialValue: _descricao,
-                        hintText:
-                            'Explique quando marcar Sim, como preencher o modelo e quais documentos devem ser anexados.',
-                      ),
-                      _buildTextField(
-                        label: 'Nome do modelo para baixar',
-                        onChanged: (v) => _modeloDocumentoNome = v,
-                        initialValue: _modeloDocumentoNome,
-                        hintText: 'Exemplo: Ofício de bloqueio de via',
-                      ),
-                      _buildTextField(
-                        label: 'URL ou referência do modelo',
-                        onChanged: (v) => _modeloDocumentoUrl = v,
-                        initialValue: _modeloDocumentoUrl,
-                        hintText:
-                            'Exemplo: assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf',
-                      ),
-                      _buildModelUploadButton(),
-                      _buildDropdown(
-                        'Secretaria',
-                        _secretaria,
-                        _secretarias,
-                        (v) => _secretaria = v,
-                      ),
-                      _buildTextField(
-                        label: 'Prazo interno de resposta (dias úteis)',
-                        onChanged:
-                            (v) =>
-                                _prazoRespostaDiasUteis =
-                                    int.tryParse(v.trim()) ?? 2,
-                        initialValue: _prazoRespostaDiasUteis.toString(),
-                        hintText: 'Exemplo: 2',
-                      ),
-                      _buildTextField(
-                        label: 'Ordem da pergunta',
-                        onChanged:
-                            (v) => _displayOrder = int.tryParse(v.trim()) ?? 0,
-                        initialValue: _displayOrder.toString(),
-                        hintText: 'Exemplo: 10',
-                      ),
-                      _buildDropdown(
-                        'Serviço',
-                        _tipoFormulario,
-                        _tiposFormulario,
-                        (v) => _tipoFormulario = v,
-                      ),
-                      if (_tipoFormulario == 'Alvará de Eventos') ...[
-                        const Text(
-                          'Para serviço de alvará, selecione também a secretaria responsável por gerar o DAM.',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                          },
+                          initialValue: _pergunta,
                         ),
-                        const SizedBox(height: 8),
-                        _buildDropdown(
-                          'Secretaria geradora do DAM',
-                          _secretariaDam,
-                          _secretariasDam,
-                          (v) => _secretariaDam = v,
-                        ),
-                      ],
-                      _buildResponseFieldSelection(),
-                      _buildInspectionChecklistSection(),
-                      SizedBox(
-                        width: isMobile ? double.infinity : 200,
-                        child: ElevatedButton(
-                          onPressed:
-                              _isSaving ? null : _adicionarOuAtualizarPergunta,
-                          child: Text(
-                            _isSaving
-                                ? 'Salvando...'
-                                : _indiceEdicao != null
-                                ? 'Atualizar'
-                                : 'Salvar',
+                        SizedBox(
+                          width:
+                              MediaQuery.of(context).size.width < 600
+                                  ? double.infinity
+                                  : 400,
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Pergunta obrigatória'),
+                            subtitle: const Text(
+                              'Quando marcada, o cidadão não poderá responder Não.',
+                            ),
+                            value: _questionRequired,
+                            onChanged:
+                                (value) =>
+                                    setState(() => _questionRequired = value),
                           ),
                         ),
-                      ),
-                    ],
+                        _buildTextField(
+                          label: 'Descrição e orientação ao cidadão',
+                          onChanged: (v) => _descricao = v,
+                          maxLines: 3,
+                          initialValue: _descricao,
+                          hintText:
+                              'Explique quando marcar Sim, como preencher o modelo e quais documentos devem ser anexados.',
+                        ),
+                        _buildTextField(
+                          label: 'Nome do modelo para baixar',
+                          onChanged: (v) => _modeloDocumentoNome = v,
+                          initialValue: _modeloDocumentoNome,
+                          hintText: 'Exemplo: Ofício de bloqueio de via',
+                        ),
+                        _buildTextField(
+                          label: 'URL ou referência do modelo',
+                          onChanged: (v) => _modeloDocumentoUrl = v,
+                          initialValue: _modeloDocumentoUrl,
+                          hintText:
+                              'Exemplo: assets/docs/arquivos/solicitacao_de_bloqueio_de_via.pdf',
+                        ),
+                        _buildModelUploadButton(),
+                        _buildDropdown(
+                          'Secretaria',
+                          _secretaria,
+                          _secretarias,
+                          (v) => _secretaria = v,
+                        ),
+                        _buildTextField(
+                          label: 'Prazo interno de resposta (dias úteis)',
+                          onChanged:
+                              (v) =>
+                                  _prazoRespostaDiasUteis =
+                                      int.tryParse(v.trim()) ?? 2,
+                          initialValue: _prazoRespostaDiasUteis.toString(),
+                          hintText: 'Exemplo: 2',
+                        ),
+                        _buildTextField(
+                          label: 'Ordem da pergunta',
+                          onChanged:
+                              (v) =>
+                                  _displayOrder = int.tryParse(v.trim()) ?? 0,
+                          initialValue: _displayOrder.toString(),
+                          hintText: 'Exemplo: 10',
+                        ),
+                        _buildDropdown(
+                          'Serviço',
+                          _tipoFormulario,
+                          _tiposFormulario,
+                          (v) => _tipoFormulario = v,
+                        ),
+                        if (_tipoFormulario == 'Alvará de Eventos') ...[
+                          const Text(
+                            'Para serviço de alvará, selecione também a secretaria responsável por gerar o DAM.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildDropdown(
+                            'Secretaria geradora do DAM',
+                            _secretariaDam,
+                            _secretariasDam,
+                            (v) => _secretariaDam = v,
+                          ),
+                        ],
+                        _buildResponseFieldSelection(),
+                        _buildEventTypeSelection(),
+                        _buildInspectionChecklistSection(),
+                        SizedBox(
+                          width: isMobile ? double.infinity : 200,
+                          child: ElevatedButton(
+                            onPressed:
+                                _isSaving
+                                    ? null
+                                    : _adicionarOuAtualizarPergunta,
+                            child: Text(
+                              _isSaving
+                                  ? 'Salvando...'
+                                  : _indiceEdicao != null
+                                  ? 'Atualizar'
+                                  : 'Salvar',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
                 _buildPublicRangeSection(),
+                const SizedBox(height: 32),
+                _buildEventTypesManagerSection(),
                 const SizedBox(height: 32),
                 const Text(
                   'Perguntas Cadastradas',
@@ -234,62 +281,110 @@ class _PerguntasPageState extends State<PerguntasPage> {
                 const SizedBox(height: 16),
                 _perguntas.isEmpty
                     ? const Text('Nenhuma pergunta cadastrada.')
-                    : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('Chave')),
-                          DataColumn(label: Text('Pergunta')),
-                          DataColumn(label: Text('Secretaria')),
-                          DataColumn(label: Text('Secretaria DAM')),
-                          DataColumn(label: Text('Prazo')),
-                          DataColumn(label: Text('Ordem')),
-                          DataColumn(label: Text('Respostas')),
-                          DataColumn(label: Text('Vistoria')),
-                          DataColumn(label: Text('Tipo')),
-                          DataColumn(label: Text('Ações')),
-                        ],
-                        rows: List.generate(_perguntas.length, (index) {
-                          final p = _perguntas[index];
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(p['key'] ?? '')),
-                              DataCell(Text(p['pergunta']!)),
-                              DataCell(Text(p['secretaria']!)),
-                              DataCell(Text(p['secretaria_dam'] ?? '')),
-                              DataCell(
-                                Text(
-                                  '${p['prazo_resposta_dias_uteis'] ?? 2} dia(s) úteis',
-                                ),
+                    : LayoutBuilder(
+                      builder: (context, constraints) {
+                        return SizedBox(
+                          width: double.infinity,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: constraints.maxWidth,
                               ),
-                              DataCell(Text('${p['display_order'] ?? 0}')),
-                              DataCell(Text(_formatResponseSummary(p))),
-                              DataCell(
-                                Text(
-                                  p['requer_vistoria'] == true
-                                      ? '${(p['checklist_vistoria'] as List<dynamic>? ?? []).length} item(ns)'
-                                      : 'Não',
-                                ),
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text('Chave')),
+                                  DataColumn(label: Text('Pergunta')),
+                                  DataColumn(label: Text('Secretaria')),
+                                  DataColumn(label: Text('Secretaria DAM')),
+                                  DataColumn(label: Text('Prazo')),
+                                  DataColumn(label: Text('Ordem')),
+                                  DataColumn(label: Text('Respostas')),
+                                  DataColumn(label: Text('Vistoria')),
+                                  DataColumn(label: Text('Categorias')),
+                                  DataColumn(label: Text('Tipo')),
+                                  DataColumn(label: Text('Ações')),
+                                ],
+                                rows: List.generate(_perguntas.length, (index) {
+                                  final p = _perguntas[index];
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(p['key'] ?? '')),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['pergunta']?.toString() ?? '',
+                                          width: 260,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['secretaria']?.toString() ?? '',
+                                          width: 180,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['secretaria_dam']?.toString() ?? '',
+                                          width: 180,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          '${p['prazo_resposta_dias_uteis'] ?? 2} dia(s) úteis',
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text('${p['display_order'] ?? 0}'),
+                                      ),
+                                      DataCell(
+                                        _TableCellText(
+                                          _formatResponseSummary(p),
+                                          width: 240,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          p['requer_vistoria'] == true
+                                              ? '${(p['checklist_vistoria'] as List<dynamic>? ?? []).length} item(ns)'
+                                              : 'Não',
+                                        ),
+                                      ),
+                                      DataCell(
+                                        _TableCellText(
+                                          _formatEventTypeSummary(p),
+                                          width: 190,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        _TableCellText(
+                                          p['tipo']?.toString() ?? '',
+                                          width: 160,
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Row(
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit),
+                                              onPressed:
+                                                  () => _editarPergunta(index),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete),
+                                              onPressed:
+                                                  () => _excluirPergunta(index),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }),
                               ),
-                              DataCell(Text(p['tipo']!)),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () => _editarPergunta(index),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () => _excluirPergunta(index),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }),
-                      ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
               ],
             ),
@@ -319,8 +414,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
         ),
         onChanged: onChanged,
         validator: (value) {
-          if ((label == 'Pergunta' || label == 'Chave de identificação') &&
-              (value == null || value.trim().isEmpty)) {
+          if (label == 'Pergunta' && (value == null || value.trim().isEmpty)) {
             return 'Este campo não pode ficar vazio.';
           }
           return null;
@@ -354,6 +448,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   Widget _buildResponseFieldSelection() {
+    final responseFields = [
+      ..._additionalResponseFields,
+      ..._customResponseFields,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -367,9 +465,51 @@ class _PerguntasPageState extends State<PerguntasPage> {
           style: TextStyle(fontSize: 12, color: Colors.black54),
         ),
         const SizedBox(height: 12),
+        SizedBox(
+          width:
+              MediaQuery.of(context).size.width < 600 ? double.infinity : 620,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customResponseFieldController,
+                  decoration: const InputDecoration(
+                    labelText: 'Criar novo tipo de resposta',
+                    hintText: 'Exemplo: Número do protocolo externo',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _addCustomResponseField(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: 'Adicionar tipo de resposta',
+                onPressed: _addCustomResponseField,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+        ),
+        if (_customResponseFields.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                _customResponseFields
+                    .map(
+                      (field) => InputChip(
+                        label: Text(field),
+                        onDeleted: () => _removeCustomResponseField(field),
+                      ),
+                    )
+                    .toList(),
+          ),
+        ],
+        const SizedBox(height: 12),
         Column(
           children:
-              _additionalResponseFields.map((field) {
+              responseFields.map((field) {
                 final selected = _selectedResponseFields[field] ?? false;
                 final required = _requiredResponseFields[field] ?? false;
                 return Column(
@@ -390,19 +530,28 @@ class _PerguntasPageState extends State<PerguntasPage> {
                     if (selected)
                       Padding(
                         padding: const EdgeInsets.only(left: 48.0, bottom: 8.0),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Checkbox(
-                              value: required,
-                              onChanged: (value) {
-                                setState(() {
-                                  _requiredResponseFields[field] =
-                                      value ?? false;
-                                });
-                              },
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: required,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _requiredResponseFields[field] =
+                                          value ?? false;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('Obrigatório'),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            const Text('Obrigatório'),
+                            if (field == 'Opções selecionáveis') ...[
+                              const SizedBox(height: 8),
+                              _buildSelectableOptionsEditor(),
+                            ],
                           ],
                         ),
                       ),
@@ -411,6 +560,115 @@ class _PerguntasPageState extends State<PerguntasPage> {
               }).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildEventTypeSelection() {
+    return Container(
+      width: MediaQuery.of(context).size.width < 600 ? double.infinity : 400,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD8E0D8)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Categorias de evento vinculadas',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Se nenhuma categoria for marcada, a pergunta será exibida para todos os tipos de evento.',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 8),
+          if (_eventTypes.isEmpty)
+            const Text(
+              'Categorias ainda não carregadas.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  _eventTypes.map((eventType) {
+                    final key = eventType['key']?.toString() ?? '';
+                    final selected = _selectedEventTypeKeys.contains(key);
+                    return FilterChip(
+                      label: Text(eventType['name']?.toString() ?? key),
+                      selected: selected,
+                      onSelected:
+                          (value) => setState(() {
+                            if (value) {
+                              _selectedEventTypeKeys.add(key);
+                            } else {
+                              _selectedEventTypeKeys.remove(key);
+                            }
+                          }),
+                    );
+                  }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectableOptionsEditor() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return SizedBox(
+      width: isMobile ? double.infinity : 560,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _selectableOptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Opção selecionável',
+                    hintText: 'Exemplo: Som ao vivo',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _addSelectableOption(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: 'Adicionar opção',
+                onPressed: _addSelectableOption,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_selectableOptions.isEmpty)
+            const Text(
+              'Inclua as opções que o cidadão poderá marcar.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  _selectableOptions
+                      .map(
+                        (option) => InputChip(
+                          label: Text(option),
+                          onDeleted:
+                              () => setState(
+                                () => _selectableOptions.remove(option),
+                              ),
+                        ),
+                      )
+                      .toList(),
+            ),
+        ],
+      ),
     );
   }
 
@@ -656,6 +914,125 @@ class _PerguntasPageState extends State<PerguntasPage> {
     );
   }
 
+  Widget _buildEventTypesManagerSection() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Categorias de evento',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Crie e edite os tipos usados no alvará de eventos. A descrição aparece para o cidadão antes da solicitação e ajuda a secretaria na análise.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _plainControllerField(
+                  _eventTypeNameController,
+                  'Nome da categoria',
+                  isMobile,
+                ),
+                _plainControllerField(
+                  _eventTypeKeyController,
+                  'Chave',
+                  isMobile,
+                  hint: 'exemplo: festa_popular',
+                ),
+                _plainControllerField(
+                  _eventTypeDescriptionController,
+                  'Descrição',
+                  isMobile,
+                  maxLines: 3,
+                ),
+                _plainControllerField(
+                  _eventTypeExamplesController,
+                  'Exemplos',
+                  isMobile,
+                  maxLines: 2,
+                ),
+                SizedBox(
+                  width: isMobile ? double.infinity : 180,
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        _isSavingEventType ? null : _saveEventTypeCategory,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(
+                      _isSavingEventType
+                          ? 'Salvando...'
+                          : _eventTypeEditId == null
+                          ? 'Adicionar'
+                          : 'Atualizar',
+                    ),
+                  ),
+                ),
+                if (_eventTypeEditId != null)
+                  TextButton(
+                    onPressed: _resetEventTypeForm,
+                    child: const Text('Cancelar edição'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_eventTypes.isEmpty)
+              const Text('Nenhuma categoria cadastrada.')
+            else
+              ..._eventTypes.map(
+                (eventType) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.category_outlined),
+                  title: Text(eventType['name']?.toString() ?? ''),
+                  subtitle: Text(
+                    [
+                      eventType['description']?.toString() ?? '',
+                      eventType['examples']?.toString() ?? '',
+                    ].where((value) => value.trim().isNotEmpty).join('\n'),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Editar categoria',
+                    onPressed: () => _editEventTypeCategory(eventType),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _plainControllerField(
+    TextEditingController controller,
+    String label,
+    bool isMobile, {
+    String? hint,
+    int maxLines = 1,
+  }) {
+    return SizedBox(
+      width: isMobile ? double.infinity : 240,
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
   Widget _rangeField(
     TextEditingController controller,
     String label,
@@ -686,12 +1063,13 @@ class _PerguntasPageState extends State<PerguntasPage> {
 
   void _adicionarOuAtualizarPergunta() {
     if (!_formKey.currentState!.validate()) return;
-    if (_key == null || _key!.trim().isEmpty) {
-      _showError('Informe uma chave válida para a pergunta.');
-      return;
-    }
     if (_pergunta == null || _pergunta!.trim().isEmpty) {
       _showError('Informe uma pergunta válida.');
+      return;
+    }
+    _key = _generateKeyFromPergunta(_pergunta!);
+    if (_key == null || _key!.trim().isEmpty) {
+      _showError('A pergunta precisa ter ao menos uma letra ou número.');
       return;
     }
     if (_secretaria == null || _secretaria!.isEmpty) {
@@ -722,16 +1100,22 @@ class _PerguntasPageState extends State<PerguntasPage> {
       _showError('Informe uma ordem entre 0 e 1000.');
       return;
     }
+    if (_selectedResponseFields['Opções selecionáveis'] == true &&
+        _selectableOptions.isEmpty) {
+      _showError('Inclua ao menos uma opção selecionável.');
+      return;
+    }
 
     final tiposResposta = [
       'Sim/Não',
-      ..._additionalResponseFields.where(
+      ..._responseFields.where(
         (field) => _selectedResponseFields[field] == true,
       ),
     ];
 
     final obrigatorios = {
-      for (final field in _additionalResponseFields)
+      if (_questionRequired) '__pergunta_obrigatoria': true,
+      for (final field in _responseFields)
         if (_selectedResponseFields[field] == true)
           field: _requiredResponseFields[field] == true,
     };
@@ -756,6 +1140,10 @@ class _PerguntasPageState extends State<PerguntasPage> {
       'secretaria_dam': _secretariaDam ?? '',
       'tipos_resposta': tiposResposta,
       'campos_obrigatorios': obrigatorios,
+      'opcoes_resposta':
+          _selectedResponseFields['Opções selecionáveis'] == true
+              ? _selectableOptions
+              : <String>[],
       'modelo_documento_nome': _modeloDocumentoNome?.trim(),
       'modelo_documento_url': _modeloDocumentoUrl?.trim(),
       'requer_vistoria': _requerVistoria,
@@ -763,6 +1151,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
       'prazo_resposta_dias_uteis': _prazoRespostaDiasUteis,
       'display_order': _displayOrder,
       'vistoria_exige_foto': _requerVistoria && _vistoriaExigeFoto,
+      'event_type_keys': _selectedEventTypeKeys.toList(),
     };
 
     final payload = Map<String, dynamic>.from(novaPergunta);
@@ -798,14 +1187,34 @@ class _PerguntasPageState extends State<PerguntasPage> {
           int.tryParse(pergunta['display_order']?.toString() ?? '') ?? 0;
       _requerVistoria = pergunta['requer_vistoria'] == true;
       _vistoriaExigeFoto = pergunta['vistoria_exige_foto'] == true;
+      _questionRequired =
+          (pergunta['campos_obrigatorios']
+              as Map<String, dynamic>?)?['__pergunta_obrigatoria'] ==
+          true;
       _checklistVistoria
         ..clear()
         ..addAll(List<String>.from(pergunta['checklist_vistoria'] ?? []));
       _checklistController.clear();
+      _selectableOptionController.clear();
+      _selectableOptions
+        ..clear()
+        ..addAll(List<String>.from(pergunta['opcoes_resposta'] ?? []));
+      _selectedEventTypeKeys
+        ..clear()
+        ..addAll(List<String>.from(pergunta['event_type_keys'] ?? []));
       _selectedResponseFields.clear();
       _requiredResponseFields.clear();
       final tiposResposta = List<String>.from(pergunta['tipos_resposta'] ?? []);
-      for (final field in _additionalResponseFields) {
+      _customResponseFields
+        ..clear()
+        ..addAll(
+          tiposResposta.where(
+            (field) =>
+                field != 'Sim/Não' &&
+                !_additionalResponseFields.contains(field),
+          ),
+        );
+      for (final field in _responseFields) {
         _selectedResponseFields[field] = tiposResposta.contains(field);
         _requiredResponseFields[field] =
             (pergunta['campos_obrigatorios']
@@ -831,8 +1240,14 @@ class _PerguntasPageState extends State<PerguntasPage> {
     _displayOrder = 0;
     _requerVistoria = false;
     _vistoriaExigeFoto = false;
+    _questionRequired = false;
     _checklistVistoria.clear();
     _checklistController.clear();
+    _customResponseFieldController.clear();
+    _selectableOptionController.clear();
+    _customResponseFields.clear();
+    _selectableOptions.clear();
+    _selectedEventTypeKeys.clear();
     _selectedResponseFields.clear();
     _requiredResponseFields.clear();
     _formVersion++;
@@ -843,12 +1258,84 @@ class _PerguntasPageState extends State<PerguntasPage> {
     final obrigatorios =
         (p['campos_obrigatorios'] as Map<String, dynamic>?)?.entries
             .where((entry) => entry.value == true)
+            .where((entry) => entry.key != '__pergunta_obrigatoria')
             .map((entry) => entry.key)
             .toList() ??
         <String>[];
-    final summary = tipos.join(', ');
-    if (obrigatorios.isEmpty) return summary;
-    return '$summary • Obrigatórios: ${obrigatorios.join(', ')}';
+    final options = List<String>.from(p['opcoes_resposta'] ?? const []);
+    final details = <String>[tipos.join(', ')];
+    if ((p['campos_obrigatorios']
+            as Map<String, dynamic>?)?['__pergunta_obrigatoria'] ==
+        true) {
+      details.add('Pergunta obrigatória');
+    }
+    if (options.isNotEmpty) {
+      details.add(
+        'Opções: ${options.take(3).join(', ')}${options.length > 3 ? '...' : ''}',
+      );
+    }
+    if (obrigatorios.isNotEmpty) {
+      details.add('Obrigatórios: ${obrigatorios.join(', ')}');
+    }
+    return details.join(' • ');
+  }
+
+  String _formatEventTypeSummary(Map<String, dynamic> p) {
+    final keys = List<String>.from(p['event_type_keys'] ?? const []);
+    if (keys.isEmpty) return 'Todas';
+    final labels =
+        keys.map((key) {
+          final matches = _eventTypes.where(
+            (eventType) => eventType['key'] == key,
+          );
+          return matches.isEmpty
+              ? key
+              : matches.first['name']?.toString() ?? key;
+        }).toList();
+    if (labels.length <= 2) return labels.join(', ');
+    return '${labels.take(2).join(', ')} +${labels.length - 2}';
+  }
+
+  List<String> get _responseFields => [
+    ..._additionalResponseFields,
+    ..._customResponseFields,
+  ];
+
+  void _addCustomResponseField() {
+    final value = _customResponseFieldController.text.trim();
+    if (value.isEmpty) return;
+    if (value == 'Sim/Não' ||
+        _additionalResponseFields.contains(value) ||
+        _customResponseFields.contains(value)) {
+      _showError('Este tipo de resposta já está disponível.');
+      return;
+    }
+    setState(() {
+      _customResponseFields.add(value);
+      _selectedResponseFields[value] = true;
+      _customResponseFieldController.clear();
+    });
+  }
+
+  void _addSelectableOption() {
+    final value = _selectableOptionController.text.trim();
+    if (value.isEmpty) return;
+    if (_selectableOptions.contains(value)) {
+      _showError('Esta opção já foi adicionada.');
+      return;
+    }
+    setState(() {
+      _selectableOptions.add(value);
+      _selectableOptionController.clear();
+    });
+  }
+
+  void _removeCustomResponseField(String field) {
+    setState(() {
+      _customResponseFields.remove(field);
+      _selectedResponseFields.remove(field);
+      _requiredResponseFields.remove(field);
+    });
   }
 
   void _showError(String message) {
@@ -864,8 +1351,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   Future<void> _fetchQuestionDefinitions() async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -902,8 +1388,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   }
 
   Future<String?> _accessToken() async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return null;
@@ -923,6 +1408,28 @@ class _PerguntasPageState extends State<PerguntasPage> {
         _publicRanges
           ..clear()
           ..addAll(ranges);
+      });
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    }
+  }
+
+  Future<void> _fetchEventTypes() async {
+    final token = await _accessToken();
+    if (token == null) return;
+    try {
+      final eventTypes = await PermitApiService().listEventTypes(
+        accessToken: token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _eventTypes
+          ..clear()
+          ..addAll(eventTypes);
       });
     } on PermitApiException catch (error) {
       if (error.statusCode == 401 && mounted) {
@@ -1024,9 +1531,95 @@ class _PerguntasPageState extends State<PerguntasPage> {
     });
   }
 
+  Future<void> _saveEventTypeCategory() async {
+    final token = await _accessToken();
+    if (token == null) return;
+    final name = _eventTypeNameController.text.trim();
+    final key =
+        _eventTypeKeyController.text.trim().isNotEmpty
+            ? _eventTypeKeyController.text.trim()
+            : _generateKeyFromPergunta(name);
+    if (name.isEmpty || key.isEmpty) {
+      _showError('Informe nome e chave da categoria.');
+      return;
+    }
+    final payload = {
+      'key': key,
+      'name': name,
+      'description': _eventTypeDescriptionController.text.trim(),
+      'examples': _eventTypeExamplesController.text.trim(),
+      'required_documents':
+          _eventTypeEditId == null
+              ? <Map<String, String>>[]
+              : (_eventTypes.firstWhere(
+                        (item) => item['id'] == _eventTypeEditId,
+                        orElse: () => const <String, dynamic>{},
+                      )['required_documents']
+                      as List<dynamic>? ??
+                  const []),
+      'display_order':
+          _eventTypeEditId == null
+              ? _eventTypes.length + 1
+              : _eventTypes.firstWhere(
+                    (item) => item['id'] == _eventTypeEditId,
+                    orElse: () => const <String, dynamic>{},
+                  )['display_order'] ??
+                  _eventTypes.length,
+      'is_active': true,
+    };
+    setState(() => _isSavingEventType = true);
+    try {
+      if (_eventTypeEditId == null) {
+        await PermitApiService().createEventType(
+          accessToken: token,
+          payload: payload,
+        );
+      } else {
+        await PermitApiService().updateEventType(
+          accessToken: token,
+          eventTypeId: _eventTypeEditId!,
+          payload: payload,
+        );
+      }
+      if (!mounted) return;
+      _resetEventTypeForm();
+      await _fetchEventTypes();
+      if (mounted) _showSuccess('Categoria salva.');
+    } on PermitApiException catch (error) {
+      if (error.statusCode == 401 && mounted) {
+        await SessionExpiration.logout(context);
+        return;
+      }
+      if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isSavingEventType = false);
+    }
+  }
+
+  void _editEventTypeCategory(Map<String, dynamic> eventType) {
+    setState(() {
+      _eventTypeEditId = eventType['id'] as int?;
+      _eventTypeNameController.text = eventType['name']?.toString() ?? '';
+      _eventTypeKeyController.text = eventType['key']?.toString() ?? '';
+      _eventTypeDescriptionController.text =
+          eventType['description']?.toString() ?? '';
+      _eventTypeExamplesController.text =
+          eventType['examples']?.toString() ?? '';
+    });
+  }
+
+  void _resetEventTypeForm() {
+    setState(() {
+      _eventTypeEditId = null;
+      _eventTypeNameController.clear();
+      _eventTypeKeyController.clear();
+      _eventTypeDescriptionController.clear();
+      _eventTypeExamplesController.clear();
+    });
+  }
+
   Future<void> _enviarParaAPISalvar(Map<String, dynamic> pergunta) async {
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -1057,8 +1650,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   Future<void> _enviarParaAPIEditar(Map<String, dynamic> pergunta) async {
     final questionId = pergunta['id'] as int?;
     if (questionId == null) return;
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -1093,8 +1685,7 @@ class _PerguntasPageState extends State<PerguntasPage> {
   ) async {
     final questionId = pergunta['id'] as int?;
     if (questionId == null) return;
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -1140,5 +1731,23 @@ class _PerguntasPageState extends State<PerguntasPage> {
     } else {
       Navigator.pushReplacementNamed(context, '/home');
     }
+  }
+}
+
+class _TableCellText extends StatelessWidget {
+  const _TableCellText(this.value, {required this.width});
+
+  final String value;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Tooltip(
+        message: value,
+        child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/permit_api_service.dart';
 import '../../core/session_expiration.dart';
@@ -16,8 +15,6 @@ class PermissionsPage extends StatefulWidget {
 }
 
 class _PermissionsPageState extends State<PermissionsPage> {
-  static const _storage = FlutterSecureStorage();
-
   final _api = PermitApiService();
   final Map<String, Set<String>> _rolePermissions = {};
   final Map<String, dynamic> _rolesBySlug = {};
@@ -171,7 +168,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
   }
 
   Future<String?> _token() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null || token.isEmpty) {
       if (mounted) await SessionExpiration.logout(context);
       return null;

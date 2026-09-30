@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/auth_service.dart';
 import '../../core/session_expiration.dart';
+import '../../core/session_store.dart';
 import '../../shared/widgets/app_scaffold.dart';
 
 class UserCreatePage extends StatefulWidget {
@@ -19,12 +19,10 @@ class _UserCreatePageState extends State<UserCreatePage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _surnameController = TextEditingController();
-  final _cpfController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  final _secureStorage = const FlutterSecureStorage();
 
   final _roles = const {
     'admin': 'Administrador',
@@ -38,6 +36,7 @@ class _UserCreatePageState extends State<UserCreatePage> {
     'infraestrutura': 'Infraestrutura',
     'dmtran': 'DMTRAN',
     'vigilancia_sanitaria': 'Vigilância Sanitária',
+    'secretaria_saude': 'Secretaria de Saúde',
     'guarda_civil': 'Guarda Civil Municipal',
     'receita_municipal': 'Receita Municipal',
   };
@@ -58,7 +57,6 @@ class _UserCreatePageState extends State<UserCreatePage> {
   void dispose() {
     _nameController.dispose();
     _surnameController.dispose();
-    _cpfController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -68,7 +66,7 @@ class _UserCreatePageState extends State<UserCreatePage> {
   Future<void> _registerUser() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final token = await _secureStorage.read(key: 'access_token');
+    final token = await SessionExpiration.readAccessToken();
     if (token == null) {
       if (!mounted) return;
       await SessionExpiration.logout(context);
@@ -81,7 +79,6 @@ class _UserCreatePageState extends State<UserCreatePage> {
         accessToken: token,
         nome: _nameController.text,
         sobrenome: _surnameController.text,
-        cpfCnpj: _cpfController.text,
         email: _emailController.text,
         senha: _passwordController.text,
         role: _selectedRole!,
@@ -110,7 +107,7 @@ class _UserCreatePageState extends State<UserCreatePage> {
   }
 
   Future<void> _loadCurrentUserScope() async {
-    final rawUser = await _secureStorage.read(key: 'user');
+    final rawUser = await const SessionStore().readUserJson();
     if (rawUser == null || !mounted) return;
     final user = jsonDecode(rawUser) as Map<String, dynamic>;
     setState(() {
@@ -169,23 +166,23 @@ class _UserCreatePageState extends State<UserCreatePage> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: _cpfController,
-                    decoration: const InputDecoration(labelText: 'CPF'),
-                    validator:
-                        (value) => value!.isEmpty ? 'Informe o CPF' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
                     controller: _phoneController,
                     decoration: const InputDecoration(labelText: 'Telefone'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _emailController,
-                    decoration: const InputDecoration(labelText: 'E-mail'),
+                    decoration: const InputDecoration(
+                      labelText: 'E-mail institucional',
+                    ),
                     keyboardType: TextInputType.emailAddress,
-                    validator:
-                        (value) => value!.isEmpty ? 'Informe o e-mail' : null,
+                    validator: (value) {
+                      final email = (value ?? '').trim();
+                      if (email.isEmpty) return 'Informe o e-mail';
+                      return email.contains('@')
+                          ? null
+                          : 'Informe um e-mail válido';
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
