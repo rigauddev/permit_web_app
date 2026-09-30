@@ -30,10 +30,16 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs.getByName("debug") {
+        // Mantém v1 e v2 para compatibilidade com instaladores Android.
+        enableV1Signing = true
+        enableV2Signing = true
+        enableV3Signing = true
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Assinatura de homologação preservada para permitir atualizações do APK atual.
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
