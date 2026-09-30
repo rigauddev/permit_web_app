@@ -2,7 +2,7 @@
 ///
 /// Atualize este arquivo e `version` do pubspec.yaml a cada novo lançamento.
 abstract final class AppRelease {
-  static const version = '1.0.2';
+  static const version = '1.0.3';
   static const releasedAt = '30 de setembro de 2026';
   static const title = 'Atualização disponível';
   static const description =
